@@ -24,6 +24,9 @@ void initHal();
 bool checkReceive(Frame &f);
 void transmitFrame(Frame &f);
 
+
+
+
 extern bool txFlag;
 extern bool rxFlag;
 

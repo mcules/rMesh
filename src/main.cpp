@@ -141,18 +141,16 @@ void loop() {
     	}
     }
 
-
-
-
     //Prüfen, ob was empfangen wurde
     Frame f;
-    bool rx = checkReceive(f);
-    if (rx == true) {
-        Serial.println("RX");
+    if (checkReceive(f)) {
+
+
+        
+
+        
+
     }
-    
-
-
 
 
     //Status über Websocket senden

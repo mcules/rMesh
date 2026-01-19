@@ -6,7 +6,7 @@
 
 
 struct Frame {
-    char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0};
+    char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0x33};
     char dstCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char nodeCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};

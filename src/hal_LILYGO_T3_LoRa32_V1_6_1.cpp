@@ -26,7 +26,6 @@ void setWiFiLED(bool value) {
     #endif
 }
 
-
 void initHal() {
     //SPI Init
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
@@ -95,12 +94,17 @@ bool checkReceive(Frame &f) {
         radio.startReceive();
         if (state == RADIOLIB_ERR_NONE) {    
             f.importBinary(rxBuffer, rxBufferLength);
+            f.tx = false;
+            f.timestamp = time(NULL);
+            f.rssi = radio.getRSSI();
+            f.snr = radio.getSNR();
+            f.frqError = radio.getFrequencyError();
+
             return true;
         }
     }
     return false;
 }
-
 
 void transmitFrame(Frame &f) {
     uint8_t txBuffer[255];

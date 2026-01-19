@@ -1,6 +1,8 @@
-#include "frame.h"
-
 #include <ArduinoJson.h>
+
+#include "frame.h"
+#include "helperFunctions.h"
+#include "hal_LILYGO_T3_LoRa32_V1_6_1.h"
 
 size_t Frame::exportBinary(uint8_t* data, size_t length) {
     //Binär-Daten erzeugen
@@ -115,6 +117,77 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
 
 void Frame::importBinary(uint8_t* data, size_t length) {
 
-    tx = false;
+    if (length <= 1) { return; }
+
+    Serial.println("--------------");
+    printHexArray(data, length);
+
+    //Frame-TYP
+    frameType = data[0] & 0x0F;
+    hopCount = (data[0] & 0xF0) >> 4;
+
+    //Frame druchlaufen und nach Headern suchen
+    uint8_t header = 0;
+    uint8_t payloadLength = 0;
+    size_t i = 1;
+    while (i < length) {
+        //Header prüfen
+        header = data[i] >> 4;
+        payloadLength = (data[i] & 0x0F);
+        i = i + 1;
+        if (i >= length) {break;}
+        switch (header) {
+            case Frame::HeaderTypes::DST_CALL_HEADER:
+                memcpy(dstCall, data + i, sizeof(dstCall)); 
+                if (payloadLength >= sizeof(dstCall)) {payloadLength = sizeof(dstCall) - 1;}
+                dstCall[payloadLength] = '\0';
+                if ((i + payloadLength) < length) {i += payloadLength;}
+                break;
+            case Frame::HeaderTypes::VIA_CALL_HEADER:
+                memcpy(viaCall, data + i, sizeof(viaCall)); 
+                if (payloadLength >= sizeof(viaCall)) {payloadLength = sizeof(viaCall) - 1;}
+                viaCall[payloadLength] = '\0';
+                if ((i + payloadLength) < length) {i += payloadLength;}
+                break;
+            case Frame::HeaderTypes::NODE_CALL_HEADER:
+                memcpy(nodeCall, data + i, sizeof(nodeCall)); 
+                if (payloadLength >= sizeof(nodeCall)) {payloadLength = sizeof(nodeCall) - 1;}
+                nodeCall[payloadLength] = '\0';
+                if ((i + payloadLength) < length) {i += payloadLength;}
+                break;
+            case Frame::HeaderTypes::SRC_CALL_HEADER:
+                memcpy(srcCall, data + i, sizeof(srcCall)); 
+                if (payloadLength >= sizeof(srcCall)) {payloadLength = sizeof(srcCall) - 1;}
+                srcCall[payloadLength] = '\0';
+                if ((i + payloadLength) < length) {i += payloadLength;}
+                break;
+            case Frame::HeaderTypes::MESSAGE_HEADER:
+                //Message Type Setzen
+                messageType = (data[i - 1] & 0x0F);
+                //ID ausschneiden
+                if (length >= (i + sizeof(id))) {
+                    id = (data[i + 4] << 24) + (data[i + 3] << 16) + (data[i + 2] << 8) + data[i + 1];  
+                    i += sizeof(id) + 1;
+                }
+                //Message Länge
+                messageLength = length - i;
+                //Message
+                memcpy(message, data + i, messageLength);
+                //Suche beenden
+                i = length;
+                break;
+            default:
+                i = length;
+                break;
+        }      
+    }
+
+    Serial.printf("messageType: *%s*\n", messageType);
+    Serial.printf("messageLength: *%s*\n", messageLength);
+    Serial.printf("id: *%s*\n", id);
+    Serial.printf("dstCall: *%s*\n", dstCall);
+    Serial.printf("srcCall: *%s*\n", srcCall);
+    Serial.printf("nodeCall: *%s*\n", nodeCall);
+    Serial.printf("viaCall: *%s*\n", viaCall);
 
 }
