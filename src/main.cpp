@@ -290,8 +290,8 @@ void loop() {
                     if (settings.loraRepeat == true) {
                         //Frame vorbereiten
                         tf.frameType = f.frameType;
-                        memcpy(tf.srcCall, f.nodeCall, sizeof(tf.srcCall));
-                        memcpy(tf.dstCall, f.dstCall, sizeof(tf.dstCall));
+                        memcpy(tf.srcCall, f.srcCall, sizeof(tf.srcCall));
+                        memcpy(tf.dstCall, f.dstCall, sizeof(tf.srcCall));
                         tf.hopCount = f.hopCount;
                         if (tf.hopCount < 15) {tf.hopCount ++;}
                         tf.messageType = f.messageType;                        

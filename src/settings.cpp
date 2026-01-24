@@ -149,7 +149,7 @@ void loadSettings() {
         settings.loraSyncWord = 0x2b;
         settings.loraCodingRate = 6;
         settings.loraSpreadingFactor = 11;
-        settings.loraPreambleLength = 20;
+        settings.loraPreambleLength = 10;
         settings.loraRepeat = true;
     }
 }
