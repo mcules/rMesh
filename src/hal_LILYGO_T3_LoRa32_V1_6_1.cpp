@@ -40,6 +40,8 @@ void initHal() {
     int state;
 
     //Init
+    radio.reset();
+    delay(100);
     printState(radio.begin());
     printState(radio.setSyncWord(settings.loraSyncWord));
     printState(radio.setFrequency(settings.loraFrequency));
