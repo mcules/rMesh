@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="de">
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" /> 
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<link rel="stylesheet" type="text/css" href="style.css"  />
+		 <title>rMesh</title>
+	</head>
+	
+	<body>
+
+		<div style="display: flex; gap: 20px;">
+			<div style="flex: 1; min-width: 0;">
+				<h1>Monitor</h1>
+				<div id="monitor" style="height: 200px; overflow-y: auto; border: 1px solid; padding:5px; "> </div>
+			</div>
+			<div style="flex: 0 0 40%;">
+				<h1>Peers</h1>
+				<div id="peers" style="height: 200px; overflow-y: auto; border: 1px solid; "> </div>
+			</div>
+		</div>
+
+		<div style="display: flex; gap: 20px;">
+			<div style="flex: 1; min-width: 0;">
+				<h1>Messages</h1>
+				<div style="overflow-y: auto; border: 1px solid; padding:5px; ">
+                    <!-- Filter:
+                    <select id="messageFilter"> </select> -->
+                    <div id="messages" style="height: 200px; overflow-y: auto;  "> </div>
+					Destination: <input style="width: 100px;" id="messageDstCall">
+					Message: <input style="width: 400px;" id="messageText">
+					<button id="messageSend">send</button>
+                    <button id="commandAnnounce">announce</button>
+                    <button id="commandTune">tune</button>                    
+                    <button id="commandTrace">trace</button>                    
+                    <button id="commandVersion">version</button>                    
+                    <!-- <button id="commandReboot">reboot</button>                     -->
+				</div>
+			</div>
+			<div style="flex: 0 0 40%;">
+				<h1>Status</h1>
+				<div style="border: 1px solid; width: fit-content;">
+					<table>
+						<tr> <td>Time:</td> <td><span id="statusTime"></span> <button id="statusSyncTime">sync</button> </td> </tr>
+						<tr> <td>RX:</td> <td><span id="statusRX"></span> </td> </tr>
+						<tr> <td>TX:</td> <td><span id="statusTX"></span> </td> </tr>
+						<tr> <td>TX Buffer Count:</td> <td><span id="statusTxBufferCount"></span> </td> </tr>
+					</table>
+				</div> <br>
+			</div>
+		</div>
+		<br>
+ 		<details> 
+			<summary>Settings</summary>
+			<div style="border: 1px solid; width: fit-content;">
+				<table>
+					<tr> <td>Callsign</td> <td><input style="width: 200px;" id="settingsMycall"></td> </tr>
+					<tr> <td>NTP-Server</td> <td><input style="width: 200px;" id="settingsNTP"></td> </tr>
+					<tr> <td> Accesspoint </td>  <td> <input type='checkbox' id='settingsApMode'> </td>	</tr> 
+					<tr class="AP_MODE_ENABLED"> 
+						<td> SSID </td> 
+						<td> 
+							Networks:
+							<select id='settingsSSIDList' size='1'></select> 
+							<button id="settingsScanWifi">scan</button> <br>
+							SSID:
+							<input id='settingsSSID' style='width: 200px;'>
+						</td>
+					</tr>
+					<tr class="AP_MODE_ENABLED"> <td> Password </td> <td> <input type="password" id='settingsPassword' style='width: 200px;' > </td> 
+					</tr>
+					<tr class="AP_MODE_ENABLED"> <td> DHCP </td> <td> <input type='checkbox' id='settingsDHCP'> </td> </tr> 
+					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> IP-Address </td> <td> <input style='width: 100px;' id='settingsWiFiIP'> </td> </tr>
+					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Subnet </td> <td> <input style='width: 100px;' id='settingsWifiNetMask'> </td> </tr>
+					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Gateway </td> <td> <input style='width: 100px;' id='settingsWifiGateway'> </td> </tr>
+					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> DNS </td> <td> <input style='width: 100px;' id='settingsWifiDNS'> </td> </tr>
+					<tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Brodcast </td> <td> <input style='width: 100px;' id='settingsWifiBrodcast'> </td> </tr>
+
+					<tr> <td>Frequency</td> <td><input style="width: 200px;" id="settingsLoraFrequency"></td> </tr>
+					<tr> <td>Output Power</td> <td><input style="width: 200px;" id="settingsLoraOutputPower"></td> </tr>
+					<tr> <td>Bandwidth</td> <td>
+						<select id='settingsLoraBandwidth'>
+							<option value="31.25">31,25 kHz</option>	
+							<option value="62.5">62,5 kHz</option>	
+							<option value="125">125 kHz</option>	
+							<option value="250">250 kHz</option>	
+							<option value="500">500 kHz</option>	
+						</select> 
+					</td> </tr>
+					<tr> <td>Coding Rate</td> <td>
+						<select id='settingsLoraCodingRate'>
+							<option value="5">5 - Standard</option>	
+							<option value="6">6 - Erhöhter Schutz gegen Störungen</option>	
+							<option value="7">7 - Hoher Schutz, deutlich längere Sendezeit</option>	
+							<option value="8">8 - Maximaler Schutz</option>	
+						</select> 
+					</td> </tr>				
+					<tr> <td>Spreading Factor</td> <td>
+						<select id='settingsLoraSpreadingFactor'>
+							<option value="6">6 - Gering (Sichtverbindung)</option>	
+							<option value="7">7 - Gut (Standard)</option>	
+							<option value="8">8 - Besser</option>	
+							<option value="9">9 - Sehr gut</option>	
+							<option value="10">10 - Exzellent</option>	
+							<option value="11">11 - Maximum</option>	
+							<option value="12">12 - Maximum (Deep Indoor)</option>	
+						</select> 
+					</td> </tr>
+					<tr> <td>Sync Word</td> <td><input style="width: 200px;" id="settingsLoraSyncWord"></td> </tr>		
+					<tr> <td>Preamble Length</td> <td><input style="width: 200px;" id="settingsLoraPreambleLength"></td> </tr>		
+					<tr> <td> Repeat Messages </td> <td> <input type='checkbox' id='settingsLoraRepeat'> </td> </tr> 
+					<tr> <td> Max Message Length </td> <td> <span id="settingsLoraMaxMessageLength"> </span> </td> </tr> 
+					
+				</table>
+				<button id="settingsSave">save</button>
+				<button id="settingsReboot">reboot</button> <br>
+			</div>
+			</details>
+
+		<script>
+			var websocket;
+			var timeout = 0;
+            var messages = [];
+
+			document.addEventListener('DOMContentLoaded', function() {
+				//Verbinden
+				initWebSocket();
+			});
+
+			document.getElementById("settingsSave").addEventListener("click", function() {
+				var settings = {};
+				settings["mycall"] = document.getElementById("settingsMycall").value;
+				settings["ntp"] = document.getElementById("settingsNTP").value;
+				settings["dhcpActive"] = document.getElementById("settingsDHCP").checked;
+				settings["wifiSSID"] = document.getElementById("settingsSSID").value;
+				settings["wifiPassword"] = document.getElementById("settingsPassword").value;
+				settings["apMode"] = document.getElementById("settingsApMode").checked;
+				settings["wifiIP"] = document.getElementById("settingsWiFiIP").value.split('.').map(Number);
+				settings["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
+				settings["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
+				settings["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
+				settings["wifiBrodcast"] = document.getElementById("settingsWifiBrodcast").value.split('.').map(Number);
+				settings["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
+				settings["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
+				settings["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
+				settings["loraSyncWord"] = parseInt(document.getElementById("settingsLoraSyncWord").value, 16);
+				settings["loraCodingRate"] = parseInt(document.getElementById("settingsLoraCodingRate").value);
+				settings["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
+				settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
+				settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+				sendWS(JSON.stringify({settings: settings}));
+			});
+
+			document.getElementById("settingsApMode").addEventListener("change", function() { settingsVisibility(); });
+
+			document.getElementById("settingsDHCP").addEventListener("change", function() { settingsVisibility(); });
+
+			document.getElementById("messageSend").addEventListener("click", function() { 
+                //Über Weksocket senden
+				var sendMessage = {};
+				sendMessage["text"] = document.getElementById("messageText").value;
+				sendMessage["dstCall"] = document.getElementById("messageDstCall").value;
+				sendWS(JSON.stringify({sendMessage: sendMessage}));
+			});
+
+
+
+            document.getElementById('messageText').addEventListener('keydown', function(event) {
+                if (event.key === 'Enter') {
+                    document.getElementById("messageSend").click();
+                    document.getElementById("messageText").value = "";    
+                }
+            });
+			
+			
+			document.getElementById("commandAnnounce").addEventListener("click", function() {
+				sendWS(JSON.stringify({announce: true }));
+			});
+
+			document.getElementById("commandTune").addEventListener("click", function() {
+				sendWS(JSON.stringify({tune: true }));
+			});
+
+   			document.getElementById("commandTrace").addEventListener("click", function() {
+                var trace = {};
+				trace["dstCall"] = document.getElementById("messageDstCall").value;
+				sendWS(JSON.stringify({trace: trace}));
+			});
+
+   			document.getElementById("commandVersion").addEventListener("click", function() {
+                var sendFrame = {};
+                sendFrame["srcCall"] = document.getElementById("settingsMycall").value;
+                sendFrame["dstCall"] = document.getElementById("messageDstCall").value;
+				sendFrame["frameType"] = 3;     //TEXT_MESSAGE
+				sendFrame["messageType"] = 15; //COMMAND
+                sendFrame["message"] = [0xff]; //VERSION
+                sendFrame["messageLength"] = 1;
+				sendWS(JSON.stringify({sendFrame: sendFrame}));
+			});            
+
+   			document.getElementById("commandReboot").addEventListener("click", function() {
+                var sendFrame = {};
+                sendFrame["srcCall"] = document.getElementById("settingsMycall").value;
+                sendFrame["dstCall"] = document.getElementById("messageDstCall").value;
+				sendFrame["frameType"] = 3; //TEXT_MESSAGE
+				sendFrame["messageType"] = 15; //COMMAND
+                sendFrame["message"] = [0xfe]; //VERSION
+                sendFrame["messageLength"] = 1;
+				sendWS(JSON.stringify({sendFrame: sendFrame}));
+			});            
+           
+
+			document.getElementById("settingsReboot").addEventListener("click", function() {
+				sendWS(JSON.stringify({reboot: true }));
+			});
+
+			document.getElementById("statusSyncTime").addEventListener("click", function() {
+				sendWS(JSON.stringify({time: Math.floor(Date.now() / 1000) }));
+			});
+
+			document.getElementById("settingsScanWifi").addEventListener("click", function() {
+                document.getElementById('settingsSSIDList').innerHTML = "";
+				sendWS(JSON.stringify({scanWifi: true }));
+			});
+
+			document.getElementById("settingsSSIDList").addEventListener("click", function() {
+				document.getElementById("settingsSSID").value = document.getElementById("settingsSSIDList").value;
+			});
+			
+		
+
+			function onMessage(event) {
+				var d = JSON.parse(event.data);
+				if (d.status === undefined) {console.log("RX: " + event.data);}
+
+                //RAW-RX
+				if (d.monitor) {
+                    f = d.monitor;
+					var msg = "<span ";
+                    
+                    if (d.monitor.tx == true) {
+                        msg += "style='color: darkred;'> ";
+                    } else {
+                        msg += ">";
+                    }
+                    //Port
+                    msg += f.port + ": ";
+
+                    //Zeit
+                    const date = new Date(d.monitor.timestamp * 1000);
+				    msg += date.toLocaleString("de-DE", {hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
+
+                    //Bytes
+					// if (f.tx == true) {msg += "TX: ";} else {msg += "RX: ";}
+					// msg += f.rawData.map(b => b.toString(16).padStart(2, '0')).join(' ').toUpperCase();
+					// msg += " (RSSI:" + f.rssi + "dBm SNR:" + f.snr + "db Retry:" + f.retry + "/" + f.initRetry + ")";
+                    // msg += "<br>";
+
+                    //Lesbar anzeigen
+                    if (typeof f.nodeCall !== "undefined") { msg += "<b>" + f.nodeCall + "</b> > "; }
+                    if (typeof f.viaCall !== "undefined") { msg += "<b>" + f.viaCall + "</b> "; }
+                    if (typeof f.hopCount !== "undefined") { 
+                        if (f.hopCount > 0) { 
+                            msg += "H" + f.hopCount + " "; 
+                        }
+                    }
+					switch (f.frameType) {
+  						case 0x00: msg += "Announce"; break;
+  						case 0x01: msg += "Announce ACK"; break;
+  						case 0x02: msg += "Tuning"; break;
+  						case 0x03: 
+  						case 0x05: 
+                            msg += "Message"; 
+                            if (f.messageType == 0) {msg += ", [TEXT] ";}
+                            if (f.messageType == 1) {msg += ", [TRACE] ";}
+                            if (f.messageType == 15) {msg += ", [COMMAND] ";}
+                            if (f.id) { msg += "ID: <b>" + f.id + "</b> "; }
+                            if (f.srcCall) { msg += "SRC: <b>" + f.srcCall + "</b> "; }
+                            if (f.dstCall) { msg += "DST: <b>" + f.dstCall + "</b> "; }
+                            if (f.text) {
+                                msg += "MSG: <b>" + f.text + "</b>";
+                            }
+                            break;
+  						case 0x04: 
+                            msg += "Message ACK "; 
+                            if (f.id > 0) { msg += "ID: <b>" + f.id + "</b> "; }
+                            break;
+                    }
+					document.getElementById("monitor").innerHTML = document.getElementById("monitor").innerHTML + "</span><br>" + msg;
+					document.getElementById('monitor').scrollTop = document.getElementById("monitor").scrollHeight;
+				
+				}
+
+                //Message empfangen
+                if (d.message) {
+                    messages.push(d.message);
+					showMessages(d.message);
+                }
+
+				//Peers
+				if (d.peerlist) {
+					var peers = "";
+					peers += "<table>";
+					peers += "<tr> <td>Port</td> <td>Call</td> <td>Last RX</td> <td>RSSI</td> <td>SNR</td> <td>Frq. Error</td> <td>Available</td> </tr>";
+					if (d.peerlist.peers) {
+						d.peerlist.peers.forEach(function(p, index) {
+							const lastRX = new Date(p.timestamp * 1000);
+							peers += "<tr>";
+							peers += "<td>" + p.port + "</td>";
+							peers += "<td>" + p.call + "</td>";
+							peers += "<td>" + lastRX.toLocaleTimeString('de-DE') + "</td>";
+							peers += "<td>" + p.rssi + "</td>";
+							peers += "<td>" + p.snr + "</td>";
+							peers += "<td>" + parseInt(p.frqError) + "</td>";
+							peers += "<td>" + p.available + "</td>";
+							peers += "</tr>";
+					 	});
+					}
+					peers += "</table>";
+					document.getElementById("peers").innerHTML = peers;
+				}
+
+				//Einstellungen
+				if (d.settings) {
+					document.getElementById("settingsMycall").value = d.settings.mycall;
+					document.getElementById("settingsNTP").value = d.settings.ntp;
+					document.getElementById("settingsSSID").value = d.settings.wifiSSID;
+					document.getElementById("settingsPassword").value = d.settings.wifiPassword;
+					document.getElementById("settingsWiFiIP").value = d.settings.wifiIP[0] + "." + d.settings.wifiIP[1] + "." + d.settings.wifiIP[2] + "." + d.settings.wifiIP[3];
+					document.getElementById("settingsWifiNetMask").value = d.settings.wifiNetMask[0] + "." + d.settings.wifiNetMask[1] + "." + d.settings.wifiNetMask[2] + "." + d.settings.wifiNetMask[3];
+					document.getElementById("settingsWifiGateway").value = d.settings.wifiGateway[0] + "." + d.settings.wifiGateway[1] + "." + d.settings.wifiGateway[2] + "." + d.settings.wifiGateway[3];
+					document.getElementById("settingsWifiDNS").value = d.settings.wifiDNS[0] + "." + d.settings.wifiDNS[1] + "." + d.settings.wifiDNS[2] + "." + d.settings.wifiDNS[3];
+					document.getElementById("settingsWifiBrodcast").value = d.settings.wifiBrodcast[0] + "." + d.settings.wifiBrodcast[1] + "." + d.settings.wifiBrodcast[2] + "." + d.settings.wifiBrodcast[3];
+					document.getElementById("settingsDHCP").checked = d.settings.dhcpActive; 
+					document.getElementById("settingsApMode").checked = d.settings.apMode; 
+					document.getElementById("settingsLoraFrequency").value = d.settings.loraFrequency; 
+					document.getElementById("settingsLoraOutputPower").value = d.settings.loraOutputPower; 
+					document.getElementById("settingsLoraBandwidth").value = d.settings.loraBandwidth; 
+					document.getElementById("settingsLoraSyncWord").value = d.settings.loraSyncWord.toString(16).padStart(2, '0').toUpperCase(); 
+					document.getElementById("settingsLoraCodingRate").value = d.settings.loraCodingRate; 
+					document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor; 
+					document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
+					document.title = d.settings.name + " " + d.settings.version + " " + d.settings.mycall;
+                    document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
+                    document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength; 
+					settingsVisibility();
+				}
+
+				//Status
+                if (d.status) {
+                    const date = new Date(d.status.time * 1000);
+                    document.getElementById("statusTime").innerHTML = date.toLocaleString("de-DE");
+                    if (d.status.rx) {
+                        document.getElementById("statusRX").innerHTML = d.status.rx; 
+                        document.getElementById("statusRX").style.color = "darkgreen";
+                        document.getElementById("statusRX").style.fontWeight = "bold";
+                    } else {
+                        document.getElementById("statusRX").innerHTML = d.status.rx; 
+                        document.getElementById("statusRX").style.color = "";
+                        document.getElementById("statusRX").style.fontWeight = "";
+                    }
+                    if (d.status.tx) {
+                        document.getElementById("statusTX").innerHTML = d.status.tx; 
+                        document.getElementById("statusTX").style.color = "darkred";
+                        document.getElementById("statusTX").style.fontWeight = "bold";
+                    } else {
+                        document.getElementById("statusTX").innerHTML = d.status.tx; 
+                        document.getElementById("statusTX").style.color = "";
+                        document.getElementById("statusTX").style.fontWeight = "";
+                    }
+                    document.getElementById("statusTxBufferCount").innerHTML = d.status.txBufferCount; 
+
+                }
+				if (d.time) {
+					const date = new Date(d.time * 1000);
+					document.getElementById("statusTime").innerHTML = date.toLocaleString("de-DE");
+				}
+
+				//WiFi Scan
+				if (d.wifiScan) {
+					const select = document.getElementById('settingsSSIDList');
+					select.length = 0;
+					d.wifiScan.forEach(n => {
+						let opt = document.createElement('option');
+						opt.value = n.ssid;
+						opt.text = n.ssid + " (" + n.encryption + ", " + n.rssi +  "dBm)";
+						select.add(opt);
+					});
+				}
+
+
+			}		
+		
+			function keepAlive() { 
+				if (websocket.readyState == websocket.OPEN) {  
+					websocket.send(JSON.stringify({ping: new Date() }));
+				}  
+				timeout = setTimeout(keepAlive, 1000);  
+			}
+
+			function initWebSocket() {
+                var baseURL = "";
+                var gateway = "";
+
+                //Debug
+                if (!window.location.hostname.includes("127.0.0.1")) {
+					gateway = `ws://${window.location.hostname}/socket`;
+                    baseURL = "";
+				} else {
+					gateway = "ws://192.168.33.60/socket";
+                    baseURL = "http://192.168.33.60/"
+				}
+
+                document.getElementById("messages").innerHTML = document.getElementById("monitor").innerHTML = "";
+
+				//messages.json laden und parsen
+                document.getElementById("messages").innerHTML = document.getElementById("messages").innerHTML = "";
+                fetch(baseURL + "messages.json", )
+                    .then(response => response.text())
+                    .then(text => {
+                        const lines = text.split(/\r?\n/);
+                        lines.forEach(line => {
+                            if (line.trim().length === 0) return;
+                            const m = JSON.parse(line);
+                            messages.push(m.message);
+                            
+                    });
+                    showMessages();
+                });				
+			
+				websocket = new WebSocket(gateway);
+				websocket.onopen = onOpen;
+				websocket.onclose = onClose;
+				websocket.onmessage = onMessage;
+			}
+
+            function showMessages() {
+                var msg = "";
+                messages.forEach(function(m) {
+
+                    if ((m.messageType == 0) || (m.messageType == 1)) { //nur TEXT & TRACE Nachrichten
+                        if (m.dstCall.length == 0) {m.dstCall = "all";}
+
+                        // //MSG in Filter eintragen
+                        // var select = document.getElementById("messageFilter");
+                        // var options = select.options;
+                        // var exists = false;
+
+                        // // Prüfen, ob der Wert schon existiert
+                        // for (var i = 0; i < options.length; i++) {
+                        //     if (options[i].value === m.dstCall) {
+                        //         exists = true;
+                        //         break;
+                        //     }
+                        // }
+
+                        // // Nur hinzufügen, wenn er nicht gefunden wurde
+                        // if (!exists && m.dstCall.trim() !== "") {
+                        //     var opt = document.createElement("option");
+                        //     opt.value = m.dstCall;
+                        //     opt.innerHTML = m.dstCall;
+                        //     select.appendChild(opt);
+                        // }                        
+
+                        msg += "<span ";
+                        if (m.tx == true) {
+                            msg += "style='color: darkred;'> ";
+                        } else {
+                            msg += "> ";
+                        }
+                        const date = new Date(m.timestamp * 1000);
+                        msg += date.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
+                        msg += m.srcCall;
+                        if (m.dstCall)  {msg += " " + m.dstCall; }
+                        if (m.messageType == 1) {msg += " [TRACE] ";}
+                        msg += ": <b>" + m.text + "</b>";
+                        msg += "</span><br>"
+                    }
+
+                    document.getElementById("messages").innerHTML = msg;                     
+                    document.getElementById('messages').scrollTop = document.getElementById("messages").scrollHeight;			
+
+                });
+            }
+
+
+
+			function onOpen(event) {
+				//sendWS(JSON.stringify({scanWifi: true }));
+				keepAlive();
+			}
+
+			function onClose(event) {
+				clearTimeout(timeout);
+				setTimeout(initWebSocket, 500);
+			}
+
+			function sendWS(text) {
+				websocket.send(text);
+				console.log("TX: " + text);
+			}
+
+			function settingsVisibility() {
+				if (document.getElementById("settingsApMode").checked) {
+					for (e of document.getElementsByClassName('DHCP_ENABLED')) {
+						e.style.display = "none";
+					}
+					for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
+						e.style.display = "none";
+					}				
+				} else {
+					for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
+						e.style.display = "";
+					}				
+					if (document.getElementById("settingsDHCP").checked) {
+						for (e of document.getElementsByClassName('DHCP_ENABLED')) {
+							e.style.display = "none";
+						}
+					} else {
+						for (e of document.getElementsByClassName('DHCP_ENABLED')) {
+							e.style.display = "";
+						}
+					}
+				}
+			}
+
+
+		</script>
+
+
+	</body>
+
+	
+
+
+</html>
