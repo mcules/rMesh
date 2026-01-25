@@ -11,7 +11,7 @@
 
 
 //UDP Timing
-#define UDP_TX_RETRY_TIME 1000
+#define UDP_TX_RETRY_TIME 2000
 
 //Interner Quatsch
 #define NAME "rMesh"                             //Versions-String

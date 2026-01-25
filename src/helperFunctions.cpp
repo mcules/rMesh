@@ -23,15 +23,10 @@ void printHexArray(uint8_t* data, size_t length) {
 }
 
 
-void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
-    //Neuen Frame für alle Peers zusammenbauen
-    Frame f;
-    f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
-    f.messageType = messageType;
+
+void sendFrame(Frame &f) {
+    //Frame an alle Peers senden
     strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
-    strncpy(f.dstCall, dstCall, sizeof(f.dstCall));
-    strncpy((char*)f.message, text, sizeof(f.message));
-    f.messageLength = strlen(text);
     f.id = millis();
     f.timestamp = time(NULL);
     f.tx = true;
@@ -55,15 +50,17 @@ void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
         } 
 
         //Wenn keine Peers, Frame ohne Ziel und Retry senden
-        if (availableNodeCount == 0) {
-            //Frame in Sendebuffer
-            f.viaCall[0] = 0;
-            f.retry = 1;
-            f.initRetry = 1;
-            f.syncFlag = false;            
-            f.port = port;
-            txBuffer.push_back(f);
-        }
+        #ifdef REPEAT_WITHOUT_PEER
+            if (availableNodeCount == 0) {
+                //Frame in Sendebuffer
+                f.viaCall[0] = 0;
+                f.retry = 1;
+                f.initRetry = 1;
+                f.syncFlag = false;            
+                f.port = port;
+                txBuffer.push_back(f);
+            }
+        #endif
     }
 
     //Message an Websocket senden & speichern
@@ -73,7 +70,17 @@ void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
     addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
     free(jsonBuffer);
     jsonBuffer = nullptr;
+}
 
+void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
+    //Neuen Frame für alle Peers zusammenbauen
+    Frame f;
+    f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
+    f.messageType = messageType;
+    strncpy(f.dstCall, dstCall, sizeof(f.dstCall));
+    strncpy((char*)f.message, text, sizeof(f.message));
+    f.messageLength = strlen(text);
+    sendFrame(f);
 }
 
 void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {

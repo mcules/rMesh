@@ -100,14 +100,9 @@ void startWebServer() {
     if (json["sendFrame"].is<JsonVariant>()) {
         Frame f;
         if (json["sendFrame"]["frameType"].is<JsonVariant>()) {f.frameType = json["sendFrame"]["frameType"].as<uint8_t>();}
-        if (json["sendFrame"]["srcCall"].is<JsonVariant>()) { strlcpy(f.srcCall, json["sendFrame"]["srcCall"] | "", sizeof(f.srcCall)); }
         if (json["sendFrame"]["dstCall"].is<JsonVariant>()) { strlcpy(f.dstCall, json["sendFrame"]["dstCall"] | "", sizeof(f.dstCall)); }
-        if (json["sendFrame"]["viaCall"].is<JsonVariant>()) { strlcpy(f.viaCall, json["sendFrame"]["viaCall"] | "", sizeof(f.viaCall)); }
         if (json["sendFrame"]["messageType"].is<JsonVariant>()) {f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();}
-        if (json["sendFrame"]["retry"].is<JsonVariant>()) {f.retry = json["sendFrame"]["retry"].as<uint8_t>();}
-        if (json["sendFrame"]["initRetry"].is<JsonVariant>()) {f.initRetry = json["sendFrame"]["initRetry"].as<uint8_t>();}
         if (json["sendFrame"]["messageLength"].is<JsonVariant>()) {f.messageLength = json["sendFrame"]["messageLength"].as<uint16_t>();}
-        if (json["sendFrame"]["syncFlag"].is<JsonVariant>()) {f.syncFlag = json["sendFrame"]["syncFlag"].as<bool>();}
         if (json["sendFrame"]["messageText"].is<JsonVariant>()) { strncpy((char*)f.message, json["sendFrame"]["messageText"], sizeof(f.message)); }
         if (json["sendFrame"]["message"].is<JsonArray>()) {
             JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
@@ -120,13 +115,7 @@ void startWebServer() {
                 }
             }
         }
-        f.id = millis();
-        f.timestamp = time(NULL);
-        f.tx = true;
-        f.port = 0;
-        txBuffer.push_back(f);        
-        f.port = 1;
-        txBuffer.push_back(f);        
+        sendFrame(f);
     }   
 
     //Nachricht senden
