@@ -1,0 +1,113 @@
+Bot-ID:        8416090750
+Bot-Username:  MeshRXBot
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 01:51:45","msg_id":"6971C5C0","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1C8","alt":1476,"batt":58,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 01:56:47","msg_id":"6971C5C1","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:01:50","msg_id":"6971C5C2","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:11:54","msg_id":"6971C5C4","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:16:56","msg_id":"6971C5C5","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:21:58","msg_id":"6971C5C6","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1CB","alt":1476,"batt":69,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:27:00","msg_id":"6971C5C7","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:32:02","msg_id":"6971C5C8","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:37:04","msg_id":"6971C5C9","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:42:06","msg_id":"6971C5CA","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:47:09","msg_id":"6971C5CB","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:52:11","msg_id":"6971C5CC","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1CE","alt":1476,"batt":29,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 02:57:13","msg_id":"6971C5CD","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 03:02:15","msg_id":"6971C5CE","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 03:07:17","msg_id":"6971C5CF","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 03:22:23","msg_id":"6971C5D2","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1D1","alt":1476,"batt":0,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 03:27:25","msg_id":"6971C5D3","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 03:32:27","msg_id":"6971C5D4","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 03:52:36","msg_id":"6971C5D8","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1D4","alt":1476,"batt":0,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 03:57:38","msg_id":"6971C5D9","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:02:40","msg_id":"6971C5DA","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DO5DMF-99","dst":"26298","msg":"moin meshgemeinde!","msg_id":"4EBEE360","firmware":35,"fw_sub":"h"}
+DO5DMF-99 -> 26298: moin meshgemeinde! (udp 4EBEE360 )
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:07:42","msg_id":"6971C5DB","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:12:44","msg_id":"6971C5DC","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:17:46","msg_id":"6971C5DD","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:22:48","msg_id":"6971C5DE","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1D7","alt":1476,"batt":0,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:27:50","msg_id":"6971C5DF","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:32:53","msg_id":"6971C5E0","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:37:55","msg_id":"6971C5E1","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DB4UW-12","dst":"*","msg":"Guten Morgen. WX aus JN58NE Adelshofen/FFB:??/???:-3.6°C??/??:85.5% rF??/LD:938 hPa??/W: bis 3km/h. 73 Udo/C18","msg_id":"715F80FA","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:42:57","msg_id":"6971C5E2","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:47:59","msg_id":"6971C5E3","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:53:01","msg_id":"6971C5E4","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1DA","alt":1476,"batt":0,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 04:58:03","msg_id":"6971C5E5","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:03:05","msg_id":"6971C5E6","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:08:07","msg_id":"6971C5E7","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:23:14","msg_id":"6971C5EA","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1DD","alt":1476,"batt":0,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:28:16","msg_id":"6971C5EB","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:33:18","msg_id":"6971C5EC","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:43:22","msg_id":"6971C5EE","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DL2IAS-10","dst":"*","msg":"Guten Morgen aus Mainz bei -4,5°C","msg_id":"9C0152EC","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"DO1RBH-17","dst":"*","msg":"Moin moin von der Elbe aus JO43WL.","msg_id":"6B08A382","firmware":35,"fw_sub":"f"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:53:27","msg_id":"6971C5F0","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1E0","alt":1476,"batt":57,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 05:58:29","msg_id":"6971C5F1","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:03:31","msg_id":"6971C5F2","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:08:33","msg_id":"6971C5F3","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:13:35","msg_id":"6971C5F4","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:18:37","msg_id":"6971C5F5","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:23:39","msg_id":"6971C5F6","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1E3","alt":1476,"batt":59,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:33:44","msg_id":"6971C5F8","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DO1RBH-17","dst":"*","msg":"Guten Morgen Herbert.","msg_id":"6B08A388","firmware":35,"fw_sub":"f"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:38:46","msg_id":"6971C5F9","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE6JVE-12","dst":"*","msg":"{OE6JVE-12;O}APRS/CWOP-Wetter 2026-01-25 07:20:24 Temperatur -0.6°C Luftfeuchtigkeit 92% Luftdruck 999.3 mbar Vorsicht Einsetzender EISREGEN","msg_id":"A564E0AD","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:43:48","msg_id":"6971C5FA","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:48:50","msg_id":"6971C5FB","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE6DJG-2","dst":"*","msg":"GM aus Kainbach bei Graz 0,7°C QNH 1004 Hochnebel","msg_id":"0BE92399","firmware":35,"fw_sub":"h"}
+{"src_type":"udp","type":"msg","src":"DF6KA-11","dst":"*","msg":"Guten Morgen aus Coesfeld. Wünsche allen einen OMs einen schönen Sonntag","msg_id":"90E982BE","firmware":35,"fw_sub":"f"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1E6","alt":1476,"batt":67,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 06:58:54","msg_id":"6971C5FD","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:03:57","msg_id":"6971C5FE","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:08:59","msg_id":"6971C5FF","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:14:01","msg_id":"6971C600","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:19:03","msg_id":"6971C601","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DF6CR-14","dst":"*","msg":"guten MORGEN an alle ","msg_id":"B0168039","firmware":35,"fw_sub":"k"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1E9","alt":1476,"batt":65,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"DF4ND-99","dst":"*","msg":"Guten Morgen aus Mittelfranken. -2,5 Grad und bewölkt.","msg_id":"687B4154","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:29:08","msg_id":"6971C603","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DF6CR-14","dst":"*","msg":"Augsburg min 5 Grad unf Nebel","msg_id":"B016803A","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:34:10","msg_id":"6971C604","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:39:12","msg_id":"6971C605","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DO5MAD-10","dst":"*","msg":"Guten Morgen aus Dülmen bei lauschigen -2 Grad. 73","msg_id":"4F6B6398","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:44:14","msg_id":"6971C606","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DL2DBQ-1","dst":"*","msg":"Moin aus Hamm, NRW. - 1,8 Grad, diesig","msg_id":"B3F8D112","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"DF2AP-99","dst":"26298","msg":"Schönen guten Morgen und einen schönen Sonntag heute.","msg_id":"9975D280","firmware":35,"fw_sub":"k"}
+DF2AP-99 -> 26298: Schönen guten Morgen und einen schönen Sonntag heute. (udp 9975D280 )
+{"src_type":"udp","type":"msg","src":"DF2AP-99","dst":"26298","msg":"@DO2KTE: Gruß von der Baustelle. ??","msg_id":"9975D282","firmware":35,"fw_sub":"k"}
+DF2AP-99 -> 26298: @DO2KTE: Gruß von der Baustelle. ?? (udp 9975D282 )
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:49:17","msg_id":"6971C607","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DK6MM-1","dst":"26286","msg":"Guten Morgen aus Wildenheid bei -6.8 Grad. Und allen einen schönen Sonntag.","msg_id":"A2A90139","firmware":35,"fw_sub":"k"}
+DK6MM-1 -> 26286: Guten Morgen aus Wildenheid bei -6.8 Grad. Und allen einen schönen Sonntag. (udp A2A90139 )
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:54:19","msg_id":"6971C608","firmware":0,"fw_sub":"#"}
+{"src_type":"node","type":"pos","src":"DB0LUS","msg":"","lat":50.487,"lat_dir":"N","long":11.3836,"long_dir":"E","aprs_symbol":"#","aprs_symbol_group":"/","hw_id":42,"msg_id":"A934E1ED","alt":1476,"batt":69,"firmware":"4.35","fw_sub":"k"}
+{"src_type":"node","type":"tele","temp1":0,"temp2":0,"hum":0,"qfe":0,"qnh":0,"gas":0,"co2":0}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 07:59:21","msg_id":"6971C609","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"IW5EHL-11","dst":"*","msg":"Buongiorno!! ","msg_id":"A1EC3196","firmware":35,"fw_sub":"k"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 08:04:23","msg_id":"6971C60A","firmware":0,"fw_sub":"#"}
+{"src_type":"udp","type":"msg","src":"DO1EMC-12","dst":"*","msg":"Guten Morgen aus Essen ( NRW ) bei -2 grad und Bewölkt ","msg_id":"0CEEA202","firmware":35,"fw_sub":"i"}
+{"src_type":"udp","type":"msg","src":"OE1XAR-45","dst":"*","msg":"{CET}2026-01-25 08:09:25","msg_id":"6971C60B","firmware":0,"fw_sub":"#"}

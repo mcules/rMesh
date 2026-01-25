@@ -100,10 +100,15 @@ void startWebServer() {
     if (json["sendFrame"].is<JsonVariant>()) {
         Frame f;
         if (json["sendFrame"]["frameType"].is<JsonVariant>()) {f.frameType = json["sendFrame"]["frameType"].as<uint8_t>();}
+        if (json["sendFrame"]["srcCall"].is<JsonVariant>()) { strlcpy(f.srcCall, json["sendFrame"]["srcCall"] | "", sizeof(f.srcCall)); }
         if (json["sendFrame"]["dstCall"].is<JsonVariant>()) { strlcpy(f.dstCall, json["sendFrame"]["dstCall"] | "", sizeof(f.dstCall)); }
         if (json["sendFrame"]["messageType"].is<JsonVariant>()) {f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();}
         if (json["sendFrame"]["messageLength"].is<JsonVariant>()) {f.messageLength = json["sendFrame"]["messageLength"].as<uint16_t>();}
-        if (json["sendFrame"]["messageText"].is<JsonVariant>()) { strncpy((char*)f.message, json["sendFrame"]["messageText"], sizeof(f.message)); }
+        if (json["sendFrame"]["messageText"].is<JsonVariant>()) { 
+            const char* tempText = json["sendFrame"]["messageText"];
+            memcpy((char*)f.message, tempText, sizeof(f.message)); 
+            f.messageLength = strlen(tempText);
+        }
         if (json["sendFrame"]["message"].is<JsonArray>()) {
             JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
             uint8_t i = 0;

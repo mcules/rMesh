@@ -26,7 +26,6 @@ void printHexArray(uint8_t* data, size_t length) {
 
 void sendFrame(Frame &f) {
     //Frame an alle Peers senden
-    strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
     f.id = millis();
     f.timestamp = time(NULL);
     f.tx = true;
@@ -35,15 +34,16 @@ void sendFrame(Frame &f) {
     if (txBuffer.size() > 0) {first = false;}
     for (int port = 0; port <= 1; port++) {
         uint8_t availableNodeCount = 0;
+        f.viaCall[0] = 0;
+        f.retry = TX_RETRY;
+        f.initRetry = TX_RETRY;
+        f.syncFlag = first;
+        f.port = port;
         //An alle Peers senden
         for (int i = 0; i < peerList.size(); i++) {
             if ((peerList[i].available) && (peerList[i].port == port)) {
                 availableNodeCount ++;
                 memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
-                f.retry = TX_RETRY;
-                f.initRetry = TX_RETRY;
-                f.syncFlag = first;
-                f.port = port;
                 txBuffer.push_back(f);
                 first = false;
             }
@@ -75,6 +75,7 @@ void sendFrame(Frame &f) {
 void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
     //Neuen Frame für alle Peers zusammenbauen
     Frame f;
+    strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
     strncpy(f.dstCall, dstCall, sizeof(f.dstCall));
