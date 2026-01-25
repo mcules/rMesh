@@ -24,6 +24,7 @@ struct Settings {
   int16_t loraPreambleLength;
   bool loraRepeat;
   IPAddress wifiBrodcast = IPAddress(255, 255, 255, 255);
+  uint8_t loraMaxMessageLength;
 };
 
 void loadSettings();

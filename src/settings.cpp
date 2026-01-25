@@ -52,7 +52,6 @@ void showSettings() {
         Serial.printf("NetMask: %d.%d.%d.%d\n", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]); 
         Serial.printf("Gateway: %d.%d.%d.%d\n", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]); 
         Serial.printf("DNS: %d.%d.%d.%d\n", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]); 
-        //Serial.printf("Brodcast: %d.%d.%d.%d\n", WiFi.broadcastIP()[0], WiFi.broadcastIP()[1], WiFi.broadcastIP()[2], WiFi.broadcastIP()[3]); 
         break;
     case 4:
         Serial.println("WL_CONNECT_FAILED");
@@ -111,6 +110,7 @@ void sendSettings() {
     doc["settings"]["version"] = VERSION;
     doc["settings"]["name"] = NAME;
     doc["settings"]["loraRepeat"] = settings.loraRepeat;
+    doc["settings"]["loraMaxMessageLength"] = settings.loraMaxMessageLength;
 
 
     char* jsonBuffer = (char*)malloc(4096);
@@ -141,6 +141,7 @@ void loadSettings() {
     if (strlen(settings.wifiPassword) >= 64) {valid = false;}
     if (strlen(settings.mycall) >= 17) {valid = false;}
     if (strlen(settings.ntpServer) >= 64) {valid = false;}
+    if (strlen(settings.wifiSSID) == 0) {settings.apMode = true;}
 
     if (valid == false) {
         //Defaults laden
@@ -165,6 +166,9 @@ void loadSettings() {
         settings.loraPreambleLength = 10;
         settings.loraRepeat = true;
     }
+
+    //MAX Nachrichtenlänge berechnen
+    settings.loraMaxMessageLength = 255 - (4 * (MAX_CALLSIGN_LENGTH + 1)) - 8;
 }
 
 void saveSettings() {
