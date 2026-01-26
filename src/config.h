@@ -4,7 +4,7 @@
 #define PEER_TIMEOUT 30 * 60 * 1000              //Zeit, nach dem ein Call aus der Peer-Liste gelöscht wird
 #define ACK_TIME random(0, 4000)                 //Zeit, bis ein ACK gesendet wird
 #define TX_RETRY 10                              //Retrys beim Senden 
-#define TX_RETRY_TIME 4000 + random(0, 2000)     //Pause zwischen wiederholungen (muss größer als ACK_TIME sein)
+#define TX_RETRY_TIME 4000 + random(0, 4000)     //Pause zwischen wiederholungen (muss größer als ACK_TIME sein)
 #define MAX_STORED_MESSAGES 1000                  //max. in "messages.json" gespeicherte Nachrichten
 #define MAX_STORED_ACK 100                       //max. ACK Frames in "ack.json"
 //#define REPEAT_WITHOUT_PEER                      //Wenn ein Node keine Peers hat, wird die Nachricht trotzdem wiederholt

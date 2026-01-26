@@ -115,7 +115,7 @@ function onMessage(event) {
     if (d.status) {
         drawClock(new Date(d.status.time * 1000));
        if (d.status.tx) {
-            document.getElementById("statusTRX").innerHTML = "TRX:&nbsp;<span style='color: #ffd900;'> >> TX << </span>"; 
+            document.getElementById("statusTRX").innerHTML = "TRX:&nbsp;<span style='color: #d9ff00;'> << TX >> </span>"; 
         } else if (d.status.rx) {
             document.getElementById("statusTRX").innerHTML = "TRX:&nbsp;<span style='color: #00ff00;'> >> RX << </span>"; 
         } else {

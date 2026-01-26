@@ -29,6 +29,9 @@ void setWiFiLED(bool value) {
 }
 
 void initHal() {
+    txFlag = false;
+    rxFlag = false;
+
     //SPI Init
     SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
 

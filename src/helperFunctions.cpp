@@ -45,8 +45,8 @@ void sendFrame(Frame &f) {
                 availableNodeCount ++;
                 f.port = peerList[i].port;
                 memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
+                if (txBuffer.size() == 0) {f.syncFlag = true;} else {f.syncFlag = false;}
                 txBuffer.push_back(f);
-                //first = false;
             }
         } 
 
