@@ -170,7 +170,7 @@
                 <span class="button-text">Routing</span>
             </button>    
 
-            <button id="dosButton" class="main-button" onclick="alert('Just kidding ;-)')">
+            <button id="dosButton" class="main-button" onclick="openDosPopup()">
                 <img src="dos.png" class="button-icon">
                 <span class="button-text">DOS</span>
             </button>    
@@ -271,10 +271,21 @@
                 }
             });
 
-function meineZusatzFunktion(zeilenInhalt) {
-    console.log("Übergebene Zeile:", zeilenInhalt);
-    // Hier kannst du den Text z.B. in den .monitor schreiben
-}
+            function openDosPopup() {
+                // Konfiguration des Popups
+                const width = 800;
+                const height = 600;
+                const left = (screen.width - width) / 2;
+                const top = (screen.height - height) / 2;
+
+                // Das "window.open" Kommando mit Parametern für ein minimalistisches Fenster
+                window.open(
+                    'dos.html', 
+                    'DOSEmulator', 
+                    `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes`
+                );
+            }            
+
 
 
         </script>

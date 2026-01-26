@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOS</title>
+    
+    <link rel="stylesheet" href="https://v8.js-dos.com/latest/js-dos.css">
+    <script src="https://v8.js-dos.com/latest/js-dos.js"></script>
+
+    <style>
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background: #000; overflow: hidden;
+        }
+        #dos { width: 100vw; height: 100vh; }
+        
+        /* Versteckt das js-dos Logo und zusätzliche UI-Elemente radikal */
+        .jd-canvas-container canvas { cursor: default !important; }
+    </style>
+</head>
+<body>
+
+    <div id="dos"></div>
+
+    <script>
+        Dos(document.getElementById("dos"), {
+            url: "https://v8.js-dos.com/bundles/doom.jsdos", 
+            autoStart: true,
+            kiosk: true,              // Aktiviert den Kiosk-Modus (entfernt fast alle UI-Elemente)
+            noSideBar: true,          // Entfernt die Seitenleiste
+            noFooter: true,           // Entfernt die Statusleiste unten
+            noFullscreen: true,       // Versteckt den Fullscreen-Button
+            mouseCapture: false,      // Verhindert, dass die Maus im Fenster "gefangen" wird
+        });
+    </script>
+</body>
+</html>
