@@ -41,22 +41,23 @@ void checkPeerList() {
 
 void sendPeerList() {
     JsonDocument doc;
+    doc["peerlist"]["peers"] = JsonArray();
     for (int i = 0; i < peerList.size(); i++) {
-        //Serial.printf("Peer List #%d %s\n", i, peerList[i].call);
-        doc["peerlist"]["peers"][i]["port"] = peerList[i].port;
-        doc["peerlist"]["peers"][i]["call"] = peerList[i].nodeCall;
-        doc["peerlist"]["peers"][i]["timestamp"] = peerList[i].timestamp;
-        doc["peerlist"]["peers"][i]["rssi"] = peerList[i].rssi;
-        doc["peerlist"]["peers"][i]["snr"] = peerList[i].snr;
-        doc["peerlist"]["peers"][i]["frqError"] = peerList[i].frqError;
-        doc["peerlist"]["peers"][i]["available"] = peerList[i].available;
-    }  
-    char* jsonBuffer = (char*)malloc(2048); 
-    size_t len = serializeJson(doc,jsonBuffer, 2048);
-    ws.textAll(jsonBuffer, len);  
+        JsonObject peer = doc["peerlist"]["peers"].add<JsonObject>();
+        peer["port"] = peerList[i].port;
+        peer["call"] = peerList[i].nodeCall;
+        peer["timestamp"] = peerList[i].timestamp;
+        peer["rssi"] = peerList[i].rssi;
+        peer["snr"] = peerList[i].snr;
+        peer["frqError"] = peerList[i].frqError;
+        peer["available"] = peerList[i].available;
+    }
+    char* jsonBuffer = (char*)malloc(2048);
+    size_t len = serializeJson(doc, jsonBuffer, 2048);
+    ws.textAll(jsonBuffer, len);
     free(jsonBuffer);
-    jsonBuffer = nullptr;
 }
+
 
 
 void availablePeerList(const char* call, bool available, uint8_t port) {

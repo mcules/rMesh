@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "config.h"
 #include "webFunctions.h"
+#include "hal.h"
 
 Settings settings;
 
@@ -169,6 +170,9 @@ void loadSettings() {
 
     //MAX Nachrichtenlänge berechnen
     settings.loraMaxMessageLength = 255 - (4 * (MAX_CALLSIGN_LENGTH + 1)) - 8;
+
+    //Hardware neu initialisieren
+    initHal();
 }
 
 void saveSettings() {
@@ -179,6 +183,7 @@ void saveSettings() {
     EEPROM.begin(4096);
     EEPROM.put(0, settings);
     EEPROM.commit();
+    loadSettings();
     sendSettings();
 }
 
