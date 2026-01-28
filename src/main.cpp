@@ -18,7 +18,6 @@
 #include "udp.h"
 
 
-
 //Uhrzeitformat
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 
@@ -294,7 +293,9 @@ void setup() {
     startWebServer();
 
     //Init OK
-    Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);   
+    Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);  
+    
+
 }
 
 
