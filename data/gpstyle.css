@@ -8,6 +8,25 @@
 
 }
 
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.3);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+#modal {
+    background: #555555;
+    padding: 20px;
+    border-radius: 5px;
+    min-width: 300px;
+    border: 2px solid #ffffff;
+}
+
+
 html {
     /* Verhindert Glättung von Bildern/Icons beim Skalieren */
     image-rendering: pixelated;

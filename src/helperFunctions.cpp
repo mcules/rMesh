@@ -80,7 +80,7 @@ void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
     strncpy(f.dstCall, dstCall, sizeof(f.dstCall));
-    strncpy((char*)f.message, text, sizeof(f.message));
+    safeUtf8Copy((char*)f.message, (uint8_t*)text, strlen(text));
     f.messageLength = strlen(text);
     sendFrame(f);
 }

@@ -6,6 +6,7 @@ function onMessage(event) {
 
     //RAW-RX
     if (d.monitor) {
+
         f = d.monitor;
         var msg = "<span ";
         if (d.monitor.tx == true) {
@@ -56,6 +57,7 @@ function onMessage(event) {
     if (d.message) {
         messages.push(d.message);
         showMessages(d.message);
+        okSound.play();
     }
 
     //Peers
@@ -108,6 +110,7 @@ function onMessage(event) {
         document.getElementById("statusMyCall").innerHTML = "MyCall: " + d.settings.mycall;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
+        document.getElementById('channelButton2').innerHTML = d.settings.mycall;
         settingsVisibility();
     }
 
@@ -141,6 +144,23 @@ function onMessage(event) {
 
 }		
 
+
+//Nachricht senden
+async function sendMessage(text, channel) {
+    var dstCall = document.getElementById('dstCall').innerHTML;
+    if (dstCall == "..........") return;
+    if (dstCall == "") {
+        dstCall = await inputBox("Destination Call?");
+    }
+    if (dstCall == "all") dstCall = "";
+    var sendMessage = {};
+    sendMessage["text"] = text;
+    sendMessage["dstCall"] = dstCall;
+    console.log(sendMessage);
+    sendWS(JSON.stringify({sendMessage: sendMessage}));                    
+}
+
+
 function saveSettings() {
     var settings = {};
     settings["mycall"] = document.getElementById("settingsMycall").value;
@@ -166,16 +186,21 @@ function saveSettings() {
 }
 
 function showMessages() {
-    var msg = "";
+    //Alles löschen
+    for (let i = 1; i <= 10; i++) {
+        document.getElementById("channel" + i).innerHTML = "";
+    }
     messages.forEach(function(m) {
-        if (m.delimiter == true) {msg += "<span>^</span>";}
+        var msg = "";
+
+        //Nachricht aufbereiten
         if ((m.messageType == 0) || (m.messageType == 1)) { //nur TEXT & TRACE Nachrichten
             //if (m.dstCall.length == 0) {m.dstCall = "all";}
-            msg += "<span ";
+            msg += "<span";
             if (m.tx == true) {
-                msg += "class='middle-tx'> ";
+                msg += " class='middle-tx'> ";
             } else {
-                msg += "> ";
+                msg += ">";
             }
             const date = new Date(m.timestamp * 1000);
             msg += date.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
@@ -185,12 +210,48 @@ function showMessages() {
             msg += ": " + m.text;
             msg += "</span>"
         }
-        document.getElementById("channel1").innerHTML = msg;                     
-        for (let i = 1; i <= 10; i++) {
-            document.getElementById('channel' + 1).scrollTop = document.getElementById("channel1").scrollHeight;
+        
+        //Auf verschiedene Kanäle aufteilen
+        var found = false;
+        //Nachricht an alle
+        if ((m.dstCall == "") && (found == false)) {
+            found = true;
+            document.getElementById("channel1").innerHTML += msg;
+        }
+
+        for (let i = 10; i >= 1; i--) {
+            //Trennung
+            if (m.delimiter == true) {
+                found = true;
+                //document.getElementById("channel" + i).innerHTML += "<span>^</span>";
+            }
+
+            //Nachricht an Gruppe oder mich
+            if ((m.dstCall == document.getElementById('channelButton' + i).innerHTML) && (found == false)) {
+                found = true;
+                document.getElementById("channel" + i).innerHTML += msg;
+            }
+
         }        
+        //Nachrichten, die ich gesendet habe
+        if ((m.srcCall == document.getElementById('channelButton2').innerHTML) && (found == false)) {
+            found = true;
+            document.getElementById("channel2").innerHTML += msg;
+        }
+
+        //Rest müssten dann Nachrichten sein, die ich gesendet habe und die nicht in einer Gruppe sind
+        if (found == false) {
+            found = true;
+            document.getElementById("channel2").innerHTML += msg;
+        }
 
     });
+
+    //Nach unten scrollen
+    for (let i = 1; i <= 10; i++) {
+        document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight;
+    }     
+
 }
 
 
@@ -208,6 +269,7 @@ function initWebSocket() {
         baseURL = "http://192.168.33.60/"
     }
 
+    //Nachrichten laden
     fetch(baseURL + "messages.json", )
         .then(response => response.text())
         .then(text => {
@@ -220,14 +282,10 @@ function initWebSocket() {
 
         const result = {"delimiter": true};
         messages.push(result);
-
-        for (let i = 1; i <= 10; i++) {
-            document.getElementById("channel" + i).innerHTML = "not implemented yet....";
-        }
-        document.getElementById("channel1").innerHTML = "";
         showMessages();
     });				
 
+    //Websocket init
     websocket = new WebSocket(gateway);
     websocket.onopen = onOpen;
     websocket.onclose = onClose;

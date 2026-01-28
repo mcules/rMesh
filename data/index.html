@@ -11,209 +11,267 @@
 	</head>
 
     <body>
-        <div class="top">
-            <div class="left">
-                <textarea class="text-input" id="messageText"></textarea>
-                <div class="channel-switch"> 
-                    <button id="channelButton1" class="channel-button" onclick="setUI('channel1')">1: all</button>
-                    <button id="channelButton2" class="channel-button" onclick="setUI('channel2')">2: .........</button>
-                    <button id="channelButton3" class="channel-button" onclick="setUI('channel3')">3: .........</button>
-                    <button id="channelButton4" class="channel-button" onclick="setUI('channel4')">4: .........</button>
-                    <button id="channelButton5" class="channel-button" onclick="setUI('channel5')">5: .........</button>
+       
+            <div class="top">
+                <div class="left">
+                    <textarea class="text-input" id="messageText0" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText1" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText2" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText3" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText4" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText5" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText6" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText7" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText8" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText9" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText10" style="display: none;"></textarea>
+                    <div class="channel-switch"> 
+                        <button id="channelButton1" class="channel-button" onclick="setUI('channel1')">all</button>
+                        <button id="channelButton2" class="channel-button" onclick="setUI('channel2')"></button>
+                        <button id="channelButton3" class="channel-button" onclick="setUI('channel3')"></button>
+                        <button id="channelButton4" class="channel-button" onclick="setUI('channel4')"></button>
+                        <button id="channelButton5" class="channel-button" onclick="setUI('channel5')"></button>
+                    </div>
+                    <div class="channel-switch" style="border-top: none;">
+                        <button id="channelButton6" class="channel-button" onclick="setUI('channel6')"></button>
+                        <button id="channelButton7" class="channel-button" onclick="setUI('channel7')"></button>
+                        <button id="channelButton8" class="channel-button" onclick="setUI('channel8')"></button>
+                        <button id="channelButton9" class="channel-button" onclick="setUI('channel9')"></button>
+                        <button id="channelButton10" class="channel-button" onclick="setUI('channel10')"></button>
+                    </div>
+                    <div class="status-box">
+                        <div id="statusDstCall" class="status">DstCall: <div id="dstCall"></div> </div>
+                        <div id="statusMyCall" class="status"></div>
+                        <div id="statusTRX" class="status"></div>
+                        <div id="statusTxBufferCount" class="status"></div>
+                        <div id="statusRetry" class="status"></div>
+                    </div>
                 </div>
-                <div class="channel-switch" style="border-top: none;">
-                    <button id="channelButton6" class="channel-button" onclick="setUI('channel6')">6: .........</button>
-                    <button id="channelButton7" class="channel-button" onclick="setUI('channel7')">7: .........</button>
-                    <button id="channelButton8" class="channel-button" onclick="setUI('channel8')">8: .........</button>
-                    <button id="channelButton9" class="channel-button" onclick="setUI('channel9')">9: .........</button>
-                    <button id="channelButton10" class="channel-button" onclick="setUI('channel10')">10: .........</button>
-                </div>
-                <div class="status-box">
-                    <div id="statusDstCall" class="status">DstCall: all</div>
-                    <div id="statusMyCall" class="status"></div>
-                    <div id="statusTRX" class="status"></div>
-                    <div id="statusTxBufferCount" class="status"></div>
-                    <div id="statusRetry" class="status"></div>
+                <div class="right">
+                    <canvas class="clock" id="clock" ></canvas>
+                    <div id="version" class="grey-text-box">rMesh</div>
+                    <div id="date" class="grey-text-box"></div>
                 </div>
             </div>
-            <div class="right">
-                <canvas class="clock" id="clock" ></canvas>
-                <div id="version" class="grey-text-box">rMesh</div>
-                <div id="date" class="grey-text-box"></div>
-            </div>
-        </div>
 
-        <div id="channel1" class="middle" style="display: none;"></div>
-        <div id="channel2" class="middle" style="display: none;"></div>
-        <div id="channel3" class="middle" style="display: none;"></div>
-        <div id="channel4" class="middle" style="display: none;"></div>
-        <div id="channel5" class="middle" style="display: none;"></div>
-        <div id="channel6" class="middle" style="display: none;"></div>
-        <div id="channel7" class="middle" style="display: none;"></div>
-        <div id="channel8" class="middle" style="display: none;"></div>
-        <div id="channel9" class="middle" style="display: none;"></div>
-        <div id="channel10" class="middle" style="display: none;"> </div>
-        <div id="monitor" class="monitor"style="display: none;">
-            <div style="display: flex; flex-direction: column; align-items: center;">
-                <img src="rMesh.png" style="height: 70%;">
-                <div style="height: 22vh;"></div>
-            </div>   
-        </div>
-        <div id="peer" class="peer" style="display: none;"></div>
-        <div id="routing" class="routing" style="display: none;">not implemented yet....</div>
-        <div id="setup" class="setup" style="display: none;">
-            <table>
-                <tr> <td>Callsign:</td> <td><input class="input-box" id="settingsMycall"></td> </tr>
-                <tr> <td>Frequency:</td> <td><input class="input-box" id="settingsLoraFrequency"></td> </tr>
-                <tr> <td>Output Power:</td> <td><input class="input-box" id="settingsLoraOutputPower"></td> </tr>
-                <tr> <td>Bandwidth:</td> <td>
-                    <select id='settingsLoraBandwidth' class="input-box" >
-                        <option value="31.25">31,25 kHz</option>	
-                        <option value="62.5">62,5 kHz</option>	
-                        <option value="125">125 kHz</option>	
-                        <option value="250">250 kHz</option>	
-                        <option value="500">500 kHz</option>	
-                    </select> 
-                </td> </tr>
-                <tr> <td>Coding Rate:</td> <td>
-                    <select id='settingsLoraCodingRate' class="input-box">
-                        <option value="5">5 - Standard</option>	
-                        <option value="6">6 - Erhöhter Schutz gegen Störungen</option>	
-                        <option value="7">7 - Hoher Schutz, deutlich längere Sendezeit</option>	
-                        <option value="8">8 - Maximaler Schutz</option>	
-                    </select> 
-                </td> </tr>				
-                <tr> <td>Spreading Factor:</td> <td>
-                    <select id='settingsLoraSpreadingFactor' class="input-box">
-                        <option value="6">6 - Gering (Sichtverbindung)</option>	
-                        <option value="7">7 - Gut (Standard)</option>	
-                        <option value="8">8 - Besser</option>	
-                        <option value="9">9 - Sehr gut</option>	
-                        <option value="10">10 - Exzellent</option>	
-                        <option value="11">11 - Maximum</option>	
-                        <option value="12">12 - Maximum (Deep Indoor)</option>	
-                    </select> 
-                </td> </tr>
-                <tr> <td>Sync Word:</td> <td><input class="input-box" id="settingsLoraSyncWord"></td> </tr>		
-                <tr> <td>Preamble Length:</td> <td><input class="input-box" id="settingsLoraPreambleLength"></td> </tr>		
-                <tr> <td> Repeat Messages: </td> 
-                <td> 
-                    <label class="retro-checkbox-container">
-                        <input type="checkbox" id="settingsLoraRepeat">
-                        <span class="checkmark"></span>
-                    </label>                    
-                </td> </tr> 
-                <tr> <td> Max Message Length: </td> <td> <span id="settingsLoraMaxMessageLength"> </span> </td> </tr> 
-                <tr> <td>&nbsp;</td> <td>
-                    <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
-                    <button class="button" id="statusSyncTime">sync browser time</button>
-                </td> </tr>
-            </table>
-            
-        </div>
-        <div id="network" class="network" style="display: none;">
-            <table>
-                <tr> <td> Accesspoint: </td>  <td>
-                    <label class="retro-checkbox-container">
-                        <input type="checkbox" id="settingsApMode">
-                        <span class="checkmark"></span>
-                    </label> 
-                </td>	</tr> 
-                <tr class="AP_MODE_ENABLED"> 
-                    <td> Networks: </td> 
-                    <td> 
-                        <select class="input-box" id='settingsSSIDList'></select> 
-                        <button class="button" id="settingsScanWifi">scan</button> 
-                    </td>
-                </tr>
-                <tr class="AP_MODE_ENABLED"> 
-                    <td> SSID: </td> 
-                    <td> <input class="input-box" id='settingsSSID'> </td>
-                </tr>
-                <tr class="AP_MODE_ENABLED"> <td> Password </td> <td> <input class="input-box" type="password" id='settingsPassword'> </td> 
-                </tr>
-                <tr class="AP_MODE_ENABLED"> <td> DHCP </td> 
+            <div id="channel1" class="middle" style="display: none;"></div>
+            <div id="channel2" class="middle" style="display: none;"></div>
+            <div id="channel3" class="middle" style="display: none;"></div>
+            <div id="channel4" class="middle" style="display: none;"></div>
+            <div id="channel5" class="middle" style="display: none;"></div>
+            <div id="channel6" class="middle" style="display: none;"></div>
+            <div id="channel7" class="middle" style="display: none;"></div>
+            <div id="channel8" class="middle" style="display: none;"></div>
+            <div id="channel9" class="middle" style="display: none;"></div>
+            <div id="channel10" class="middle" style="display: none;"> </div>
+            <div id="monitor" class="monitor"style="display: none;">
+                <div style="display: flex; flex-direction: column; align-items: center;">
+                    <img src="rMesh.png" style="height: 70%;">
+                    <div style="height: 22vh;"></div>
+                </div>   
+            </div>
+            <div id="peer" class="peer" style="display: none;"></div>
+            <div id="routing" class="routing" style="display: none;">not implemented yet....</div>
+            <div id="setup" class="setup" style="display: none;">
+                <table>
+                    <tr> <td>Callsign:</td> <td><input class="input-box" id="settingsMycall"></td> </tr>
+                    <tr> <td>Frequency:</td> <td><input class="input-box" id="settingsLoraFrequency"></td> </tr>
+                    <tr> <td>Output Power:</td> <td><input class="input-box" id="settingsLoraOutputPower"></td> </tr>
+                    <tr> <td>Bandwidth:</td> <td>
+                        <select id='settingsLoraBandwidth' class="input-box" >
+                            <option value="31.25">31,25 kHz</option>	
+                            <option value="62.5">62,5 kHz</option>	
+                            <option value="125">125 kHz</option>	
+                            <option value="250">250 kHz</option>	
+                            <option value="500">500 kHz</option>	
+                        </select> 
+                    </td> </tr>
+                    <tr> <td>Coding Rate:</td> <td>
+                        <select id='settingsLoraCodingRate' class="input-box">
+                            <option value="5">5 - Standard</option>	
+                            <option value="6">6 - Erhöhter Schutz gegen Störungen</option>	
+                            <option value="7">7 - Hoher Schutz, deutlich längere Sendezeit</option>	
+                            <option value="8">8 - Maximaler Schutz</option>	
+                        </select> 
+                    </td> </tr>				
+                    <tr> <td>Spreading Factor:</td> <td>
+                        <select id='settingsLoraSpreadingFactor' class="input-box">
+                            <option value="6">6 - Gering (Sichtverbindung)</option>	
+                            <option value="7">7 - Gut (Standard)</option>	
+                            <option value="8">8 - Besser</option>	
+                            <option value="9">9 - Sehr gut</option>	
+                            <option value="10">10 - Exzellent</option>	
+                            <option value="11">11 - Maximum</option>	
+                            <option value="12">12 - Maximum (Deep Indoor)</option>	
+                        </select> 
+                    </td> </tr>
+                    <tr> <td>Sync Word:</td> <td><input class="input-box" id="settingsLoraSyncWord"></td> </tr>		
+                    <tr> <td>Preamble Length:</td> <td><input class="input-box" id="settingsLoraPreambleLength"></td> </tr>		
+                    <tr> <td> Repeat Messages: </td> 
                     <td> 
                         <label class="retro-checkbox-container">
-                            <input type="checkbox" id="settingsDHCP">
+                            <input type="checkbox" id="settingsLoraRepeat">
+                            <span class="checkmark"></span>
+                        </label>                    
+                    </td> </tr> 
+                    <tr> <td> Max Message Length: </td> <td> <span id="settingsLoraMaxMessageLength"> </span> </td> </tr> 
+                    <tr> <td>&nbsp;</td> <td>
+                        <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
+                        <button class="button" id="statusSyncTime">sync browser time</button>
+                    </td> </tr>
+                </table>
+                
+            </div>
+            <div id="network" class="network" style="display: none;">
+                <table>
+                    <tr> <td> Accesspoint: </td>  <td>
+                        <label class="retro-checkbox-container">
+                            <input type="checkbox" id="settingsApMode">
                             <span class="checkmark"></span>
                         </label> 
-                    </td> 
-                </tr> 
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> IP-Address </td> <td> <input class="input-box" id='settingsWiFiIP'> </td> </tr>
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Subnet </td> <td> <input class="input-box" id='settingsWifiNetMask'> </td> </tr>
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Gateway </td> <td> <input class="input-box" id='settingsWifiGateway'> </td> </tr>
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> DNS </td> <td> <input class="input-box" id='settingsWifiDNS'> </td> </tr>
-                <tr> <td> Brodcast </td> <td> <input class="input-box" id='settingsWifiBrodcast'> </td> </tr>
-                <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input class="input-box" id="settingsNTP"></td> </tr>
-                <tr> <td>&nbsp;</td> <td>
-                    <button class="button" onclick="saveSettings();">save</button>
-                    <button class="button" id="settingsReboot">reboot</button>                
-                </td> </tr>
-            </table>
-        </div>
+                    </td>	</tr> 
+                    <tr class="AP_MODE_ENABLED"> 
+                        <td> Networks: </td> 
+                        <td> 
+                            <select class="input-box" id='settingsSSIDList'></select> 
+                            <button class="button" id="settingsScanWifi">scan</button> 
+                        </td>
+                    </tr>
+                    <tr class="AP_MODE_ENABLED"> 
+                        <td> SSID: </td> 
+                        <td> <input class="input-box" id='settingsSSID'> </td>
+                    </tr>
+                    <tr class="AP_MODE_ENABLED"> <td> Password </td> <td> <input class="input-box" type="password" id='settingsPassword'> </td> 
+                    </tr>
+                    <tr class="AP_MODE_ENABLED"> <td> DHCP </td> 
+                        <td> 
+                            <label class="retro-checkbox-container">
+                                <input type="checkbox" id="settingsDHCP">
+                                <span class="checkmark"></span>
+                            </label> 
+                        </td> 
+                    </tr> 
+                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> IP-Address </td> <td> <input class="input-box" id='settingsWiFiIP'> </td> </tr>
+                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Subnet </td> <td> <input class="input-box" id='settingsWifiNetMask'> </td> </tr>
+                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Gateway </td> <td> <input class="input-box" id='settingsWifiGateway'> </td> </tr>
+                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> DNS </td> <td> <input class="input-box" id='settingsWifiDNS'> </td> </tr>
+                    <tr> <td> Brodcast </td> <td> <input class="input-box" id='settingsWifiBrodcast'> </td> </tr>
+                    <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input class="input-box" id="settingsNTP"></td> </tr>
+                    <tr> <td>&nbsp;</td> <td>
+                        <button class="button" onclick="saveSettings();">save</button>
+                        <button class="button" id="settingsReboot">reboot</button>                
+                    </td> </tr>
+                </table>
+            </div>
 
-        <div class="bottom">
+            <div class="bottom">
 
-            <button id="monitorButton" class="main-button" onclick="setUI('monitor')">
-                <img src="monitor.png" class="button-icon">
-                <span class="button-text">Monitor</span>
-            </button>
+                <button id="monitorButton" class="main-button" onclick="setUI('monitor')">
+                    <img src="monitor.png" class="button-icon">
+                    <span class="button-text">Monitor</span>
+                </button>
 
-            <button id="peerButton" class="main-button" onclick="setUI('peer')">
-                <img src="mh.png" class="button-icon">
-                <span class="button-text">Peers</span>
-            </button>    
+                <button id="peerButton" class="main-button" onclick="setUI('peer')">
+                    <img src="mh.png" class="button-icon">
+                    <span class="button-text">Peers</span>
+                </button>    
 
-            <button id="routingButton" class="main-button" onclick="setUI('routing')">
-                <img src="edit.png" class="button-icon">
-                <span class="button-text">Routing</span>
-            </button>    
+                <button id="routingButton" class="main-button" onclick="setUI('routing')">
+                    <img src="edit.png" class="button-icon">
+                    <span class="button-text">Routing</span>
+                </button>    
 
-            <button id="dosButton" class="main-button" onclick="openDosPopup()">
-                <img src="dos.png" class="button-icon">
-                <span class="button-text">DOS</span>
-            </button>    
+                <button id="dosButton" class="main-button" onclick="openDosPopup()">
+                    <img src="dos.png" class="button-icon">
+                    <span class="button-text">DOS</span>
+                </button>    
 
-            <button id="tuneButton" class="main-button">
-                <img src="tune.png" class="button-icon">
-                <span class="button-text">Tune</span>
-            </button>    
+                <button id="tuneButton" class="main-button">
+                    <img src="tune.png" class="button-icon">
+                    <span class="button-text">Tune</span>
+                </button>    
 
-            <button id="announceButton" class="main-button">
-                <img src="announce.png" class="button-icon">
-                <span class="button-text">Announce</span>
-            </button>    
+                <button id="announceButton" class="main-button">
+                    <img src="announce.png" class="button-icon">
+                    <span class="button-text">Announce</span>
+                </button>    
 
-            <button id="setupButton" class="main-button" onclick="setUI('setup')">
-                <img src="setup.png" class="button-icon">
-                <span class="button-text">Setup</span>
-            </button>    
+                <button id="setupButton" class="main-button" onclick="setUI('setup')">
+                    <img src="setup.png" class="button-icon">
+                    <span class="button-text">Setup</span>
+                </button>    
 
-            <button id="networkButton" class="main-button" onclick="setUI('network')">
-                <img src="network.png" class="button-icon">
-                <span class="button-text">Network</span>
-            </button>    
-
+                <button id="networkButton" class="main-button" onclick="setUI('network')">
+                    <img src="network.png" class="button-icon">
+                    <span class="button-text">Network</span>
+                </button>    
+            </div>
+       
+        <!-- Input box -->
+        <div id="overlay">
+            <div id="modal">
+                <span id="modalTitle"></span>
+                <input class="input-box" id="modalInput" type="text" style="width:100%; padding:5px;">
+                <br>
+                <button class="button" style="display:block; margin:10px auto 0 auto;" id="modalOk">OK</button>
+            </div>
         </div>
 
         <script>
-            var ui = ""         //Aktuelle Ansicht
+            var ui = ""         
 			var websocket;
 			var timeout = 0;
             var messages = [];
+            let okSound = new Audio("ok.wav");
 
-			document.addEventListener('DOMContentLoaded', function() {
+			document.addEventListener('DOMContentLoaded', async function() {
                 //Init
                 setUI("monitor");
                 drawClock(new Date(0));
-				initWebSocket();
-			});
+                let okSound = new Audio("ok.wav");
 
-            function show(id) {
-                document.querySelectorAll('.content').forEach(el => el.style.display = 'none');
-                document.getElementById('section' + id).style.display = 'block';
-            }
+                //Channel Buttons + Message input
+                for (let i = 1; i <= 10; i++) {
+
+                    if (i > 2) {
+                        document.getElementById('channelButton' + i).innerHTML = Cookie.get("channelButton" + i, "..........");
+                        document.getElementById("channelButton" + i).addEventListener("dblclick", async function() {
+                            var value = await inputBox("Group Name?");
+                            if (!value) value = "..........";
+                            Cookie.set("channelButton" + i, value);
+                            document.getElementById('channelButton' + i).innerHTML = value;
+                            setUI(ui);
+                            showMessages();
+
+                        });
+                    }
+
+                    document.getElementById('messageText' + i).addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') {
+                            const pos = this.selectionStart;
+                            const text = this.value;
+                            const startOfLine = text.lastIndexOf('\n', pos - 1) + 1;
+                            let endOfLine = text.indexOf('\n', pos);
+                            if (endOfLine === -1) endOfLine = text.length;
+                            const currentLineText = text.substring(startOfLine, endOfLine);
+                            sendMessage(currentLineText, i)
+                            if (pos < text.length) {
+                                e.preventDefault(); 
+                                const nextLineIndex = text.indexOf('\n', pos);
+                                if (nextLineIndex !== -1) {
+                                    this.setSelectionRange(nextLineIndex + 1, nextLineIndex + 1);
+                                } else {
+                                    this.setSelectionRange(text.length, text.length);
+                                }
+                            }
+                        }
+                    });
+                }   
+                
+                //Websocket verbinden
+				initWebSocket();
+                
+			});
 
 			document.getElementById("tuneButton").addEventListener("click", function() {
 				sendWS(JSON.stringify({tune: true }));
@@ -244,32 +302,7 @@
 				sendWS(JSON.stringify({scanWifi: true }));
 			});            
 
-            document.getElementById('messageText').addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    const pos = this.selectionStart;
-                    const text = this.value;
-                    const startOfLine = text.lastIndexOf('\n', pos - 1) + 1;
-                    let endOfLine = text.indexOf('\n', pos);
-                    if (endOfLine === -1) endOfLine = text.length;
-                    const currentLineText = text.substring(startOfLine, endOfLine);
-                    //Über Weksocket senden
-                    var sendMessage = {};
-                    sendMessage["text"] = currentLineText;
-                    sendMessage["dstCall"] = "";
-                    sendWS(JSON.stringify({sendMessage: sendMessage}));                    
 
-                    // --- 2. Deine Sprung-Logik (von vorhin) ---
-                    if (pos < text.length) {
-                        e.preventDefault(); 
-                        const nextLineIndex = text.indexOf('\n', pos);
-                        if (nextLineIndex !== -1) {
-                            this.setSelectionRange(nextLineIndex + 1, nextLineIndex + 1);
-                        } else {
-                            this.setSelectionRange(text.length, text.length);
-                        }
-                    }
-                }
-            });
 
             function openDosPopup() {
                 // Konfiguration des Popups
@@ -284,6 +317,62 @@
                     'DOSEmulator', 
                     `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes`
                 );
+            } 
+            
+            
+			const Cookie = {
+			  get(name, defaultValue = null) {
+				const cookies = document.cookie.split(";").map(c => c.trim());
+				for (const c of cookies) {
+				  const eqIndex = c.indexOf("=");
+				  const n = c.substring(0, eqIndex);
+				  const v = c.substring(eqIndex + 1);
+				  if (n === name) return v;
+				}
+				return defaultValue;
+			  },
+
+			  set(name, value, days = 3650) {
+				const expires = new Date(Date.now() + days * 864e5).toUTCString();
+				document.cookie = `${name}=${value}; expires=${expires}; path=/`;
+			  },
+
+			  delete(name) {
+				document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+			  }
+			};            
+            
+            function inputBox(title) {
+                return new Promise(resolve => {
+                const overlay = document.getElementById("overlay");
+                const input = document.getElementById("modalInput");
+                const titleElem = document.getElementById("modalTitle");
+                const okBtn = document.getElementById("modalOk");
+
+                titleElem.textContent = title;
+                input.value = "";
+                overlay.style.display = "flex";
+                input.focus();
+
+                function close() {
+                    overlay.style.display = "none";
+                    okBtn.removeEventListener("click", onOk);
+                    input.removeEventListener("keydown", onKey);
+                }
+
+                function onOk() {
+                    const val = input.value;
+                    close();
+                    resolve(val);
+                }
+
+                function onKey(e) {
+                    if (e.key === "Enter") onOk();
+                }
+
+                okBtn.addEventListener("click", onOk);
+                input.addEventListener("keydown", onKey);
+                });
             }            
 
 
