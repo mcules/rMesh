@@ -7,6 +7,7 @@
 
 struct Frame {
     char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0};
+    char dstGroup[MAX_CALLSIGN_LENGTH + 1] = {0};
     char dstCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char nodeCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};
@@ -50,10 +51,11 @@ struct Frame {
     enum HeaderTypes {
         //Obere 4 Bits vom Header-Byte -> 0x00 bis 0x0F
         SRC_CALL_HEADER,  
-        DST_CALL_HEADER,
+        DST_GROUP_HEADER,
         MESSAGE_HEADER,
         NODE_CALL_HEADER,
-        VIA_CALL_HEADER
+        VIA_CALL_HEADER,
+        DST_CALL_HEADER
     };
 
 };

@@ -13,7 +13,6 @@ function setUI(value) {
         }
         document.getElementById("channelButton2").innerHTML = "2:" + document.getElementById("settingsMycall").value;
     }
-
     document.getElementById("messageText0").style.display = "none";
     document.getElementById("monitorButton").classList.remove('selected');
     document.getElementById("peerButton").classList.remove('selected');
@@ -38,6 +37,7 @@ function setUI(value) {
             document.getElementById("channelButton1").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText1").style.display = "flex";
+            document.getElementById("messageText1").focus();
             document.getElementById("dstCall").innerHTML = channels[1].dstCall;
             activeChannel = 1;
             break;
@@ -46,6 +46,7 @@ function setUI(value) {
             document.getElementById("channelButton2").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText2").style.display = "flex";
+            document.getElementById("messageText2").focus();
             document.getElementById("dstCall").innerHTML = channels[2].dstCall; 
             activeChannel = 2;
             break;
@@ -54,6 +55,7 @@ function setUI(value) {
             document.getElementById("channelButton3").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText3").style.display = "flex";
+            document.getElementById("messageText3").focus();
             document.getElementById("dstCall").innerHTML = channels[3].dstCall;
             activeChannel = 3;
             break;
@@ -62,6 +64,7 @@ function setUI(value) {
             document.getElementById("channelButton4").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText4").style.display = "flex";
+            document.getElementById("messageText4").focus();
             document.getElementById("dstCall").innerHTML = channels[4].dstCall;
             activeChannel = 4;
             break;
@@ -70,6 +73,7 @@ function setUI(value) {
             document.getElementById("channelButton5").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText5").style.display = "flex";
+            document.getElementById("messageText5").focus();
             document.getElementById("dstCall").innerHTML = channels[5].dstCall;
             activeChannel = 5;
             break;
@@ -78,6 +82,7 @@ function setUI(value) {
             document.getElementById("channelButton6").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText6").style.display = "flex";
+            document.getElementById("messageText6").focus();
             document.getElementById("dstCall").innerHTML = channels[6].dstCall;
             activeChannel = 6;
             break;
@@ -86,6 +91,7 @@ function setUI(value) {
             document.getElementById("channelButton7").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText7").style.display = "flex";
+            document.getElementById("messageText7").focus();
             document.getElementById("dstCall").innerHTML = channels[7].dstCall;
             activeChannel = 7;
             break;
@@ -94,6 +100,7 @@ function setUI(value) {
             document.getElementById("channelButton8").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText8").style.display = "flex";
+            document.getElementById("messageText8").focus();
             document.getElementById("dstCall").innerHTML = channels[8].dstCall;
             activeChannel = 8;
             break;
@@ -102,6 +109,7 @@ function setUI(value) {
             document.getElementById("channelButton9").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText9").style.display = "flex";
+            document.getElementById("messageText9").focus();
             document.getElementById("dstCall").innerHTML = channels[9].dstCall;
             activeChannel = 9;
             break;
@@ -110,6 +118,7 @@ function setUI(value) {
             document.getElementById("channelButton10").classList.add('selected');
             document.getElementById("monitor").style.display = "flex";
             document.getElementById("messageText10").style.display = "flex";
+            document.getElementById("messageText10").focus();
             document.getElementById("dstCall").innerHTML = channels[10].dstCall;
             activeChannel = 10;
             break;
@@ -149,11 +158,11 @@ function setUI(value) {
     document.getElementById('monitor').scrollTop = document.getElementById("monitor").scrollHeight;
     for (let i = 1; i <= 10; i++) {
         document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight
+        //Ungelesene Nachrichten anzeigen
         if (activeChannel == i) {channels[i].unread = 0;}
         if (channels[i].unread > 0) {document.getElementById("channelButton" + i).classList.add('unread');}
     }      
     
-    console.log( channels);
 
 }
 

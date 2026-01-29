@@ -36,7 +36,7 @@ function onMessage(event) {
                 if (f.id) { msg += " ID: " + f.id ; }
                 if (f.srcCall) { msg += " SRC: " + f.srcCall; }
                 if (f.dstCall) { msg += " DST: " + f.dstCall; }
-
+                if (f.dstGroup) { msg += " GRP: " + f.dstGroup; }
                 if (f.messageType == 0) {msg += " TEXT: ";}
                 if (f.messageType == 1) {msg += " TRACE: ";}
                 if (f.messageType == 15) {msg += " COMMAND: ";}
@@ -55,8 +55,9 @@ function onMessage(event) {
 
     //Message empfangen
     if (d.message) {
+        d.message.parsed = false;
         messages.push(d.message);
-        showMessages(d.message);
+        showMessages();
         okSound.play();
     }
 
@@ -148,16 +149,25 @@ function onMessage(event) {
 //Nachricht senden
 async function sendMessage(text, channel) {
     var dstCall = document.getElementById('dstCall').innerHTML;
-    if (dstCall == "..........") return;
-    if (dstCall == "") {
-        dstCall = (await inputBox("Destination Call?")).toUpperCase();
+    if (channel == 2) {
+        dstCall = (await inputBox("Destination Call?", channels[2].dstCall, document.getElementById('messageText' + channel) )).toUpperCase();
+        channels[2].dstCall = dstCall;
+        Cookie.set("channels", JSON.stringify(channels))
     }
+    if (dstCall == "") {return;}
     if (dstCall == "all") dstCall = "";
-    var sendMessage = {};
-    sendMessage["text"] = text;
-    sendMessage["dstCall"] = dstCall;
-    console.log(sendMessage);
-    sendWS(JSON.stringify({sendMessage: sendMessage}));                    
+
+    var message = {};
+    message["text"] = text;
+    message["dst"] = dstCall;
+    console.log(message);
+    if (channel == 2) {
+        //Private Nachricht
+        sendWS(JSON.stringify({sendMessage: message}));                    
+    } else {
+        //Gruppe
+        sendWS(JSON.stringify({sendGroup: message}));                    
+    }
 }
 
 
@@ -185,12 +195,17 @@ function saveSettings() {
     sendWS(JSON.stringify({settings: settings}));
 }
 
-function showMessages() {
-    //Alles löschen
-    for (let i = 1; i <= 10; i++) {
-        document.getElementById("channel" + i).innerHTML = "";
+function showMessages(parseAll = false) {
+    console.log(parseAll);
+    if (parseAll) {
+        //Alles löschen
+        for (let i = 1; i <= 10; i++) { document.getElementById("channel" + i).innerHTML = ""; }
     }
+
     messages.forEach(function(m) {
+        //Abbruch, wenn Nachricht schon angezeigt wurde
+        if ((m.parsed == true) && (parseAll == false)) {return;}
+        m.parsed = true;
         var msg = "";
 
         //Nachricht aufbereiten
@@ -206,6 +221,7 @@ function showMessages() {
             msg += date.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
             msg += m.srcCall;
             if (m.dstCall)  {msg += " " + m.dstCall; }
+            if (m.dstGroup)  {msg += " " + m.dstGroup; }
             if (m.messageType == 1) {msg += " [TRACE] ";}
             msg += ": " + m.text;
             msg += "</span>"
@@ -213,18 +229,18 @@ function showMessages() {
         
         //Auf verschiedene Kanäle aufteilen
         var found = false;
-        //Nachricht an alle
-        if ((m.dstCall == "") && (found == false)) {
+        //Nachricht an alle -> Channel 1
+        if ((m.dstCall == "") && (m.dstGroup == "") && (found == false)) {
             found = true;
             document.getElementById("channel1").innerHTML += msg;
-            channels[1].unread ++;
+            if (!parseAll) {channels[1].unread ++;}
         }
 
-        //Nachrichten an mich
+        //Nachrichten an mich -> Channel 2
         if ((m.dstCall == document.getElementById("settingsMycall").value) && (found == false)) {
             found = true;
             document.getElementById("channel2").innerHTML += msg;
-            channels[2].unread ++;
+            if (!parseAll) {channels[2].unread ++;}
         }
 
         for (let i = 1; i <= 10; i++) {
@@ -233,38 +249,33 @@ function showMessages() {
                 found = true;
                 document.getElementById("channel" + i).innerHTML += "<span>^</span>";
             }
-            //Nachricht an Gruppe 
-            if ((m.dstCall == channels[i].dstCall) && (found == false)) {
+
+            //Nachricht an Gruppe -> Channel 3...10
+            if ((m.dstGroup == channels[i].dstCall) && (m.dstCall == "") && (found == false)) {
                 found = true;
                 document.getElementById("channel" + i).innerHTML += msg;
-                //channels[i].unread ++;
+                if (!parseAll) {channels[i].unread ++;}
             }
         }        
 
-        //Nachrichten, die ich gesendet habe
-        if ((m.srcCall == document.getElementById("settingsMycall").value) && (found == false)) {
+        //Nachrichten, die ich gesendet habe -> Channel 2
+        if ((m.srcCall == document.getElementById("settingsMycall").value) && (m.dstGroup == "") && (found == false)) {
             found = true;
             document.getElementById("channel2").innerHTML += msg;
-            //if (activeChannel != 2) {channels[2].unread ++;}
+            if (!parseAll) {channels[2].unread ++;}
         }
 
-        //Rest 
+        //Rest -> Channel 1
         if (found == false) {
             found = true;
             document.getElementById("channel1").innerHTML += msg;
-            //if (activeChannel != 1) {channels[1].unread ++;}
+            if (!parseAll) {channels[1].unread ++;}
         }
 
     });
 
-    console.log( channels);
-
-    //Nach unten scrollen
-    for (let i = 1; i <= 10; i++) {
-        document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight;
-        if (activeChannel == i) {channels[i].unread = 0;}
-        if (channels[i].unread > 0) {document.getElementById("channelButton" + i).classList.add('unread');}
-    }     
+    //UI Anpassen wegen nach unten scrollen und ungelesenen Nachrichten
+    setUI(ui);
 
 }
 
@@ -291,6 +302,7 @@ function initWebSocket() {
             lines.forEach(line => {
                 if (line.trim().length === 0) return;
                 const m = JSON.parse(line);
+                m.message.parsed = false;
                 messages.push(m.message);
         });
 
@@ -298,10 +310,9 @@ function initWebSocket() {
         messages.push(result);
         showMessages();
 
-        for (let i = 1; i <= 10; i++) {
-            channels[i].unread = 0;
-            document.getElementById("channelButton" + i).classList.remove('unread');
-        } 
+        //Alles als gelesen markieren
+        for (let i = 1; i <= 10; i++) {channels[i].unread = 0;} 
+        setUI(ui);
 
     });				
 

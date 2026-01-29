@@ -73,14 +73,26 @@ void sendFrame(Frame &f) {
     jsonBuffer = nullptr;
 }
 
-void sendMessage(const char* dstCall, const char* text, uint8_t messageType) {
+void sendMessage(const char* dst, const char* text, uint8_t messageType) {
     //Neuen Frame für alle Peers zusammenbauen
     Frame f;
-    strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
-    strncpy(f.dstCall, dstCall, sizeof(f.dstCall));
-    safeUtf8Copy((char*)f.message, (uint8_t*)text, strlen(text));
+    strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
+    safeUtf8Copy((char*)f.dstCall, (uint8_t*)dst, sizeof(f.dstCall));
+    safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
+    f.messageLength = strlen(text);
+    sendFrame(f);
+}
+
+void sendGroup(const char* dst, const char* text, uint8_t messageType) {
+    //Neuen Frame für alle Peers zusammenbauen
+    Frame f;
+    f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
+    f.messageType = messageType;
+    strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
+    safeUtf8Copy((char*)f.dstGroup, (uint8_t*)dst, sizeof(f.dstGroup));
+    safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
     f.messageLength = strlen(text);
     sendFrame(f);
 }

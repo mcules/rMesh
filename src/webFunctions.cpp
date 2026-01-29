@@ -93,12 +93,12 @@ void startWebServer() {
       saveSettings();
     }
 
-
     //Frame senden RAW
     if (json["sendFrame"].is<JsonVariant>()) {
         Frame f;
         if (json["sendFrame"]["frameType"].is<JsonVariant>()) {f.frameType = json["sendFrame"]["frameType"].as<uint8_t>();}
         if (json["sendFrame"]["srcCall"].is<JsonVariant>()) { strlcpy(f.srcCall, json["sendFrame"]["srcCall"] | "", sizeof(f.srcCall)); }
+        if (json["sendFrame"]["dstGroup"].is<JsonVariant>()) { strlcpy(f.dstGroup, json["sendFrame"]["dstCall"] | "", sizeof(f.dstGroup)); }
         if (json["sendFrame"]["dstCall"].is<JsonVariant>()) { strlcpy(f.dstCall, json["sendFrame"]["dstCall"] | "", sizeof(f.dstCall)); }
         if (json["sendFrame"]["messageType"].is<JsonVariant>()) {f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();}
         if (json["sendFrame"]["messageLength"].is<JsonVariant>()) {f.messageLength = json["sendFrame"]["messageLength"].as<uint16_t>();}
@@ -123,8 +123,14 @@ void startWebServer() {
 
     //Nachricht senden
     if (json["sendMessage"].is<JsonVariant>()) {
-        sendMessage(json["sendMessage"]["dstCall"].as<const char*>(), json["sendMessage"]["text"].as<const char*>() );
+        sendMessage(json["sendMessage"]["dst"].as<const char*>(), json["sendMessage"]["text"].as<const char*>() );
     }   
+
+    //Gruppe senden
+    if (json["sendGroup"].is<JsonVariant>()) {
+        sendGroup(json["sendGroup"]["dst"].as<const char*>(), json["sendGroup"]["text"].as<const char*>() );
+    }   
+
 
     //Trace senden
     if (json["trace"].is<JsonVariant>()) {

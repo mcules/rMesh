@@ -184,7 +184,8 @@ void processRxFrame(Frame &f) {
                     //Frame vorbereiten
                     tf.frameType = f.frameType;
                     memcpy(tf.srcCall, f.srcCall, sizeof(tf.srcCall));
-                    memcpy(tf.dstCall, f.dstCall, sizeof(tf.srcCall));
+                    memcpy(tf.dstGroup, f.dstGroup, sizeof(tf.srcCall));
+                    memcpy(tf.dstCall, f.dstCall, sizeof(tf.dstCall));
                     tf.hopCount = f.hopCount;
                     if (tf.hopCount < 15) {tf.hopCount ++;}
                     tf.messageType = f.messageType;                        

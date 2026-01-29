@@ -227,8 +227,7 @@
             var channels = [];
             for (let i = 0; i <= 10; i++) {
                 channels[i] = {
-                    dstCall: "",
-                    unread: 0
+                    dstCall: ""
                 };
             }
 
@@ -250,15 +249,11 @@
                     channels[i].unread = 0;
 
                     if (i > 2) {
-                        //document.getElementById('channelButton' + i).innerHTML = Cookie.get("channelButton" + i, "..........");
-                        //channels[i].dstCall = Cookie.get("channelButton" + i, "..........");
                         document.getElementById("channelButton" + i).addEventListener("dblclick", async function() {
                             var value = await inputBox("Group Name?");
                             channels[i].dstCall = value;
                             Cookie.set("channels", JSON.stringify(channels))
-                            setUI(ui);
-                            showMessages();
-
+                            showMessages(true);
                         });
                     }
 
@@ -270,7 +265,8 @@
                             let endOfLine = text.indexOf('\n', pos);
                             if (endOfLine === -1) endOfLine = text.length;
                             const currentLineText = text.substring(startOfLine, endOfLine);
-                            sendMessage(currentLineText, i)
+                            sendMessage(currentLineText, i,);
+                            
                             if (pos < text.length) {
                                 e.preventDefault(); 
                                 const nextLineIndex = text.indexOf('\n', pos);
@@ -297,12 +293,6 @@
 
             document.getElementById("announceButton").addEventListener("click", function() {
 				sendWS(JSON.stringify({announce: true }));
-
-
-                        const result = {"text":": Habe Meshsense 👍🏻 schicke Dir das per PN","messageType":0,"srcCall":"DB0LUS","dstCall":"Wetter","id":42668686,"tx":false,"timestamp":1769692111};
-                        messages.push(result);
-                        showMessages();
-
 			});   
 
 			document.getElementById("settingsReboot").addEventListener("click", function() {
@@ -326,7 +316,25 @@
 				sendWS(JSON.stringify({scanWifi: true }));
 			});            
 
-
+            //F-Tasten
+            window.addEventListener('keydown', function(e) {
+                if (e.altKey) {
+                    const key = e.key.toLowerCase(); // Damit es auch bei festgestellter Großschreibung geht
+                    if (key === 'm' ) {e.preventDefault(); setUI("monitor"); }
+                    if (key === 'p' ) {e.preventDefault(); setUI("peer"); }
+                    if (key === 'a' ) {e.preventDefault(); sendWS(JSON.stringify({announce: true })); }
+                }
+                // Extrahiert die Zahl nach dem "F"
+                const fKeyMatch = e.key.match(/^F(\d+)$/);
+                if (fKeyMatch) {
+                    const fNumber = parseInt(fKeyMatch[1]);
+                    // Nur F1 bis F10 abfangen
+                    if (fNumber >= 1 && fNumber <= 10) {
+                        e.preventDefault(); // Browser-Standard blockieren
+                        setUI("channel" + fNumber);
+                    }
+                }
+            });
 
             function openDosPopup() {
                 // Konfiguration des Popups
@@ -366,39 +374,47 @@
 			  }
 			};            
             
-            function inputBox(title) {
+            function inputBox(title, defaultValue = "", returnFocusElement = null) {
                 return new Promise(resolve => {
-                const overlay = document.getElementById("overlay");
-                const input = document.getElementById("modalInput");
-                const titleElem = document.getElementById("modalTitle");
-                const okBtn = document.getElementById("modalOk");
+                    const overlay = document.getElementById("overlay");
+                    const input = document.getElementById("modalInput");
+                    const titleElem = document.getElementById("modalTitle");
+                    const okBtn = document.getElementById("modalOk");
 
-                titleElem.textContent = title;
-                input.value = "";
-                overlay.style.display = "flex";
-                input.focus();
+                    titleElem.textContent = title;
+                    input.value = defaultValue; 
+                    
+                    overlay.style.display = "flex";
+                    
+                    input.focus();
+                    if (defaultValue) input.select(); // Markiert Text, falls einer da ist
 
-                function close() {
-                    overlay.style.display = "none";
-                    okBtn.removeEventListener("click", onOk);
-                    input.removeEventListener("keydown", onKey);
-                }
+                    function close() {
+                        overlay.style.display = "none";
+                        okBtn.removeEventListener("click", onOk);
+                        input.removeEventListener("keydown", onKey);
+                        
+                        // Fokus zurückgeben, falls ein Element übergeben wurde
+                        if (returnFocusElement && typeof returnFocusElement.focus === "function") {
+                            returnFocusElement.focus();
+                        }
+                    }
 
-                function onOk() {
-                    const val = input.value;
-                    close();
-                    resolve(val);
-                }
+                    function onOk() {
+                        const val = input.value;
+                        close();
+                        resolve(val);
+                    }
 
-                function onKey(e) {
-                    if (e.key === "Enter") onOk();
-                }
+                    function onKey(e) {
+                        if (e.key === "Enter") onOk();
+                        if (e.key === "Escape") { close(); resolve(null); }
+                    }
 
-                okBtn.addEventListener("click", onOk);
-                input.addEventListener("keydown", onKey);
+                    okBtn.addEventListener("click", onOk);
+                    input.addEventListener("keydown", onKey);
                 });
-            }            
-
+            }
 
 
         </script>

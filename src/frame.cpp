@@ -32,6 +32,13 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
         position += strlen(viaCall);
     }
     //Destination hinzufügen
+    if (strlen(dstGroup) > 0) {
+        data[position] = Frame::HeaderTypes::DST_GROUP_HEADER << 4 | (0x0F & strlen(dstGroup));  
+        position ++;
+        memcpy(&data[position], dstGroup, strlen(dstGroup)); //Payload
+        position += strlen(dstGroup);
+    }
+    //Destination Call hinzufügen
     if (strlen(dstCall) > 0) {
         data[position] = Frame::HeaderTypes::DST_CALL_HEADER << 4 | (0x0F & strlen(dstCall));  
         position ++;
@@ -86,6 +93,7 @@ size_t Frame::monitorJSON(char* buffer, size_t length) {
     }
     doc["monitor"]["timestamp"] = timestamp;
     if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
+    if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
     if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
     if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
     if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
@@ -109,8 +117,9 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
     safeUtf8Copy(text, (uint8_t*)message, messageLength);
     doc["message"]["text"] = text;    
     doc["message"]["messageType"] = messageType;
-    doc["message"]["srcCall"] = srcCall;
     doc["message"]["dstCall"] = dstCall;
+    doc["message"]["dstGroup"] = dstGroup;
+    doc["message"]["srcCall"] = srcCall;
     doc["message"]["id"] = id;
     doc["message"]["tx"] = tx;
     doc["message"]["timestamp"] = timestamp;
@@ -161,6 +170,16 @@ void Frame::importBinary(uint8_t* data, size_t length) {
                     memcpy(srcCall, data + i + 1, sizeof(srcCall)); 
                     if (payloadLength >= sizeof(srcCall)) {payloadLength = sizeof(srcCall) - 1;}
                     srcCall[payloadLength] = '\0';
+                    i += payloadLength + 1;
+                } else {
+                    i = length; //Abbruch
+                }
+                break;
+            case Frame::HeaderTypes::DST_GROUP_HEADER:
+                if (i + payloadLength < length) {
+                    memcpy(dstGroup, data + i + 1, sizeof(dstGroup)); 
+                    if (payloadLength >= sizeof(dstGroup)) {payloadLength = sizeof(dstGroup) - 1;}
+                    dstGroup[payloadLength] = '\0';
                     i += payloadLength + 1;
                 } else {
                     i = length; //Abbruch
