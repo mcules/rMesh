@@ -26,7 +26,7 @@
                     <textarea class="text-input" id="messageText9" style="display: none;"></textarea>
                     <textarea class="text-input" id="messageText10" style="display: none;"></textarea>
                     <div class="channel-switch"> 
-                        <button id="channelButton1" class="channel-button" onclick="setUI('channel1')">all</button>
+                        <button id="channelButton1" class="channel-button" onclick="setUI('channel1'); "></button>
                         <button id="channelButton2" class="channel-button" onclick="setUI('channel2')"></button>
                         <button id="channelButton3" class="channel-button" onclick="setUI('channel3')"></button>
                         <button id="channelButton4" class="channel-button" onclick="setUI('channel4')"></button>
@@ -218,28 +218,44 @@
         </div>
 
         <script>
-            var ui = ""         
+            var ui = ""   
+            var activeChannel = 0;      
 			var websocket;
 			var timeout = 0;
             var messages = [];
             let okSound = new Audio("ok.wav");
+            var channels = [];
+            for (let i = 0; i <= 10; i++) {
+                channels[i] = {
+                    dstCall: "",
+                    unread: 0
+                };
+            }
+
 
 			document.addEventListener('DOMContentLoaded', async function() {
                 //Init
-                setUI("monitor");
                 drawClock(new Date(0));
                 let okSound = new Audio("ok.wav");
 
+                //Kanaleinstellungen laden
+                //Cookie.set("channels", JSON.stringify(channels));
+                var json = Cookie.get("channels", JSON.stringify(channels)) ;
+                channels = JSON.parse(json);
+                channels[1].dstCall = "all";
+
+
                 //Channel Buttons + Message input
                 for (let i = 1; i <= 10; i++) {
+                    channels[i].unread = 0;
 
                     if (i > 2) {
-                        document.getElementById('channelButton' + i).innerHTML = Cookie.get("channelButton" + i, "..........");
+                        //document.getElementById('channelButton' + i).innerHTML = Cookie.get("channelButton" + i, "..........");
+                        //channels[i].dstCall = Cookie.get("channelButton" + i, "..........");
                         document.getElementById("channelButton" + i).addEventListener("dblclick", async function() {
                             var value = await inputBox("Group Name?");
-                            if (!value) value = "..........";
-                            Cookie.set("channelButton" + i, value);
-                            document.getElementById('channelButton' + i).innerHTML = value;
+                            channels[i].dstCall = value;
+                            Cookie.set("channels", JSON.stringify(channels))
                             setUI(ui);
                             showMessages();
 
@@ -268,6 +284,8 @@
                     });
                 }   
                 
+                setUI("monitor");
+
                 //Websocket verbinden
 				initWebSocket();
                 
@@ -279,6 +297,12 @@
 
             document.getElementById("announceButton").addEventListener("click", function() {
 				sendWS(JSON.stringify({announce: true }));
+
+
+                        const result = {"text":": Habe Meshsense 👍🏻 schicke Dir das per PN","messageType":0,"srcCall":"DB0LUS","dstCall":"Wetter","id":42668686,"tx":false,"timestamp":1769692111};
+                        messages.push(result);
+                        showMessages();
+
 			});   
 
 			document.getElementById("settingsReboot").addEventListener("click", function() {

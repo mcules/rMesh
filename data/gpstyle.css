@@ -370,6 +370,14 @@ body, button {
 
 }
 
+/* Der dezente Drück-Effekt */
+.channel-button.unread {
+  /* Schatten verschwindet fast ganz */
+  color: #ffff3e;
+
+
+}
+
 
 
 .button {

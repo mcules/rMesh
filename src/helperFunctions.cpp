@@ -154,38 +154,77 @@ uint32_t getTOA(uint8_t payloadBytes) {
 
 
 
-void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength) {
-    size_t d = 0; // Index für dest
-    
-    for (size_t i = 0; i < maxLength; i++) {
-        uint8_t byte = src[i];
-
-        // NEU: Abbrechen, wenn das Ende des C-Strings erreicht ist
-        if (byte == 0x00) {
-            break; 
-        }
-
-        // 1. Filter: 0xFF und 0xFE sind in UTF-8 niemals erlaubt
-        if (byte >= 0xFE) {
-            continue; // Byte überspringen
-        }
-
-        // 2. Prüfung der Byte-Sequenz
-        if (byte <= 0x7F) {
-            // Valides ASCII
-            dest[d++] = (char)byte;
-        } 
-        else if (byte >= 0xC2 && byte <= 0xF4) {
-            // Möglicher Start einer Mehrbyte-Sequenz
-            dest[d++] = (char)byte;
-        } 
-        else if (byte >= 0x80 && byte <= 0xBF) {
-            // Valides Folge-Byte
-            dest[d++] = (char)byte;
-        }
-    }
-    dest[d] = '\0'; // Null-Terminierung
+static inline bool isCont(uint8_t b) {
+    return (b & 0xC0) == 0x80; // 0b10xxxxxx
 }
+
+
+
+void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength) {
+    size_t d = 0;
+
+    for (size_t i = 0; i < maxLength; ) {
+        uint8_t b = src[i];
+
+        if (b == 0x00) break;
+
+        // ASCII
+        if (b < 0x80) {
+            // JSON: nur erlaubte ASCII-Zeichen
+            if (b >= 0x20 || b == '\n' || b == '\r' || b == '\t') {
+                dest[d++] = b;
+            }
+            i++;
+            continue;
+        }
+
+        // 2-Byte UTF-8
+        if (b >= 0xC2 && b <= 0xDF) {
+            if (i + 1 < maxLength && isCont(src[i+1])) {
+                dest[d++] = b;
+                dest[d++] = src[i+1];
+            }
+            i += 2;
+            continue;
+        }
+
+        // 3-Byte UTF-8
+        if (b >= 0xE0 && b <= 0xEF) {
+            if (i + 2 < maxLength &&
+                isCont(src[i+1]) &&
+                isCont(src[i+2])) {
+
+                dest[d++] = b;
+                dest[d++] = src[i+1];
+                dest[d++] = src[i+2];
+            }
+            i += 3;
+            continue;
+        }
+
+        // 4-Byte UTF-8
+        if (b >= 0xF0 && b <= 0xF4) {
+            if (i + 3 < maxLength &&
+                isCont(src[i+1]) &&
+                isCont(src[i+2]) &&
+                isCont(src[i+3])) {
+
+                dest[d++] = b;
+                dest[d++] = src[i+1];
+                dest[d++] = src[i+2];
+                dest[d++] = src[i+3];
+            }
+            i += 4;
+            continue;
+        }
+
+        // Alles andere verwerfen
+        i++;
+    }
+
+    dest[d] = '\0';
+}
+
 
 
 void getFormattedTime(const char* format, char* outBuffer, size_t outSize) {
