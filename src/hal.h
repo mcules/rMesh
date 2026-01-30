@@ -8,6 +8,8 @@
     #include "hal_LILYGO_T-Beam.h"
 #elif defined(HAL_HELTEC_WIRELESS_STICK_LITE_V3)
     #include "hal_HELTEC_Wireless_Stick_Lite_V3.h"
+#elif defined(HAL_HELTEC_WIFI_LORA_32_V4)
+    #include "hal_HELTEC_WiFi_LoRa_32_V4.h"
 #else
     #error "No HAL defined for this board!"
 #endif

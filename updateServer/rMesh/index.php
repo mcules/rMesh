@@ -67,7 +67,7 @@
 </head>
 <body>
 
-<h2>rMesh Installer</h2>
+<h2>rMesh Installer V1.0.2-a</h2>
 
 <div class="device-grid">
 
@@ -78,7 +78,7 @@ $devices = array_filter(glob($baseDir . '/*'), 'is_dir');
 foreach ($devices as $devicePath) {
     $device = basename($devicePath);
 
-    if (!file_exists("$devicePath/firmware.bin") || !file_exists("$devicePath/littlefs.bin")) {
+    if (!file_exists("$devicePath/firmware.bin") && !file_exists("$devicePath/littlefs.bin")) {
         continue;
     }
 
@@ -90,7 +90,7 @@ foreach ($devices as $devicePath) {
     echo "<div class='device-name'>$device</div>";
 
     echo "
-        <esp-web-install-button manifest=\"manifest.php?device=$device\">
+        <esp-web-install-button manifest=\"$device/manifest.php\">
             <button slot='activate'>Firmware installieren</button>
             <span slot='unsupported'>Browser nicht unterstützt.</span>
         </esp-web-install-button>
