@@ -6,7 +6,7 @@ $folderName = basename(__DIR__);
 $json = <<<JSON
 {
   "name": "$folderName",
-  "new_install_prompt_erase": true,
+  "new_install_immediately_erase": true,
   "builds": [
     {
       "chipFamily": "ESP32-S3",

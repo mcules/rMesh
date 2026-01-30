@@ -1,4 +1,4 @@
-#ifdef HAL_HELTEC_WIRELESS_STICK_LITE_V3
+#ifdef HELTEC_WIRELESS_STICK_LITE_V3
 
 #include "hal.h"
 #include "RadioLib.h"

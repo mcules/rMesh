@@ -1,4 +1,4 @@
-#ifdef HELTEC_WIFI_LORA_32_V4
+#ifdef HELTEC_WIFI_LORA_32_V3
 
 #include "hal.h"
 #include "RadioLib.h"
@@ -7,7 +7,6 @@
 #include "main.h"
 #include "helperFunctions.h"
 #include "webFunctions.h"
-
 
 
 SX1262 radio = new Module( LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY );
@@ -42,16 +41,6 @@ void initHal() {
     //Ausgäne
     pinMode(PIN_WIFI_LED, OUTPUT); 
     digitalWrite(PIN_WIFI_LED, 0); 
-
-
-    pinMode( PIN_PA_CPS, OUTPUT); 
-    pinMode( PIN_PA_CSD, OUTPUT); 
-    pinMode( PIN_VFEM, OUTPUT); 
-    digitalWrite(PIN_VFEM, 1); 
-
-    digitalWrite(PIN_PA_CSD, 1); 
-    digitalWrite(PIN_PA_CPS, 1); 
-
 
     //Eingänge
     pinMode(PIN_AP_MODE_SWITCH, INPUT);
