@@ -317,6 +317,7 @@
 			});
 
 			document.getElementById("settingsScanWifi").addEventListener("click", function() {
+                msgBox("WiFi scan started. Results will be displayed in a few seconds.");
                 document.getElementById('settingsSSIDList').innerHTML = "";
 				sendWS(JSON.stringify({scanWifi: true }));
 			});            
@@ -377,7 +378,28 @@
 			  delete(name) {
 				document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
 			  }
-			};            
+			};       
+            
+            
+            function msgBox(title) {
+                return new Promise(resolve => {
+                    const overlay = document.getElementById("overlay");
+                    const input = document.getElementById("modalInput");
+                    const titleElem = document.getElementById("modalTitle");
+                    const okBtn = document.getElementById("modalOk");
+                    titleElem.textContent = title;
+                    input.style.display = "none";
+                    overlay.style.display = "flex";
+
+                    function onOk() {
+                        overlay.style.display = "none";
+                        okBtn.removeEventListener("click", onOk);
+                    }
+
+                    okBtn.addEventListener("click", onOk);
+                });
+            }
+
             
             function inputBox(title, defaultValue = "", returnFocusElement = null) {
                 return new Promise(resolve => {
@@ -388,7 +410,7 @@
 
                     titleElem.textContent = title;
                     input.value = defaultValue; 
-                    
+                    input.style.display = "flex";
                     overlay.style.display = "flex";
                     
                     input.focus();

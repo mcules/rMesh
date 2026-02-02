@@ -1,8 +1,12 @@
 V1.0.4-alpha
 - Timing um ca. 25% "verlangsamt"
 - Alle LittleFS Schreibvorgänge mit flush() abgeschlossen.
-- Update Prüfung 1h nach Einschalten und dann alle 24h
+- Update Prüfung alle 24h
 - GUI: Hinweis im Fenstertitel, wenn neue Nachrichten
+- ohne gesetztes Rufzeichen kein Senden möglich
+- Default Rufzeichen = ""
+- Nachrichten mit Länge = 0 werden nicht gesendet
+- GUI kann jetzt Messageboxen
 
 
 V1.0.3-alpha

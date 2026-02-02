@@ -31,6 +31,7 @@ void checkForUpdates() {
 void showWiFiStatus() {
     //AP-Mode umschalten
     if (getKeyApMode() != apModeKey) {
+        delay(50);
         apModeKey = getKeyApMode();
         if (apModeKey == 1) {
             if (settings.apMode == false) {
@@ -38,7 +39,6 @@ void showWiFiStatus() {
             } else {
                 settings.apMode = false;
             }
-            Serial.println(settings.apMode);
             saveSettings();
             rebootTimer = 0;
             delay(500);
@@ -59,6 +59,7 @@ void showWiFiStatus() {
             wifiStatus = WiFi.status();   
             if (WiFi.status() == WL_CONNECTED) { 
                 initUDP();
+                checkForUpdates();
             }
         } 
 

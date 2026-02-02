@@ -134,6 +134,7 @@ void transmitFrame(Frame &f) {
     f.timestamp = time(NULL);
 
     //Senden
+    if (strlen(f.nodeCall) == 0) {return;}
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
     //Serial.printf("Länge: %d\n", txBufferLength);
     //printHexArray(txBuffer, txBufferLength);

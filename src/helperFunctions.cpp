@@ -71,6 +71,7 @@ void sendFrame(Frame &f) {
 }
 
 void sendMessage(const char* dst, const char* text, uint8_t messageType) {
+    if (strlen(text) == 0) {return;}
     //Neuen Frame für alle Peers zusammenbauen
     Frame f;
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
@@ -83,6 +84,7 @@ void sendMessage(const char* dst, const char* text, uint8_t messageType) {
 }
 
 void sendGroup(const char* dst, const char* text, uint8_t messageType) {
+    if (strlen(text) == 0) {return;}
     //Neuen Frame für alle Peers zusammenbauen
     Frame f;
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;

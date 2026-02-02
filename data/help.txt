@@ -12,5 +12,5 @@ NEtmask <ip-maske> ...... WiFi NETmask
 Ap <1/0> ................ AP-Mode ein/aus
 DHcp <1/0> .............. DHCP-Client aktiv
 Reboot .................. Neustart
-Version ................ Version
+Version ................. Version
 DEfaults ................ Standardeinstellungen laden

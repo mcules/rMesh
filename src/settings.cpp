@@ -146,7 +146,7 @@ void loadSettings() {
         strcpy(settings.wifiSSID, "");
         strcpy(settings.wifiPassword, "");
         strcpy(settings.ntpServer, "de.pool.ntp.org");
-        strcpy(settings.mycall, "XX0XX");
+        strcpy(settings.mycall, "");
         settings.apMode = true;
         settings.dhcpActive = true;
         settings.wifiIP = IPAddress(192,168,33,60);

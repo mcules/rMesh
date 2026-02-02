@@ -46,6 +46,7 @@ void sendUDP(Frame &f) {
     f.timestamp = time(NULL);
 
     //Senden
+    if (strlen(f.nodeCall) == 0) {return;}
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
     udp.beginPacket(settings.wifiBrodcast, UDP_PORT);
     udp.write(txBuffer, txBufferLength);

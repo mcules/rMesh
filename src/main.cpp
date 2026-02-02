@@ -105,6 +105,15 @@ void processRxFrame(Frame &f) {
                 availablePeerList(f.nodeCall, true, f.port);    
             }
 
+            //Wenn die Nachricht ein anderes Node gesendet hat und wir die Nachricht auch senden wollen: Im TX-Puffer nach MSG-ID und VIA-Call suchen und löschen
+            txBuffer.erase(
+                std::remove_if(txBuffer.begin(), txBuffer.end(),
+                    [&](const Frame& txB) {
+                        return (strcmp(txB.srcCall, f.srcCall) == 0) && (strcmp(txB.viaCall, f.viaCall) == 0) && (txB.id == f.id);
+                    }),
+                txBuffer.end()
+            );            
+
             //Alle "alten" ACKs im TX-Puffer löschen
             txBuffer.erase(
                 std::remove_if(txBuffer.begin(), txBuffer.end(),
@@ -146,7 +155,7 @@ void processRxFrame(Frame &f) {
                 file.close();                    
             }
 
-            if (found == false) {
+            if ((found == false) && (f.messageLength > 0)) {
                 //Neue Nachricht empfangen
                 
                 //Message an Websocket senden & speichern
@@ -240,6 +249,9 @@ void processRxFrame(Frame &f) {
                                 tf.retry = TX_RETRY;
                                 tf.initRetry = TX_RETRY;
                                 txBuffer.push_back(tf);
+
+                                //In ACK-Liste eintagen, damit später kein ACK gesendet wird, wenn das Peer die MSG wiederholt
+                                addACK(tf.srcCall, tf.viaCall, tf.id);                                
                             }
                         } 
 
