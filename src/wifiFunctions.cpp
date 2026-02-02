@@ -31,7 +31,7 @@ void checkForUpdates() {
 void showWiFiStatus() {
     //AP-Mode umschalten
     if (getKeyApMode() != apModeKey) {
-        delay(50);
+        delay(100);
         apModeKey = getKeyApMode();
         if (apModeKey == 1) {
             if (settings.apMode == false) {
