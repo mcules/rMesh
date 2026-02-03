@@ -132,7 +132,6 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
         dstFile.write((const uint8_t*)buffer, length);
         dstFile.print("\n");
     }
-    dstFile.flush();
     dstFile.close();
 
     LittleFS.remove(file);

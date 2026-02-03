@@ -26,6 +26,10 @@ const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 std::vector<Frame> txBuffer;
 //portMUX_TYPE txBufferMux = portMUX_INITIALIZER_UNLOCKED;
 
+//Speicher für die letzten Message IDs
+MSG messages[MAX_STORED_MESSAGES_RAM];
+uint16_t messagesHead = 0;
+
 
 //Timing
 uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
@@ -149,24 +153,33 @@ void processRxFrame(Frame &f) {
                 txBuffer.push_back(tf);
             }
 
-            //Message ID und SRC-Call in Datei suchen
-            file = LittleFS.open("/messages.json", "r");
-            found = false;  
-            if (file) {
-                JsonDocument doc;
-                while (file.available()) {
-                    DeserializationError error = deserializeJson(doc, file);
-                    if (error == DeserializationError::Ok) {
-                        if ((doc["message"]["id"].as<uint32_t>() == f.id) && (strcmp(doc["message"]["srcCall"], f.srcCall) == 0)) {
-                            found = true;
-                            break; 
-                        }
-                    } else if (error != DeserializationError::EmptyInput) {
-                        file.readStringUntil('\n');
+            //Message ID und SRC-Call in Messages Ringpuffer suchen
+            for (int i = 0; i < MAX_STORED_MESSAGES_RAM; i++) {
+                if (messages[i].id == f.id) {
+                    if (strcmp(messages[i].srcCall, f.srcCall) == 0) {
+                        found = true;
+                        break;
                     }
                 }
-                file.close();                    
             }
+            
+            // file = LittleFS.open("/messages.json", "r");
+            // found = false;  
+            // if (file) {
+            //     JsonDocument doc;
+            //     while (file.available()) {
+            //         DeserializationError error = deserializeJson(doc, file);
+            //         if (error == DeserializationError::Ok) {
+            //             if ((doc["message"]["id"].as<uint32_t>() == f.id) && (strcmp(doc["message"]["srcCall"], f.srcCall) == 0)) {
+            //                 found = true;
+            //                 break; 
+            //             }
+            //         } else if (error != DeserializationError::EmptyInput) {
+            //             file.readStringUntil('\n');
+            //         }
+            //     }
+            //     file.close();                    
+            // }
 
             pft = millis() - pft; Serial.printf("Message ID und SRC-Call in Datei suchen Time: %d\n", pft); pft = millis();
 
@@ -174,6 +187,13 @@ void processRxFrame(Frame &f) {
             if ((found == false) && (f.messageLength > 0)) {
                 //Neue Nachricht empfangen
                 
+                //Message in Ringpuffer speichern
+                strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH);
+                messages[messagesHead].id = f.id;
+                messagesHead++;
+                if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
+                pft = millis() - pft; Serial.printf("Message in Ringpuffer speichern Time: %d\n", pft); pft = millis();
+
                 //Message an Websocket senden & speichern
                 char* jsonBuffer = (char*)malloc(2048);
                 size_t len = f.messageJSON(jsonBuffer, 2048);
@@ -321,6 +341,26 @@ void setup() {
         Serial.println("An error has occurred while mounting LittleFS");
     } 
 
+    //Messages JSON in messages Ringpuffer speichern
+    File file = LittleFS.open("/messages.json", "r");
+    if (file) {
+        JsonDocument doc;
+        while (file.available()) {
+            DeserializationError error = deserializeJson(doc, file);
+            if (error == DeserializationError::Ok) {
+                Serial.printf("id: %d, src: %s, head:%d\n", doc["message"]["id"].as<uint32_t>(), doc["message"]["srcCall"].as<String>(), messagesHead);
+                //In messages speichern
+                strncpy(messages[messagesHead].srcCall, doc["message"]["srcCall"], MAX_CALLSIGN_LENGTH);
+                messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
+                messagesHead++;
+                if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
+            } else if (error != DeserializationError::EmptyInput) {
+                file.readStringUntil('\n');
+            }
+        }
+        file.close();                    
+    }
+    
     //Init Hardware
     initHal();
 

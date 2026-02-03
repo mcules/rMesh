@@ -3,7 +3,10 @@
 #include "config.h"
 #include "frame.h"
 
-
+struct MSG {
+    char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0};
+    uint32_t id = 0;
+};
 
 extern uint32_t rebootTimer;
 extern uint32_t statusTimer;

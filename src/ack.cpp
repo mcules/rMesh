@@ -16,12 +16,8 @@ void addACK(const char* srcCall, const char* nodeCall, const uint32_t id) {
 
     //In ACK Liste speichern
     if (found == false) {
-        strncpy(acks[ackHead].srcCall, srcCall, MAX_CALLSIGN_LENGTH);
-        acks[ackHead].srcCall[MAX_CALLSIGN_LENGTH] = '\0'; 
-
-        strncpy(acks[ackHead].nodeCall, nodeCall, MAX_CALLSIGN_LENGTH);
-        acks[ackHead].nodeCall[MAX_CALLSIGN_LENGTH] = '\0';
-
+        memcpy(acks[ackHead].srcCall, srcCall, MAX_CALLSIGN_LENGTH);
+        memcpy(acks[ackHead].nodeCall, nodeCall, MAX_CALLSIGN_LENGTH);
         acks[ackHead].id = id;
 
         ackHead++;
