@@ -26,6 +26,7 @@ const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 std::vector<Frame> txBuffer;
 //portMUX_TYPE txBufferMux = portMUX_INITIALIZER_UNLOCKED;
 
+
 //Timing
 uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
 uint32_t statusTimer = 0;
@@ -104,7 +105,7 @@ void processRxFrame(Frame &f) {
             //ACKs in Datei speichern (für REPEAT und ACK für fremde Frames senden)
             addACK(f.srcCall, f.nodeCall, f.id);
 
-            pft = millis() - pft; Serial.printf("MESSAGE_ACK_FRAME Time: %d\n", pft); pft = millis();
+            pft = millis() - pft; Serial.printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! MESSAGE_ACK_FRAME Time: %d\n", pft); pft = millis();
             break;
 
         //Nachricht empfangen
@@ -177,10 +178,14 @@ void processRxFrame(Frame &f) {
                 char* jsonBuffer = (char*)malloc(2048);
                 size_t len = f.messageJSON(jsonBuffer, 2048);
                 ws.textAll(jsonBuffer, len);
+                pft = millis() - pft; Serial.printf("Message an Websocket senden  Time: %d\n", pft); pft = millis();
+
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
+                pft = millis() - pft; Serial.printf("Message an Websocket JSON speichern Time: %d\n", pft); pft = millis();
+
                 free(jsonBuffer);
                 jsonBuffer = nullptr;
-                pft = millis() - pft; Serial.printf("Message an Websocket senden & speichern Time: %d\n", pft); pft = millis();
+
 
 
 
@@ -285,6 +290,9 @@ void processRxFrame(Frame &f) {
 
     pft = millis() - pft;
     Serial.printf("processRxFrame Time: %d\n", pft);
+
+
+    Serial.printf("Heap: %u / %u (Max Block: %u)\n", ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap());
  }
 
 
