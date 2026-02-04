@@ -113,7 +113,7 @@ void processRxFrame(Frame &f) {
             txBuffer.erase(
                 std::remove_if(txBuffer.begin(), txBuffer.end(),
                     [&](const Frame& txB) {
-                        return (strcmp(txB.srcCall, f.srcCall) == 0) && (strcmp(txB.viaCall, f.viaCall) == 0) && (txB.id == f.id);
+                        return (strcmp(txB.srcCall, f.srcCall) == 0) && (strcmp(txB.viaCall, f.viaCall) == 0) && (txB.id == f.id) && (txB.initRetry == TX_RETRY);
                     }),
                 txBuffer.end()
             );            
