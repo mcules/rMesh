@@ -82,7 +82,6 @@ void showWiFiStatus() {
     }
 }
 
-
 void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
     Serial.println("scan fertig...");
     int n = WiFi.scanComplete();

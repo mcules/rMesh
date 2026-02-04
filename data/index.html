@@ -14,7 +14,7 @@
        
             <div class="top">
                 <div class="left">
-                    <textarea class="text-input" id="messageText0" style="display: none;"></textarea>
+                    <textarea class="text-input" id="messageText0"></textarea>
                     <textarea class="text-input" id="messageText1" style="display: none;"></textarea>
                     <textarea class="text-input" id="messageText2" style="display: none;"></textarea>
                     <textarea class="text-input" id="messageText3" style="display: none;"></textarea>
@@ -40,11 +40,12 @@
                         <button id="channelButton10" class="channel-button" onclick="setUI('channel10')"></button>
                     </div>
                     <div class="status-box">
-                        <div id="statusDstCall" class="status">DstCall: <div id="dstCall"></div> </div>
-                        <div id="statusMyCall" class="status"></div>
-                        <div id="statusTRX" class="status"></div>
-                        <div id="statusTxBufferCount" class="status"></div>
-                        <div id="statusRetry" class="status"></div>
+                        <div class="status"> DstCall: <div id="dstCall"></div> </div>
+                        <div class="status"> MyCall: <div id="myCall"></div> </div>
+                        <div class="status" style="max-width: 180px;"> Heap: <div id="heap"></div> </div>
+                        <div class="status" style="max-width: 150px;"> TRX: <div id="TRX"></div> </div>
+                        <div class="status" style="max-width: 130px;"> TX-Buffer: <div id="txBuffer"></div></div>
+                        <div class="status" style="max-width: 90px;"> Retry: <div id="retry"></div></div>
                     </div>
                 </div>
                 <div class="right">
@@ -64,7 +65,7 @@
             <div id="channel8" class="middle" style="display: none;"></div>
             <div id="channel9" class="middle" style="display: none;"></div>
             <div id="channel10" class="middle" style="display: none;"> </div>
-            <div id="monitor" class="monitor"style="display: none;">
+            <div id="monitor" class="monitor big">
                 <div style="display: flex; flex-direction: column; align-items: center;">
                     <img src="rMesh.png" style="height: 70%;">
                     <div style="height: 22vh;"></div>
@@ -169,7 +170,6 @@
             </div>
 
             <div class="bottom">
-
                 <button id="monitorButton" class="main-button" onclick="setUI('monitor')">
                     <img src="monitor.png" class="button-icon">
                     <span class="button-text">Monitor</span>
@@ -211,7 +211,7 @@
                 </button>    
             </div>
        
-        <!-- Input box -->
+        <!-- Input/Message box -->
         <div id="overlay">
             <div id="modal">
                 <span id="modalTitle"></span>
@@ -224,67 +224,16 @@
         <script>
             var ui = ""   
             var activeChannel = 0;      
-			var websocket;
 			var timeout = 0;
-            var messages = [];
             let okSound = new Audio("ok.wav");
-            var channels = [];
-            for (let i = 0; i <= 10; i++) {
-                channels[i] = {
-                    dstCall: ""
-                };
-            }
-
+            var channels = new Array(10).fill(false);
 
 			document.addEventListener('DOMContentLoaded', async function() {
                 //Init
-                setUI("monitor");
                 drawClock(new Date(0));
                 let okSound = new Audio("ok.wav");
-
-                //Kanaleinstellungen laden
-                //Cookie.set("channels", JSON.stringify(channels));
-                var json = Cookie.get("channels", JSON.stringify(channels)) ;
-                channels = JSON.parse(json);
-                channels[1].dstCall = "all";
-
-                //Channel Buttons + Message input
-                for (let i = 1; i <= 10; i++) {
-                    channels[i].unread = 0;
-
-                    if (i > 2) {
-                        document.getElementById("channelButton" + i).addEventListener("dblclick", async function() {
-                            var value = await inputBox("Group Name?");
-                            channels[i].dstCall = value;
-                            Cookie.set("channels", JSON.stringify(channels))
-                            showMessages(true);
-                        });
-                    }
-
-                    document.getElementById('messageText' + i).addEventListener('keydown', function(e) {
-                        if (e.key === 'Enter') {
-                            const pos = this.selectionStart;
-                            const text = this.value;
-                            const startOfLine = text.lastIndexOf('\n', pos - 1) + 1;
-                            let endOfLine = text.indexOf('\n', pos);
-                            if (endOfLine === -1) endOfLine = text.length;
-                            const currentLineText = text.substring(startOfLine, endOfLine);
-                            sendMessage(currentLineText, i,);
-                            
-                            if (pos < text.length) {
-                                e.preventDefault(); 
-                                const nextLineIndex = text.indexOf('\n', pos);
-                                if (nextLineIndex !== -1) {
-                                    this.setSelectionRange(nextLineIndex + 1, nextLineIndex + 1);
-                                } else {
-                                    this.setSelectionRange(text.length, text.length);
-                                }
-                            }
-                        }
-                    });
-                }   
-                
-                setUI("monitor");
+                initUI();
+                setUI( Cookie.get("ui", "monitor") );
 
                 //Websocket verbinden
 				initWebSocket();
@@ -294,7 +243,6 @@
             document.addEventListener("visibilitychange", function() {
                 if (!document.hidden) { setUI(ui); }
             });
-
 
 			document.getElementById("tuneButton").addEventListener("click", function() {
 				sendWS(JSON.stringify({tune: true }));
@@ -312,9 +260,13 @@
 				document.getElementById("settingsSSID").value = document.getElementById("settingsSSIDList").value;
 			});
 
-			document.getElementById("settingsApMode").addEventListener("change", function() { settingsVisibility(); });
+			document.getElementById("settingsApMode").addEventListener("change", function() { 
+                settingsVisibility(); 
+            });
 
-			document.getElementById("settingsDHCP").addEventListener("change", function() { settingsVisibility(); });            
+			document.getElementById("settingsDHCP").addEventListener("change", function() { 
+                settingsVisibility(); 
+            });            
 
             document.getElementById("statusSyncTime").addEventListener("click", function() {
 				sendWS(JSON.stringify({time: Math.floor(Date.now() / 1000) }));
@@ -394,12 +346,10 @@
                     titleElem.textContent = title;
                     input.style.display = "none";
                     overlay.style.display = "flex";
-
                     function onOk() {
                         overlay.style.display = "none";
                         okBtn.removeEventListener("click", onOk);
                     }
-
                     okBtn.addEventListener("click", onOk);
                 });
             }
@@ -411,15 +361,12 @@
                     const input = document.getElementById("modalInput");
                     const titleElem = document.getElementById("modalTitle");
                     const okBtn = document.getElementById("modalOk");
-
                     titleElem.textContent = title;
                     input.value = defaultValue; 
                     input.style.display = "flex";
                     overlay.style.display = "flex";
-                    
                     input.focus();
                     if (defaultValue) input.select(); // Markiert Text, falls einer da ist
-
                     function close() {
                         overlay.style.display = "none";
                         okBtn.removeEventListener("click", onOk);

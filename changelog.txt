@@ -1,16 +1,21 @@
 V1.0.4-alpha
-- Timing um ca. 25% "verlangsamt"
-- Alle LittleFS Schreibvorgänge mit flush() abgeschlossen.
+- Timing um ca. 25% verlangsamt
+- Alle LittleFS Schreibvorgänge mit flush() abgeschlossen. -> hinfällig
 - Update Prüfung alle 24h
-- GUI: Hinweis im Fenstertitel, wenn neue Nachrichten
 - ohne gesetztes Rufzeichen kein Senden möglich
 - Default Rufzeichen = ""
 - Nachrichten mit Länge = 0 werden nicht gesendet
-- GUI kann jetzt Messageboxen
 - Keine Frames an srcCall repeaten
 - Beim setzen von SSID oder PW über UART wird AP-Mode abgeschaltet
 - Frames ohne nodeCall werden ignoriert
-
+- ACK-Liste jetzt im RAM und nicht mehr im Flash 
+- Prüfung auf neue Nachrichten jetzt im RAM und nicht mehr im Flash 
+- "messages.json" wird als Task geschrieben
+- Wenn ein anderes Node anfängt eine Nachricht zu repeaten, wird die Nachricht aus dem Sendepuffer gelöscht
+- Timing für UDP wieder schneller
+- Peer-List wird nur über Websocket gesendet, wenn auch wirklich geändert
+- GUI: Hinweis im Fenstertitel, wenn neue Nachrichten
+- GUI kann jetzt Messageboxen
 
 V1.0.3-alpha
 - Timing für UDP langsamer 

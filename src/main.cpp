@@ -25,12 +25,12 @@ const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 
 //Sendepuffer
 std::vector<Frame> txBuffer;
-//portMUX_TYPE txBufferMux = portMUX_INITIALIZER_UNLOCKED;
 
 //Speicher für die letzten Message IDs
 MSG messages[MAX_STORED_MESSAGES_RAM];
 uint16_t messagesHead = 0;
 
+//Mutex Dateisystem
 SemaphoreHandle_t fsMutex = NULL;
 
 //Timing
@@ -41,12 +41,9 @@ uint8_t currentRetry = 0;
 uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
 
 
-
-
 void processRxFrame(Frame &f) {
     //Abbruch, wenn kein nodeCall
     if (strlen(f.nodeCall) == 0) {return;}
-    uint32_t pft = millis();
 
     //Monitor
     char* jsonBuffer = (char*)malloc(4096);
@@ -62,10 +59,7 @@ void processRxFrame(Frame &f) {
     Frame tf;                   //ggf. Antwort-Frame
     bool found = false;         //z.b.V.
     File file;                  //z.b.V
-
-    pft = millis() - pft; Serial.printf("addPeer Time: %d\n", pft); pft = millis();
     switch (f.frameType) {
-
         //Antwort auf announce
         case Frame::FrameTypes::ANNOUNCE_FRAME:
             if (strlen(f.nodeCall) > 0 ){
@@ -77,8 +71,6 @@ void processRxFrame(Frame &f) {
                 }
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
                 txBuffer.push_back(tf);
-                pft = millis() - pft; Serial.printf("ANNOUNCE_FRAME Time: %d\n", pft); pft = millis();
-
             }
             break;
         //In Peer Liste eintragen
@@ -86,8 +78,6 @@ void processRxFrame(Frame &f) {
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);    
             }
-            pft = millis() - pft; Serial.printf("ANNOUNCE_ACK_FRAME Time: %d\n", pft); pft = millis();
-
             break;
 
         //Senden abbrechen
@@ -110,8 +100,6 @@ void processRxFrame(Frame &f) {
 
             //ACKs in Datei speichern (für REPEAT und ACK für fremde Frames senden)
             addACK(f.srcCall, f.nodeCall, f.id);
-
-            pft = millis() - pft; Serial.printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! MESSAGE_ACK_FRAME Time: %d\n", pft); pft = millis();
             break;
 
         //Nachricht empfangen
@@ -139,9 +127,6 @@ void processRxFrame(Frame &f) {
                 txBuffer.end()
             );
 
-            pft = millis() - pft; Serial.printf("Alle alten ACKs im TX-Puffer löschen Time: %d\n", pft); pft = millis();
-
-
             //ACK-Senden bei mir immer, bei anderen nur 1x
             if ((strcmp(f.viaCall, settings.mycall) == 0) || ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false))) {
                 addACK(f.srcCall, f.nodeCall, f.id);
@@ -164,27 +149,6 @@ void processRxFrame(Frame &f) {
                     }
                 }
             }
-            
-            // file = LittleFS.open("/messages.json", "r");
-            // found = false;  
-            // if (file) {
-            //     JsonDocument doc;
-            //     while (file.available()) {
-            //         DeserializationError error = deserializeJson(doc, file);
-            //         if (error == DeserializationError::Ok) {
-            //             if ((doc["message"]["id"].as<uint32_t>() == f.id) && (strcmp(doc["message"]["srcCall"], f.srcCall) == 0)) {
-            //                 found = true;
-            //                 break; 
-            //             }
-            //         } else if (error != DeserializationError::EmptyInput) {
-            //             file.readStringUntil('\n');
-            //         }
-            //     }
-            //     file.close();                    
-            // }
-
-            pft = millis() - pft; Serial.printf("Message ID und SRC-Call in Datei suchen Time: %d\n", pft); pft = millis();
-
 
             if ((found == false) && (f.messageLength > 0)) {
                 //Neue Nachricht empfangen
@@ -194,22 +158,14 @@ void processRxFrame(Frame &f) {
                 messages[messagesHead].id = f.id;
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
-                pft = millis() - pft; Serial.printf("Message in Ringpuffer speichern Time: %d\n", pft); pft = millis();
 
                 //Message an Websocket senden & speichern
                 char* jsonBuffer = (char*)malloc(2048);
                 size_t len = f.messageJSON(jsonBuffer, 2048);
                 ws.textAll(jsonBuffer, len);
-                pft = millis() - pft; Serial.printf("Message an Websocket senden  Time: %d\n", pft); pft = millis();
-
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
-                pft = millis() - pft; Serial.printf("Message an Websocket JSON speichern Time: %d\n", pft); pft = millis();
-
                 free(jsonBuffer);
                 jsonBuffer = nullptr;
-
-
-
 
                 //ECHO für Tracking-Message
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
@@ -241,7 +197,6 @@ void processRxFrame(Frame &f) {
                             break;
                     }
                 }
-
 
                 //Messages wiederholen
                 if (settings.loraRepeat == true) {
@@ -305,16 +260,9 @@ void processRxFrame(Frame &f) {
                 }
 
             }
-            pft = millis() - pft; Serial.printf("Fertig Time: %d\n", pft); pft = millis();
 
             break;
     }
-
-    pft = millis() - pft;
-    Serial.printf("processRxFrame Time: %d\n", pft);
-
-
-    Serial.printf("Heap: %u / %u (Max Block: %u)\n", ESP.getFreeHeap(), ESP.getHeapSize(), ESP.getMaxAllocHeap());
  }
 
 
@@ -351,7 +299,7 @@ void setup() {
         while (file.available()) {
             DeserializationError error = deserializeJson(doc, file);
             if (error == DeserializationError::Ok) {
-                Serial.printf("id: %d, src: %s, head:%d\n", doc["message"]["id"].as<uint32_t>(), doc["message"]["srcCall"].as<String>(), messagesHead);
+                //Serial.printf("id: %d, src: %s, head:%d\n", doc["message"]["id"].as<uint32_t>(), doc["message"]["srcCall"].as<String>(), messagesHead);
                 //In messages speichern
                 strncpy(messages[messagesHead].srcCall, doc["message"]["srcCall"], MAX_CALLSIGN_LENGTH);
                 messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
@@ -479,6 +427,7 @@ void loop() {
         doc["status"]["rx"] = rxFlag;
         doc["status"]["txBufferCount"] = txBuffer.size();
         doc["status"]["retry"] = currentRetry;
+        doc["status"]["heap"] = ESP.getFreeHeap();
         char* jsonBuffer = (char*)malloc(1024);
         size_t len = serializeJson(doc, jsonBuffer, 1024);
         ws.textAll(jsonBuffer, len);  // sendet direkt den Puffer

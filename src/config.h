@@ -8,7 +8,7 @@
 #define MAX_STORED_ACK 100                       //max. ACK Frames in "ack.json"
 
 //UDP Timing
-#define UDP_TX_RETRY_TIME 5000
+#define UDP_TX_RETRY_TIME 2000
 
 //Interner Quatsch
 #define NAME "rMesh"                             //Versions-String

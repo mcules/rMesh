@@ -1,19 +1,22 @@
+var websocket;
 var settings;
+var messages = [];
+var baseURL = "";
+var gateway = "";
+var init = false;
+
+
 
 function onMessage(event) {
     var d = JSON.parse(event.data);
-    //if (d.status === undefined) {console.log("RX: " + event.data);}
+    if (d.status === undefined) {console.log("RX: " + event.data);}
 
     //RAW-RX
     if (d.monitor) {
-
-        f = d.monitor;
-        var msg = "<span ";
-        if (d.monitor.tx == true) {
-            msg += "class='monitor-tx' >";
-        } else {
-            msg += ">";
-        }
+        var f = d.monitor;
+        var msg = ""; 
+        //TX-Frame gelb
+        if (d.monitor.tx == true) { msg += "<span class='monitor-tx' >"; } else { msg += "<span>"; }
         //Port
         if (f.port == 0) {msg += "LoRa";} else {msg += "Wifi";}
         //Zeit
@@ -40,16 +43,15 @@ function onMessage(event) {
                 if (f.messageType == 0) {msg += " TEXT: ";}
                 if (f.messageType == 1) {msg += " TRACE: ";}
                 if (f.messageType == 15) {msg += " COMMAND: ";}
-                if (f.text) {
-                    msg +=  f.text;
-                }
+                if (f.text) { msg += f.text; }
                 break;
             case 0x04: 
                 msg += " Message ACK "; 
                 if (f.id > 0) { msg += " ID: " + f.id + " "; }
                 break;
         }
-        document.getElementById("monitor").innerHTML = document.getElementById("monitor").innerHTML + "</span>" + msg;
+        msg += "</span>";
+        document.getElementById("monitor").innerHTML += msg;
         document.getElementById('monitor').scrollTop = document.getElementById("monitor").scrollHeight;
     }
 
@@ -58,7 +60,7 @@ function onMessage(event) {
         d.message.parsed = false;
         messages.push(d.message);
         showMessages();
-        okSound.play();
+        if (d.message.tx != true) okSound.play();
     }
 
     //Peers
@@ -108,29 +110,57 @@ function onMessage(event) {
         document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor; 
         document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
-        document.getElementById("statusMyCall").innerHTML = "MyCall: " + d.settings.mycall;
+        document.getElementById("myCall").innerHTML = d.settings.mycall;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
         settings.titel = settings.name + " - " + settings.mycall;
-        settings.altTitel = "🚨" + settings.name + " - " + settings.mycall + "🚨"
-        setUI(ui);
-        settingsVisibility();
+        settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
+
+        if (init == false) {
+            init = true;
+            //for (let i = 0; i <= 10; i++) {channels[i] = false;} 
+            //setUI(ui);
+            settingsVisibility();
+            messages = [];
+            //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
+            fetch(baseURL + "messages.json")
+                .then(function(response) {
+                    return response.text();
+                })
+                .then(function(text) {
+                    var lines = text.split(/\r?\n/);
+                    lines.forEach(function(line) {
+                        if (line.trim().length === 0) return;
+                        var m = JSON.parse(line);
+                        m.message.parsed = false;
+                        messages.push(m.message);
+                    });
+
+                    //"Trennzeichen" zwischen gespeicherten und neuen Nachrichten
+                    const result = {"delimiter": true};
+                    messages.push(result);
+                    showMessages(true);
+
+                    //Alles als gelesen markieren
+                    for (let i = 0; i <= 10; i++) {channels[i] = false;} 
+                    setUI(ui);
+                });
+        }
     }
 
     //Status
     if (d.status) {
         drawClock(new Date(d.status.time * 1000));
-       if (d.status.tx) {
-            document.getElementById("statusTRX").innerHTML = "TRX:&nbsp;<span style='color: #d9ff00;'> << TX >> </span>"; 
+        if (d.status.tx) {
+            document.getElementById("TRX").innerHTML = "<span style='color: #d9ff00;'> << TX >> </span>"; 
         } else if (d.status.rx) {
-            document.getElementById("statusTRX").innerHTML = "TRX:&nbsp;<span style='color: #00ff00;'> >> RX << </span>"; 
+            document.getElementById("TRX").innerHTML = "<span style='color: #00ff00;'> >> RX << </span>"; 
         } else {
-            document.getElementById("statusTRX").innerHTML = "TRX:&nbsp;<span>stby</span>"; 
+            document.getElementById("TRX").innerHTML = "<span>stby</span>"; 
         }
-        document.getElementById("statusTxBufferCount").innerHTML = "TX-Buffer: " + d.status.txBufferCount; 
-        document.getElementById("statusRetry").innerHTML = "Retry: " + d.status.retry; 
-
-        
+        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
+        document.getElementById("retry").innerHTML = d.status.retry; 
+        document.getElementById("heap").innerHTML = d.status.heap; 
     }
 
     //WiFi Scan
@@ -147,18 +177,17 @@ function onMessage(event) {
 
 }		
 
-
 //Nachricht senden
 async function sendMessage(text, channel) {
+    //Zielrufzeichen zusammenbasteln
     var dstCall = document.getElementById('dstCall').innerHTML;
     if (channel == 2) {
-        dstCall = (await inputBox("Destination Call?", channels[2].dstCall, document.getElementById('messageText' + channel) )).toUpperCase();
-        channels[2].dstCall = dstCall;
-        Cookie.set("channels", JSON.stringify(channels))
+        dstCall = (await inputBox("Destination Call?", Cookie.get("channel2"), document.getElementById('messageText' + channel) )).toUpperCase();
+        Cookie.set("channel2", dstCall);
     }
     if (dstCall == "") {return;}
     if (dstCall == "all") dstCall = "";
-
+    //Nachricht vorbereiten und über Websocket senden
     var message = {};
     message["text"] = text;
     message["dst"] = dstCall;
@@ -170,7 +199,6 @@ async function sendMessage(text, channel) {
         sendWS(JSON.stringify({sendGroup: message}));                    
     }
 }
-
 
 function saveSettings() {
     var settings = {};
@@ -233,14 +261,14 @@ function showMessages(parseAll = false) {
         if ((m.dstCall == "") && (m.dstGroup == "") && (found == false)) {
             found = true;
             document.getElementById("channel1").innerHTML += msg;
-            if (!parseAll) {channels[1].unread ++;}
+            if (!parseAll) {channels[1] = true;}
         }
 
         //Nachrichten an mich -> Channel 2
         if ((m.dstCall == document.getElementById("settingsMycall").value) && (found == false)) {
             found = true;
             document.getElementById("channel2").innerHTML += msg;
-            if (!parseAll) {channels[2].unread ++;}
+            if (!parseAll) {channels[2] = true;}
         }
 
         for (let i = 1; i <= 10; i++) {
@@ -251,10 +279,10 @@ function showMessages(parseAll = false) {
             }
 
             //Nachricht an Gruppe -> Channel 3...10
-            if ((m.dstGroup == channels[i].dstCall) && (m.dstCall == "") && (found == false)) {
+            if ((m.dstGroup == Cookie.get("channel" + i)) && (m.dstCall == "") && (found == false)) {
                 found = true;
                 document.getElementById("channel" + i).innerHTML += msg;
-                if (!parseAll) {channels[i].unread ++;}
+                if (!parseAll) {channels[i] = true;}
             }
         }        
 
@@ -262,14 +290,14 @@ function showMessages(parseAll = false) {
         if ((m.srcCall == document.getElementById("settingsMycall").value) && (m.dstGroup == "") && (found == false)) {
             found = true;
             document.getElementById("channel2").innerHTML += msg;
-            if (!parseAll) {channels[2].unread ++;}
+            if (!parseAll) {channels[2] = true;}
         }
 
         //Rest -> Channel 1
         if (found == false) {
             found = true;
             document.getElementById("channel1").innerHTML += msg;
-            if (!parseAll) {channels[1].unread ++;}
+            if (!parseAll) {channels[1] = true;}
         }
 
     });
@@ -282,10 +310,6 @@ function showMessages(parseAll = false) {
 
 
 function initWebSocket() {
-    var baseURL = "";
-    var gateway = "";
-    messages = [];
-
     //Debug
     if (!window.location.hostname.includes("127.0.0.1")) {
         gateway = `ws://${window.location.hostname}/socket`;
@@ -294,28 +318,6 @@ function initWebSocket() {
         gateway = "ws://192.168.33.60/socket";
         baseURL = "http://192.168.33.60/"
     }
-
-    //Nachrichten laden
-    fetch(baseURL + "messages.json", )
-        .then(response => response.text())
-        .then(text => {
-            const lines = text.split(/\r?\n/);
-            lines.forEach(line => {
-                if (line.trim().length === 0) return;
-                const m = JSON.parse(line);
-                m.message.parsed = false;
-                messages.push(m.message);
-        });
-
-        const result = {"delimiter": true};
-        messages.push(result);
-        showMessages();
-
-        //Alles als gelesen markieren
-        for (let i = 1; i <= 10; i++) {channels[i].unread = 0;} 
-        setUI(ui);
-
-    });				
 
     //Websocket init
     websocket = new WebSocket(gateway);
@@ -326,10 +328,12 @@ function initWebSocket() {
 
 function onOpen(event) {
     //sendWS(JSON.stringify({scanWifi: true }));
+    init = false;
     keepAlive();
 }
 
 function onClose(event) {
+    init = false;
     clearTimeout(timeout);
     setTimeout(initWebSocket, 500);
 }

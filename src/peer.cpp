@@ -11,13 +11,12 @@ std::vector<Peer> peerList;
 //portMUX_TYPE peerListMux = portMUX_INITIALIZER_UNLOCKED;
 
 void checkPeerList() {
+    bool update = false;
     //Suchen, ob Peer bereits existiert
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (time(NULL) - peer.timestamp) > PEER_TIMEOUT; });
     if (it != peerList.end()) {
-        //portENTER_CRITICAL(&peerListMux);
         peerList.erase(it);
-        //portEXIT_CRITICAL(&peerListMux);
-        sendPeerList();
+        update = true;
     } 
 
     //Doppelte Peers -> mit weniger SNR -> available = false
@@ -27,16 +26,23 @@ void checkPeerList() {
             if (!peerList[j].available) continue;
             if (strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0) {
                 if (peerList[i].snr < peerList[j].snr) {
-                    peerList[i].available = false;
+                    if (peerList[i].available != false) {
+                        peerList[i].available = false;
+                        update = true;
+                    }
                     break; 
                 } else {
-                    peerList[j].available = false;
+                    if (peerList[j].available != false) {
+                        peerList[j].available = false;
+                        update = true;
+                    }
                 }
             }
         }
     }
 
-    
+    if (update == true) { sendPeerList(); }
+   
 }
 
 void sendPeerList() {
@@ -61,17 +67,19 @@ void sendPeerList() {
 
 
 void availablePeerList(const char* call, bool available, uint8_t port) {
+    bool update = false;
     // Suchen, ob Peer bereits existiert
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, call) == 0) && (peer.port == port); });
 
     if (it != peerList.end()) {
         // Peer existiert: update
-        it->available = available;
+        if (it->available != available) {
+            update = true;
+            it->available = available;
+        }
     }
-
     //Peer Liste neu senden
-    checkPeerList();
-    sendPeerList();
+    if (update == true) { sendPeerList(); }
 }
 
 void addPeerList(Frame &f) {
@@ -95,16 +103,12 @@ void addPeerList(Frame &f) {
         p.frqError = f.frqError;
         p.port = f.port;
         p.available = false;
-        //portENTER_CRITICAL(&peerListMux);
         peerList.push_back(p);
-        //portEXIT_CRITICAL(&peerListMux);
-
     }
 
     // Sortieren nach SNR (absteigend)
     std::sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) { return a.snr > b.snr; });
-    checkPeerList();
-    sendPeerList();
+    sendPeerList(); 
 }
 
 
