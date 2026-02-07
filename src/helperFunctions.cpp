@@ -106,8 +106,8 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
 void addJSONtoFileTask(void * pvParameters) {
     FileWriteParams* p = (FileWriteParams*) pvParameters;
 
-    // Warten, bis das Dateisystem frei ist (max 20 Sekunden warten)
-    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(20000))) {
+    // Warten, bis das Dateisystem frei ist (max 30 Sekunden warten)
+    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
         //Zeilen zählen
         size_t lineCount = 0;
         File countFile = LittleFS.open(p->fileName, "r");
