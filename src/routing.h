@@ -16,5 +16,5 @@ extern std::vector<Route> routingList;
 
 void sendRoutingList();
 void addRoutingList(const char* srcCall, const char* viaCall);
-void getRoute(char* dstCall, char* viaCall, size_t len);
+bool checkRoute(char* srcCall, char* viaCall);
 

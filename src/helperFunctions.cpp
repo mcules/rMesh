@@ -30,12 +30,6 @@ void sendFrame(Frame &f) {
     f.timestamp = time(NULL);
     f.tx = true;
 
-    //Nach Route suchen
-    bool routing = false;
-    char viaCall[MAX_CALLSIGN_LENGTH + 1];
-    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
-    if (strlen(viaCall) > 0) { routing == true; }    
-
     for (int port = 0; port <= 1; port++) {
         uint8_t availableNodeCount = 0;
         f.viaCall[0] = 0;
@@ -46,7 +40,7 @@ void sendFrame(Frame &f) {
         //An alle Peers senden
         for (int i = 0; i < peerList.size(); i++) {
             if ((peerList[i].available) && (peerList[i].port == port)) {
-                if ((routing == false) || (strcmp(peerList[i].nodeCall, viaCall) == 0)){
+                if ((strlen(f.dstCall) == 0) || (checkRoute(f.dstCall, peerList[i].nodeCall))) {
                     availableNodeCount ++;
                     f.port = peerList[i].port;
                     memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));

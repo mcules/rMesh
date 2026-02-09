@@ -10,19 +10,11 @@
 //Routing Liste
 std::vector<Route> routingList;
 
-void getRoute(char* dstCall, char* viaCall, size_t len) {
-    viaCall[0] = '\0';
+bool checkRoute(char* srcCall, char* viaCall) {
     //Routing Liste duchsuchen
-    auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) { return (strcmp(r.srcCall, dstCall) == 0); });
-
-    if (it != routingList.end()) {
-        //Prüfen, ob Call "noch" in Peer-Liste
-        auto it2 = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, it->viaCall) == 0) && (peer.available == true) ; });
-        if (it2 != peerList.end()) {
-            strncpy(viaCall, it->viaCall, len - 1);
-            viaCall[len - 1] = '\0';
-        } 
-    } 
+    auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) { return (strcmp(r.srcCall, srcCall) == 0) && (strcmp(r.viaCall, viaCall) == 0); });
+    if (it != routingList.end()) { return true; }
+    return false;
 }
 
 void sendRoutingList() {

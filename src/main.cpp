@@ -239,13 +239,13 @@ void processRxFrame(Frame &f) {
                     tf.timestamp = time(NULL);
                     tf.syncFlag = false;
 
-                    //Prüfen, ob routing möglich
-                    bool routing = false;
+                    // //Prüfen, ob routing möglich
+                    // bool routing = false;
 
-                    //Nach Route suchen
-                    char viaCall[MAX_CALLSIGN_LENGTH + 1];
-                    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
-                    if (strlen(viaCall) > 0) { routing == true; }
+                    // //Nach Route suchen
+                    // char viaCall[MAX_CALLSIGN_LENGTH + 1];
+                    // getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
+                    // if (strlen(viaCall) > 0) { routing == true; }
 
                     //Ports duchlaufen
                     for (tf.port = 0; tf.port <= 1; tf.port++) {
@@ -278,7 +278,8 @@ void processRxFrame(Frame &f) {
 
                             //In TX-Puffer eintragen: NICHT an nodeCall und nicht an srcCall
                             if ((found == false) && (peerList[i].available == true) && (peerList[i].port == tf.port) && (strcmp(peerList[i].nodeCall, f.nodeCall) != 0) && (strcmp(peerList[i].nodeCall, f.srcCall) != 0)) {
-                                if ((routing == false) || ( strcmp(peerList[i].nodeCall, viaCall) == 0)) {
+                                //if ((routing == false) || ( strcmp(peerList[i].nodeCall, viaCall) == 0)) {
+                                if ((strlen(f.dstCall) == 0) || (checkRoute(f.dstCall, peerList[i].nodeCall))) {
                                     //Frame in TX-Puffer
                                     memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
                                     tf.retry = TX_RETRY;

@@ -47,11 +47,6 @@ void checkSerialRX() {
 
                 //Testfunktionen
                 if (strncmp(serialRxBuffer, "t", 1) == 0) {
-                    char call[12];
-                    char dstCall[15] = "DH1NFJ";
-
-                    getRoute(dstCall, call, sizeof(call));
-                    Serial.println(call);
 
                 }
 
