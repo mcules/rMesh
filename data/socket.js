@@ -14,9 +14,6 @@ function onMessage(event) {
     //RAW-RX
     if (d.monitor) {
         var f = d.monitor;
-
-        console.log(d.monitor);
-        
         var msg = ""; 
         //TX-Frame gelb
         if (d.monitor.tx == true) { msg += "<span class='monitor-tx' >"; } else { msg += "<span>"; }
