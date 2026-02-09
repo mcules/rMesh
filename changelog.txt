@@ -2,9 +2,10 @@ V1.0.6-alpha
 - "erweiterte Einstellungen" -> WLAN Einstellungen bleiben bei FW-Update erhalten, wenn "erweiterte Einstellungen" geändert werden
 - wifiBordcast ist jetzt UDP-Peer (maximal 5 IPs)
 - Viele ACKs wieder weg (auf Stand von V1.0.4)
-- Hoffentlich alle Rufzeichen UTF-8 sicher in Websocket 
+- Hoffentlich alle Rufzeichen UTF-8 sicher im Websocket 
 - Fehler in Routing Liste beseitigt (falsche Nodes, die nicht in Peer Liste sind)
 - messages.json kann über GUI gelöscht werden
+- Routing für Nachrichten mit dstCall aktiv
 
 
 V1.0.5-alpha
