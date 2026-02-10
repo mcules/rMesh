@@ -8,6 +8,7 @@ struct Route {
     char srcCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     time_t timestamp = 0;
     float snr = 0;
+    uint8_t hopCount = 0;
 };
 
 
@@ -15,6 +16,6 @@ struct Route {
 extern std::vector<Route> routingList;
 
 void sendRoutingList();
-void addRoutingList(const char* srcCall, const char* viaCall);
+void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount);
 bool checkRoute(char* srcCall, char* viaCall);
 

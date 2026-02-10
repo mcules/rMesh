@@ -92,13 +92,14 @@ function onMessage(event) {
     if (d.routingList) {
         var routing = "";
         routing += "<table>";
-        routing += "<tr> <td>Call</td> <td>Node</td> <td>Last RX</td> </tr>";
+        routing += "<tr> <td>Call</td> <td>Node</td> <td>HopCount</td> <td>Last RX</td> </tr>";
         if (d.routingList.routes) {
             d.routingList.routes.forEach(function(r, index) {
                 const lastRX = new Date(r.timestamp * 1000);
                 routing += "<tr>";
                 routing += "<td>" + r.srcCall + "</td>";
                 routing += "<td>" + r.viaCall + "</td>";
+                routing += "<td>" + r.hopCount + "</td>";
                 routing += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
                 routing += "</tr>";
             });

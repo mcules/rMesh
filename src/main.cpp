@@ -78,7 +78,7 @@ void processRxFrame(Frame &f) {
         case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);   
-                addRoutingList(f.nodeCall, f.nodeCall); 
+                addRoutingList(f.nodeCall, f.nodeCall, f.hopCount); 
             }
             break;
 
@@ -87,7 +87,7 @@ void processRxFrame(Frame &f) {
             //In Peer Liste eintragen
             if (strcmp(f.viaCall, settings.mycall) == 0) {
                 availablePeerList(f.nodeCall, true, f.port);
-                addRoutingList(f.nodeCall, f.nodeCall); 
+                addRoutingList(f.nodeCall, f.nodeCall, f.hopCount); 
                 //Wenn ich ein ACK direkt bekommen habe, dann extra Eintrag
                 addACK(f.srcCall, settings.mycall, f.id);    
             }
@@ -173,7 +173,7 @@ void processRxFrame(Frame &f) {
             }
 
             //Routing
-            addRoutingList(f.srcCall, f.nodeCall); 
+            addRoutingList(f.srcCall, f.nodeCall, f.hopCount); 
 
             if ((found == false) && (f.messageLength > 0)) {
                 //Neue Nachricht empfangen
