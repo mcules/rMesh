@@ -27,7 +27,6 @@ void sendRoutingList() {
         route["srcCall"] = routingList[i].srcCall;
         route["viaCall"] = routingList[i].viaCall;
         route["timestamp"] = routingList[i].timestamp;
-        route["snr"] = routingList[i].snr;
         route["hopCount"] = routingList[i].hopCount;
     }
     char* jsonBuffer = (char*)malloc(2048);
@@ -66,7 +65,10 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
     }
 
     std::sort(routingList.begin(), routingList.end(), [](const Route& a, const Route& b) {
-        return a.timestamp > b.timestamp; 
+        if (a.hopCount != b.hopCount) {
+            return a.hopCount < b.hopCount; 
+        }
+        return a.timestamp > b.timestamp;
     });
 
     sendRoutingList();
