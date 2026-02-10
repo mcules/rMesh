@@ -1,3 +1,6 @@
+V1.0.9-alpha
+- Nochmal Große JSON Strings 
+
 V1.0.8-alpha
 - Nochmal Große JSON Strings 
 
