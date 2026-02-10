@@ -11,7 +11,8 @@
 //Routing Liste
 std::vector<Route> routingList;
 
-void getRoute(char* dstCall, char* viaCall, size_t len) {
+void getRoute(const char* dstCall, char* viaCall, size_t len) {
+    //Serial.printf("dst:%s via:%s\n", dstCall, viaCall);
     viaCall[0] = '\0';
     //Routing Liste duchsuchen
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) { return (strcmp(r.srcCall, dstCall) == 0); });

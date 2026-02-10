@@ -243,9 +243,7 @@ void processRxFrame(Frame &f) {
                     bool routing = false;
                     char viaCall[MAX_CALLSIGN_LENGTH + 1];
                     getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
-                    if (strlen(viaCall) > 0) { routing == true; }
-                    Serial.print("Routing: ");
-                    Serial.println(routing);
+                    if (strlen(viaCall) > 0) { routing = true; }
 
                     //Ports duchlaufen
                     for (tf.port = 0; tf.port <= 1; tf.port++) {

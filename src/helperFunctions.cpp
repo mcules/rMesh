@@ -32,11 +32,9 @@ void sendFrame(Frame &f) {
 
     //Nach Route suchen
     bool routing = false;
-    char viaCall[MAX_CALLSIGN_LENGTH + 1];
-    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
-    if (strlen(viaCall) > 0) { routing == true; }
-    Serial.print("Routing: ");
-    Serial.println(routing);    
+    char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};
+    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);    
+    if (strlen(viaCall) > 0) { routing = true; }
 
     for (int port = 0; port <= 1; port++) {
         uint8_t availableNodeCount = 0;
