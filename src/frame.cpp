@@ -75,46 +75,56 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
 
 void Frame::monitorJSON() {
     //Schreibt Monitor-Daten in JSON-Buffer
-    JsonDocument doc;
+    auto doc = new JsonDocument();
     for (size_t i = 0; i < messageLength; i++) {
-        doc["monitor"]["message"][i] = message[i];
+        (*doc)["monitor"]["message"][i] = message[i];
     }    
     if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
         char text[messageLength + 1];
         safeUtf8Copy(text, (uint8_t*)message, messageLength);
-        doc["monitor"]["text"] = text;
+        (*doc)["monitor"]["text"] = text;
     }
-    doc["monitor"]["messageType"] = messageType;
-    doc["monitor"]["messageLength"] = messageLength;
-    doc["monitor"]["tx"] = tx;
+    (*doc)["monitor"]["messageType"] = messageType;
+    (*doc)["monitor"]["messageLength"] = messageLength;
+    (*doc)["monitor"]["tx"] = tx;
     if (tx == false) {
-        doc["monitor"]["rssi"] = rssi;
-        doc["monitor"]["snr"] = snr;
-        doc["monitor"]["frqError"] = frqError;
+        (*doc)["monitor"]["rssi"] = rssi;
+        (*doc)["monitor"]["snr"] = snr;
+        (*doc)["monitor"]["frqError"] = frqError;
     }
-    doc["monitor"]["timestamp"] = timestamp;
-    if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
-    if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
-    if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
-    if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
-    if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
-    doc["monitor"]["frameType"] = frameType;
-    doc["monitor"]["id"] = id;
-    doc["monitor"]["hopCount"] = hopCount;
-    doc["monitor"]["initRetry"] = initRetry;
-    doc["monitor"]["retry"] = retry;
-    doc["monitor"]["port"] = port;
+    (*doc)["monitor"]["timestamp"] = timestamp;
+    if (strlen(srcCall) > 0) {(*doc)["monitor"]["srcCall"] = srcCall;}
+    if (strlen(dstGroup) > 0) {(*doc)["monitor"]["dstGroup"] = dstGroup;}
+    if (strlen(dstCall) > 0) {(*doc)["monitor"]["dstCall"] = dstCall;}
+    if (strlen(viaCall) > 0) {(*doc)["monitor"]["viaCall"] = viaCall;}
+    if (strlen(nodeCall) > 0) {(*doc)["monitor"]["nodeCall"] = nodeCall;}
+    (*doc)["monitor"]["frameType"] = frameType;
+    (*doc)["monitor"]["id"] = id;
+    (*doc)["monitor"]["hopCount"] = hopCount;
+    (*doc)["monitor"]["initRetry"] = initRetry;
+    (*doc)["monitor"]["retry"] = retry;
+    (*doc)["monitor"]["port"] = port;
 
-    size_t len = measureJson(doc);
-    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len + 1); 
-    if (buffer != nullptr) {
-        serializeJson(doc, (char*)buffer->get(), len + 1);
-        for (auto & client : ws.getClients()) {
-            if (client.status() == WS_CONNECTED) {
-                client.text((char*)buffer->get(), len); 
+    size_t len = measureJson(*doc);
+    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len + 1); 
+    if (wsBuffer != nullptr) {
+        char* dataPtr = (char*)wsBuffer->get();
+        if (dataPtr != nullptr) {
+            // In den Buffer schreiben
+            serializeJson(*doc, dataPtr, len + 1);
+            
+            // 4. Ohne Null-Byte senden (behebt den SyntaxError im Browser)
+            for (auto & client : ws.getClients()) {
+                if (client.status() == WS_CONNECTED) {
+                    client.text(dataPtr, len); 
+                }
             }
         }
+    } else {
+        Serial.println(F("CRITICAL: No memory for WebSocket buffer!"));
     }
+    delete doc;
+    
 }
 
 size_t Frame::messageJSON(char* buffer, size_t length) {

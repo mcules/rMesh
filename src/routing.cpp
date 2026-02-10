@@ -35,25 +35,35 @@ bool checkRoute(char* srcCall, char* viaCall) {
 }
 
 void sendRoutingList() {
-    JsonDocument doc;
-    doc["routingList"]["routes"] = JsonArray();
+    auto doc = new JsonDocument();
+    (*doc)["routingList"]["routes"] = JsonArray();
     for (int i = 0; i < routingList.size(); i++) {
-        JsonObject route = doc["routingList"]["routes"].add<JsonObject>();
+        JsonObject route = (*doc)["routingList"]["routes"].add<JsonObject>();
         route["srcCall"] = routingList[i].srcCall;
         route["viaCall"] = routingList[i].viaCall;
         route["timestamp"] = routingList[i].timestamp;
         route["hopCount"] = routingList[i].hopCount;
     }
-    size_t len = measureJson(doc);
-    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len + 1); 
-    if (buffer != nullptr) {
-        serializeJson(doc, (char*)buffer->get(), len + 1);
-        for (auto & client : ws.getClients()) {
-            if (client.status() == WS_CONNECTED) {
-                client.text((char*)buffer->get(), len); 
+    
+    size_t len = measureJson(*doc);
+    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len + 1); 
+    if (wsBuffer != nullptr) {
+        char* dataPtr = (char*)wsBuffer->get();
+        if (dataPtr != nullptr) {
+            // In den Buffer schreiben
+            serializeJson(*doc, dataPtr, len + 1);
+            
+            // 4. Ohne Null-Byte senden (behebt den SyntaxError im Browser)
+            for (auto & client : ws.getClients()) {
+                if (client.status() == WS_CONNECTED) {
+                    client.text(dataPtr, len); 
+                }
             }
         }
+    } else {
+        Serial.println(F("CRITICAL: No memory for WebSocket buffer!"));
     }
+    delete doc;
 
 
 }

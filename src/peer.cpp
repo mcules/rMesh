@@ -49,10 +49,10 @@ void checkPeerList() {
 }
 
 void sendPeerList() {
-    JsonDocument doc;
-    doc["peerlist"]["peers"] = JsonArray();
+    auto doc = new JsonDocument();
+    (*doc)["peerlist"]["peers"] = JsonArray();
     for (int i = 0; i < peerList.size(); i++) {
-        JsonObject peer = doc["peerlist"]["peers"].add<JsonObject>();
+        JsonObject peer = (*doc)["peerlist"]["peers"].add<JsonObject>();
         peer["port"] = peerList[i].port;
         peer["call"] = peerList[i].nodeCall;
         peer["timestamp"] = peerList[i].timestamp;
@@ -62,16 +62,25 @@ void sendPeerList() {
         peer["available"] = peerList[i].available;
     }
     
-    size_t len = measureJson(doc);
-    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len + 1); 
-    if (buffer != nullptr) {
-        serializeJson(doc, (char*)buffer->get(), len + 1);
-        for (auto & client : ws.getClients()) {
-            if (client.status() == WS_CONNECTED) {
-                client.text((char*)buffer->get(), len); 
+    size_t len = measureJson(*doc);
+    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len + 1); 
+    if (wsBuffer != nullptr) {
+        char* dataPtr = (char*)wsBuffer->get();
+        if (dataPtr != nullptr) {
+            // In den Buffer schreiben
+            serializeJson(*doc, dataPtr, len + 1);
+            
+            // 4. Ohne Null-Byte senden (behebt den SyntaxError im Browser)
+            for (auto & client : ws.getClients()) {
+                if (client.status() == WS_CONNECTED) {
+                    client.text(dataPtr, len); 
+                }
             }
         }
+    } else {
+        Serial.println(F("CRITICAL: No memory for WebSocket buffer!"));
     }
+    delete doc;
 
 
 }

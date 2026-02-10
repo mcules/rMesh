@@ -1,3 +1,6 @@
+V1.0.8-alpha
+- Nochmal Große JSON Strings 
+
 V1.0.7-alpha
 - Große JSON Strings (PeerList und RoutungList) werden direkt in Websocket Puffer geschrieben
 - Monitor Daten auch
