@@ -6,9 +6,11 @@
 #include "peer.h"
 #include "helperFunctions.h"
 #include "config.h"
+#include "settings.h"
 
 //Routing Liste
 std::vector<Route> routingList;
+
 
 bool checkRoute(char* srcCall, char* viaCall) {
     //Routing Liste duchsuchen
@@ -37,6 +39,7 @@ void addRoutingList(const char* srcCall, const char* viaCall) {
     //Serial.printf("src:%s via:%s\n", srcCall, viaCall);
     if (strlen(srcCall) == 0) {return;}
     if (strlen(viaCall) == 0) {return;}
+    if (strcmp(settings.mycall, srcCall) == 0) {return;}
 
     //Prüfen, ob viaCall in Peer Liste ist. Wenn nicht -> Abbruch
     auto itt = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, viaCall) == 0) && (peer.available == true); });
