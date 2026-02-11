@@ -1,4 +1,5 @@
 const menuItems = [
+    { type: 'spacer' },
     { type: 'header', label: 'Groups' },
     { 
         label: 'all', 
@@ -14,10 +15,33 @@ const menuItems = [
             if(name) console.log("neue Gruppe:", name);
         }    
     },    
+    { type: 'spacer' },
+    { type: 'header', label: 'Direct Messages' },
+    { 
+        label: 'all', 
+        action: () => showContent('home') ,
+        longPressAction: () => {
+            alert('Gruppe bearbeiten oder löschen?');
+        }     
+    },
+    { 
+        label: '-- new contact --', 
+        action: async () => {
+            const name = await showModal("Neue Gruppe", "Name:", "", true);
+            if(name) console.log("neue Gruppe:", name);
+        }    
+    },    
+    { type: 'spacer' },
     { type: 'header', label: 'Info'},
     { 
         label: 'Monitor', 
-        action: () => showContent('cMonitor') 
+        action: function() { 
+            showContent('cMonitor'); 
+            window.scrollTo({ 
+                top: document.body.scrollHeight, 
+                behavior: 'smooth' 
+            });
+        }
     },
     { 
         label: 'Peers', 
@@ -27,6 +51,7 @@ const menuItems = [
         label: 'Routing', 
         action: () => showContent('cRouting') 
     },
+    { type: 'spacer' },
     { type: 'header', label: 'Settings' },
     { 
         label: 'Network', 
@@ -184,14 +209,28 @@ window.addEventListener('DOMContentLoaded', function() {
 
         showContent('cMonitor');
 
-
         initWebSocket();
 
-        setAntennaColor("rgb(255, 217, 0)");
+        //setAntennaColor("rgb(255, 217, 0)");
 
 	
 	
 });
+
+
+document.getElementById("settingsScanWifi").addEventListener("click", function() {
+    showModal("Note", "WiFi scan started. Results will be displayed in a few seconds.", "", false);
+    document.getElementById('settingsSSIDList').innerHTML = "";
+    sendWS(JSON.stringify({scanWifi: true }));
+}); 
+
+document.getElementById("settingsSSIDList").addEventListener("click", function() {
+    document.getElementById("settingsSSID").value = document.getElementById("settingsSSIDList").value;
+});
+
+
+
+
 
 
 
@@ -340,31 +379,31 @@ function closeModal() {
  * @param {string} containerId - Ziel-Container
  */
 function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) {
-    const container = document.getElementById(containerId);
+    var container = document.getElementById(containerId);
     if (!container) return;
 
-    const row = document.createElement('div');
-    // Die übergebene Klasse wird hier direkt eingesetzt
-    row.className = `bubble-row ${bubbleClass}`;
+    var row = document.createElement('div');
+    // Klassische String-Verknüpfung
+    row.className = 'bubble-row ' + bubbleClass;
 
-    const bubble = document.createElement('div');
+    var bubble = document.createElement('div');
     bubble.className = 'bubble';
 
-    const header = document.createElement('div');
+    var header = document.createElement('div');
     header.className = 'bubble-header';
     
-    const titleSpan = document.createElement('span');
+    var titleSpan = document.createElement('span');
     titleSpan.textContent = title;
     titleSpan.style.color = titleColor;
 
-    const timeSpan = document.createElement('span');
+    var timeSpan = document.createElement('span');
     timeSpan.className = 'bubble-time';
     timeSpan.textContent = subtitle;
 
     header.appendChild(titleSpan);
     header.appendChild(timeSpan);
 
-    const content = document.createElement('div');
+    var content = document.createElement('div');
     content.className = 'bubble-text';
     content.textContent = text;
 
@@ -373,8 +412,15 @@ function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) 
     row.appendChild(bubble);
 
     container.appendChild(row);
-    //window.scrollTo(0, document.body.scrollHeight);
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+
+    // FIX: Ganz kurz warten (0ms reicht oft), damit der Browser 
+    // die neue Höhe des Containers berechnen kann.
+    setTimeout(function() {
+        container.scrollTo({
+            top: container.scrollHeight,
+            behavior: 'smooth'
+        });
+    }, 10); 
 }
 
 
@@ -554,6 +600,7 @@ function setAntennaColor(hexColor) {
     if (!antenna) return;
 
     // Direktes Setzen der Styles auf das SVG Element
+    antenna.style.transition = 'none';
     antenna.style.stroke = hexColor;
     antenna.style.fill = hexColor;
 

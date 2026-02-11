@@ -4,6 +4,7 @@ var messages = [];
 var baseURL = "";
 var gateway = "";
 var init = false;
+let heartBeatTimer;
 
 
 function initWebSocket() {
@@ -19,7 +20,7 @@ function initWebSocket() {
     }
 
     //Websocket init
-    setAntennaColor("rgba(255, 255, 255, 0.17)");
+    setAntennaColor("#525252");
     websocket = new WebSocket(gateway);
     websocket.onopen = onOpen;
     websocket.onclose = onClose;
@@ -34,7 +35,6 @@ function onOpen(event) {
 
 function onClose(event) {
     init = false;
-    setAntennaColor("rgba(255, 255, 255, 0.17)");
     clearTimeout(timeout);
     setTimeout(initWebSocket, 500);
 }
@@ -174,6 +174,7 @@ function onMessage(event) {
         document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor; 
         document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
+        document.getElementById("hardware").innerHTML = d.settings.hardware;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
         settings.titel = settings.name + " - " + settings.mycall;
@@ -220,16 +221,17 @@ function onMessage(event) {
     //Status
     if (d.status) {
         if (d.status.tx) {
-            setAntennaColor("rgb(255, 0, 0)");
+            setAntennaColor("#FF0000");
         } else if (d.status.rx) {
-            setAntennaColor("rgb(0, 255, 0)");
+            setAntennaColor("#00FF00");
         } else {
-            setAntennaColor("rgb(255, 255, 0)");
+            setAntennaColor("#afaf00");
         }
-        //document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
-        //document.getElementById("retry").innerHTML = d.status.retry; 
-
+        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
+        document.getElementById("retry").innerHTML = d.status.retry; 
         document.getElementById("heap").innerHTML = d.status.heap; 
+        clearTimeout(heartBeatTimer);
+        heartBeatTimer = setTimeout(function() { setAntennaColor("#525252"); }, 2000);
     }
 
     //WiFi Scan
@@ -245,3 +247,57 @@ function onMessage(event) {
     }
 
 }		
+
+
+
+function saveSettings() {
+    var settings = {};
+    settings["mycall"] = document.getElementById("settingsMycall").value;
+    settings["ntp"] = document.getElementById("settingsNTP").value;
+    settings["dhcpActive"] = document.getElementById("settingsDHCP").checked;
+    settings["wifiSSID"] = document.getElementById("settingsSSID").value;
+    settings["wifiPassword"] = document.getElementById("settingsPassword").value;
+    settings["apMode"] = document.getElementById("settingsApMode").checked;
+    settings["wifiIP"] = document.getElementById("settingsWiFiIP").value.split('.').map(Number);
+    settings["wifiNetMask"] = document.getElementById("settingsWifiNetMask").value.split('.').map(Number);
+    settings["wifiGateway"] = document.getElementById("settingsWifiGateway").value.split('.').map(Number);
+    settings["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
+    //settings["wifiBrodcast"] = document.getElementById("settingsWifiBrodcast").value.split('.').map(Number);
+    settings["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
+    settings["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
+    settings["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
+    settings["loraSyncWord"] = parseInt(document.getElementById("settingsLoraSyncWord").value, 16);
+    settings["loraCodingRate"] = parseInt(document.getElementById("settingsLoraCodingRate").value);
+    settings["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
+    settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
+    settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    settings["udpPeers"] = [];
+    for (var i = 0; i < 5; i++) {
+        var val = document.getElementById("settingsUDPPeer" + i).value;
+        if (!val) val = "0.0.0.0";
+        var ipParts = val.split('.').map(Number);
+        settings["udpPeers"].push({
+            "ip": ipParts
+        });
+    }
+    sendWS(JSON.stringify({settings: settings}));
+    showModal("Note", "Settings saved.", "", false);
+}
+
+function reboot() {
+    sendWS(JSON.stringify({reboot: true }));
+    showModal("Note", "System rebooting...", "", false);
+}
+
+function syncTime() {
+    sendWS(JSON.stringify({time: Math.floor(Date.now() / 1000) }));
+    showModal("Note", "System time updated from browser.", "", false);
+}
+
+function deleteMessages() {
+    sendWS(JSON.stringify({deleteMessages: true }));
+    showModal("Note", "Clearing buffer and rebooting...", "", false);
+}
+
+
+

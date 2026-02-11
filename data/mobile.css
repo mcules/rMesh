@@ -139,7 +139,7 @@ table.list th {
     top: 0;
     left: 0; /* Sicherheitshalber hinzufügen */
     width: 100%;
-    height: 30px;
+    height: 50px;
     background-color: #002e33;
     color: #cfcfcf;
     display: flex;
@@ -151,8 +151,8 @@ table.list th {
 }
 
 .status-icon {
-    width: 20px; /* Bei 30px Header-Höhe ist 24px oft etwas knapp */
-    height: 20px;
+    width: 30px; /* Bei 30px Header-Höhe ist 24px oft etwas knapp */
+    height: 30px;
     margin-left: auto; 
     transition: all 0.3s ease;
     flex-shrink: 0; 
@@ -239,9 +239,9 @@ table.list th {
 
 .content-section {
     display: none;
-    padding: 20px 10px;
+    padding: 10px;
     /* Berechne die Mindesthöhe: 100% Display minus 60px Header */
-    min-height: 100vh; 
+    height: calc(100vh - 50px);
     width: 100%;
     box-sizing: border-box;
     

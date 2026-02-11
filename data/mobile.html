@@ -70,8 +70,8 @@
                 <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input id="settingsNTP"></td> </tr>
             </table>
             <button class="button" onclick="saveSettings();">save</button>
-            <button class="button" id="settingsReboot">reboot</button>  
-            <button class="button" id="statusSyncTime">sync browser time</button>              
+            <button class="button" onclick="reboot();">reboot</button>  
+            <button class="button" onClick="syncTime();">sync browser time</button>              
         </div>
 
         <div id="cLora" class="content-section">
@@ -116,18 +116,20 @@
                 <tr> <td>Preamble Length</td> <td> <input id="settingsLoraPreambleLength"></td> </tr>		
                 <tr> <td> Repeat Messages </td> <td> <input type="checkbox" id="settingsLoraRepeat"> </td> </tr> 
             </table>
-            <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
-            <button class="button" id="settingsDeleteMessages" onclick="saveSettings();">delete messages</button>
-
+            <button class="button" onclick="saveSettings();">save</button>
         </div>
 
         <div id="cAbout" class="content-section">
             <h1>About</h1>
             <table>
+                <tr> <td> Hardware </td> <td id="hardware"> </td> </tr> 
                 <tr> <td> Version </td> <td id="version"></td> </tr> 
                 <tr> <td> Max Message Length </td> <td id="settingsLoraMaxMessageLength"> </td> </tr> 
                 <tr> <td> Heap </td> <td id="heap"> </td> </tr> 
+                <tr> <td> TX Buffer </td> <td id="txBuffer"> </td> </tr> 
+                <tr> <td> Retry </td> <td id="retry"> </td> </tr> 
             </table>
+            <button class="button" onclick="deleteMessages();">delete messages</button>
         </div>
 
         <div id="cPeers" class="content-section">

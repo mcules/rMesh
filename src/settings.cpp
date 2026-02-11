@@ -118,7 +118,8 @@ void sendSettings() {
     doc["settings"]["loraSpreadingFactor"] = settings.loraSpreadingFactor;
     doc["settings"]["loraPreambleLength"] = settings.loraPreambleLength;
     doc["settings"]["version"] = VERSION;
-    doc["settings"]["name"] = NAME;
+    doc["settings"]["name"] = NAME; 
+    doc["settings"]["hardware"] = PIO_ENV_NAME;
     doc["settings"]["loraRepeat"] = settings.loraRepeat;
     doc["settings"]["loraMaxMessageLength"] = settings.loraMaxMessageLength;
     uint8_t count = sizeof(extSettings.udpPeer) / sizeof(extSettings.udpPeer[0]);
