@@ -60,41 +60,52 @@ void sendRoutingList() {
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {
-    //Serial.printf("src:%s via:%s\n", srcCall, viaCall);
-    if (strlen(srcCall) == 0) {return;}
-    if (strlen(viaCall) == 0) {return;}
-    if (strcmp(settings.mycall, srcCall) == 0) {return;}
+    if (strlen(srcCall) == 0 || strlen(viaCall) == 0) return;
+    if (strcmp(settings.mycall, srcCall) == 0) return;
 
-    //Prüfen, ob viaCall in Peer Liste ist. Wenn nicht -> Abbruch
-    auto itt = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, viaCall) == 0) && (peer.available == true); });
-    if (itt == peerList.end()) { return; }
+    // 1. Prüfen, ob viaCall (der nächste Hop) in Peer Liste ist
+    auto itt = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { 
+        return (strcmp(peer.nodeCall, viaCall) == 0) && (peer.available == true); 
+    });
+    if (itt == peerList.end()) return;
 
-    //Routing Liste duchsuchen, ob Call bereits existiert
+    // 2. Routing Liste nach dem Ziel-Call (srcCall) durchsuchen
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) {
-        return (strcmp(r.srcCall, srcCall) == 0) && (strcmp(r.viaCall, viaCall) == 0);
+        return (strcmp(r.srcCall, srcCall) == 0);
     });
 
     if (it == routingList.end()) {
-        //Neu
+        // Fall A: Ziel unbekannt -> Neu anlegen
         Route r;
-        memcpy(r.srcCall, srcCall, MAX_CALLSIGN_LENGTH + 1);
-        memcpy(r.viaCall, viaCall, MAX_CALLSIGN_LENGTH + 1);
+        strncpy(r.srcCall, srcCall, MAX_CALLSIGN_LENGTH);
+        r.srcCall[MAX_CALLSIGN_LENGTH] = '\0';
+        strncpy(r.viaCall, viaCall, MAX_CALLSIGN_LENGTH);
+        r.viaCall[MAX_CALLSIGN_LENGTH] = '\0';
         r.timestamp = time(NULL);
         r.hopCount = hopCount;
         routingList.push_back(r);
     } else {
-        //Aktualisieren
-        it->timestamp = time(NULL);
-        it->hopCount = hopCount;
+        // Fall B: Ziel existiert -> Kürzester Weg gewinnt
+        
+        // Wir aktualisieren nur, wenn:
+        // - Der neue Pfad weniger Hops hat als der gespeicherte
+        // - ODER es derselbe via-Knoten ist (dann nur Zeit/Hops aktualisieren)
+        if (hopCount < it->hopCount || strcmp(it->viaCall, viaCall) == 0) {
+            strncpy(it->viaCall, viaCall, MAX_CALLSIGN_LENGTH);
+            it->viaCall[MAX_CALLSIGN_LENGTH] = '\0';
+            it->timestamp = time(NULL);
+            it->hopCount = hopCount;
+        } else {
+            // Neuer Pfad ist länger oder gleich lang über anderen Knoten -> ignorieren
+            return; 
+        }
     }
 
+    // 3. Sortierung (kürzeste Hops nach oben)
     std::sort(routingList.begin(), routingList.end(), [](const Route& a, const Route& b) {
-        if (a.hopCount != b.hopCount) {
-            return a.hopCount < b.hopCount; 
-        }
+        if (a.hopCount != b.hopCount) return a.hopCount < b.hopCount;
         return a.timestamp > b.timestamp;
     });
 
     sendRoutingList();
-
 }

@@ -1,3 +1,15 @@
+const emojis = [
+        // Gesichter & Smileys
+        '😊','😂','🤣','😍','😎','🤔','😅','😉','🙄','🤨','😏','🥳','😭','😤','😱','🥱','😴',
+        // Handzeichen & Menschen
+        '👍','👎','👌','✌️','🤞','🤙','👏','🙌','🙏','💪','👋','🖐️','🤳','👈','👉',
+        // Herzen & Symbole
+        '❤️','✨','🔥','💥','💯','💢',
+        // Technik & LoRa/Mesh
+        '📡','📶','📻','💻','🔋','🔌','💡','📟','🛡️','🌍','🛰️','⚡','⚙️','🔧',
+        // Status & Warnung
+        '✅','❌','⚠️','🚫','🔔','🔕','🆘','🛑','🟢','🟡','🔴','💬','🗨️'
+    ];
 
 var guiSettings;
 let wakeLock = null;
@@ -24,44 +36,21 @@ const distinctColors = [
 ];
 let colorIndex = 0;
 
-
-function sendToServiceWorker(title, message) {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        navigator.serviceWorker.controller.postMessage({
-            type: 'SHOW_LORA_NOTIFICATION', // Muss mit dem 'message' Event im sw.js übereinstimmen
-            title: title,
-            message: message
-        });
-    } else {
-        console.warn("Service Worker nicht bereit oder nicht aktiv.");
-    }
-}
-
-
 async function requestWakeLock() {
   try {
     wakeLock = await navigator.wakeLock.request('screen');
-    console.log('Wake Lock ist aktiv!');
     wakeLock.addEventListener('release', () => {
-      console.log('Wake Lock wurde aufgehoben.');
     });
   } catch (err) {
     console.error(`${err.name}, ${err.message}`);
   }
 }
 
-
 document.addEventListener('click', requestWakeLock);
 
 window.addEventListener('DOMContentLoaded', async function() {
     loadGuiSettings();
     buildMenu();
-
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js').then(function(reg) {
-            console.log('SW registriert bei Scope:', reg.scope);
-        });
-    }
 
     initWebSocket();
     
@@ -117,7 +106,7 @@ function buildMenu() {
 
     //Gruppen hinzufügen
     for (key in guiSettings.groups) { 
-        const groupName  = guiSettings.groups[key]; 
+        const groupName  = guiSettings.groups[key].name; 
         //DIVs hinzu
         const container = document.querySelector(".content-container"); 
         if (!document.getElementById("group_" + groupName)) {
@@ -139,7 +128,11 @@ function buildMenu() {
                     //Gruppe löschen
                     showSelectionModal("Delete?", "Do you really want to delete " + groupName + "?",   ["yes"]).then(function(choice) {
                         if (choice === "yes") {
-                            guiSettings.groups = guiSettings.groups.filter(g => g !== groupName);
+                            var newGroups = []; 
+                            for (var i = 0; i < guiSettings.groups.length; i++) { 
+                                if (guiSettings.groups[i].name !== groupName) { newGroups.push(guiSettings.groups[i]); } 
+                            } 
+                            guiSettings.groups = newGroups;
                             showMessages(true);
                             showContent("group_all");
                         } 
@@ -153,8 +146,11 @@ function buildMenu() {
             label: '-- new group --', 
             action: async () => {
                 const name = await showModal("Add new group", "Name:", "", true);
+                const newGroup = {
+                    name: name, 
+                    read: true};
                 if (name) {
-                    guiSettings.groups.push(name);
+                    guiSettings.groups.push(newGroup);
                     showMessages(true);
                     showContent("group_" + name);
                 }
@@ -165,7 +161,7 @@ function buildMenu() {
 
     //DM hinzufügen
     for (key in guiSettings.dm) { 
-        const callsign  = guiSettings.dm[key]; 
+        const callsign  = guiSettings.dm[key].name; 
         //DIVs hinzu
         const container = document.querySelector(".content-container"); 
         if (!document.getElementById("dm_" + callsign)) {
@@ -182,17 +178,7 @@ function buildMenu() {
                 action: () => {
                     showContent("dm_" + callsign );
                     document.getElementById("dm_" + callsign).scrollTo({top: document.getElementById("dm_" + callsign).scrollHeight, behavior: 'smooth' });
-                },
-                longPressAction: () => {
-                    //DM löschen
-                    showSelectionModal("Delete?", "Do you really want to delete " + callsign + "?",   ["yes"]).then(function(choice) {
-                        if (choice === "yes") {
-                            guiSettings.dm = guiSettings.dm.filter(g => g !== callsign);
-                            showMessages(true);
-                            showContent("group_all");
-                        } 
-                    });
-                }     
+                }
             }            
         );
     }
@@ -203,11 +189,24 @@ function buildMenu() {
                 var name = await showModal("Add new contact", "Callsign:", "", true);
                 if (name) {
                     name = name.toUpperCase();
-                    if (!guiSettings.dm.includes(name)) { 
-                        guiSettings.dm.push(name); 
+                    const newDM = {
+                        name: name, 
+                        read: true
+                    };
+
+                    var exists = false;
+                    for (var i = 0; i < guiSettings.dm.length; i++) {
+                        if (guiSettings.dm[i].name === name) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        guiSettings.dm.push(newDM);
                         showMessages(true);
                         showContent("dm_" + name);
-                    }                    
+                    }
+
                     showMessages(true);
                 }
             }    
@@ -291,7 +290,6 @@ function buildMenu() {
             // Events für Touch (Mobile) und Maus (Desktop)
             li.addEventListener('mousedown', startPress);
             li.addEventListener('touchstart', startPress, { passive: true });
-            
             li.addEventListener('mouseup', cancelPress);
             li.addEventListener('mouseleave', cancelPress);
             li.addEventListener('touchend', cancelPress);
@@ -301,7 +299,9 @@ function buildMenu() {
             li.onclick = () => {
                 if (typeof item.action === 'function') {
                     item.action();
-                    document.getElementById("mnu_" + item.label).classList.remove('newMessages');
+                    //document.getElementById("mnu_" + item.label).classList.remove('newMessages');
+                    document.getElementById("title").innerHTML = settings.name + " - " + item.label;
+                    document.title = settings.name + " - " + item.label;
                 }
                 toggleMenu();
             };
@@ -327,24 +327,23 @@ function loadGuiSettings() {
         const [name, value] = c.split("=");
         if (name === "guiSettings") {
             guiSettings =  JSON.parse(decodeURIComponent(value));
+            guiSettings.dm = [];
             return;
         }
     }
     guiSettings = { 
-        groups: ["Herzog", "Wetter", "Verkehr"],
+        groups: [],
         dm: [],
-        menu: "cMonitor"
+        menu: "cMonitor",
+        update: 0
     };
 }
-
 
 
 function toggleMenu() {
 	const menu = document.getElementById('side-menu');
 	menu.classList.toggle('open');
 }
-
-
 
 function showContent(sectionId) {
 	// 1. Alle Sektionen verstecken
@@ -354,14 +353,17 @@ function showContent(sectionId) {
 	});
 
 	// 2. Gewählte Sektion anzeigen
-	document.getElementById(sectionId).classList.add('active');
+    if (document.getElementById(sectionId)) {
+    	document.getElementById(sectionId).classList.add('active');
+    } else {
+        document.getElementById("cMonitor").classList.add('active');           
+    }
+    showMessages(true);
     window.scrollTo(0, 0); 
     guiSettings.menu = sectionId;
     saveGuiSettings();
 
 }
-
-
 
 
 
@@ -455,74 +457,96 @@ function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) 
 
     container.appendChild(row);
 
-    // FIX: Ganz kurz warten (0ms reicht oft), damit der Browser 
-    // die neue Höhe des Containers berechnen kann.
-    setTimeout(function() {
-        container.scrollTo({
-            top: container.scrollHeight,
-            behavior: 'smooth'
-        });
-    }, 10); 
+    container.scrollTo({
+        top: container.scrollHeight,
+        behavior: 'smooth'
+    });
+
 }
 
 
 
-/**
- * Fügt eine Eingabeleiste in eine Sektion ein.
- * Verhindert Duplikate innerhalb derselben Sektion.
- * @param {string} sectionId - Die ID der Sektion (z.B. 'home')
- * @param {function} onSendCallback - Die Funktion, die beim Senden aufgerufen wird
- */
+
 function setupInputBar(sectionId, onSendCallback) {
     const section = document.getElementById(sectionId);
     if (!section) return;
 
     section.classList.add('has-input');
-    // 1. Bestehende Leiste in dieser Sektion entfernen (verhindert Duplikate)
     const existingBar = section.querySelector('.input-bar');
-    if (existingBar) {
-        existingBar.remove();
-    }
+    if (existingBar) existingBar.remove();
 
-    // 2. Neue Leiste erstellen
     const bar = document.createElement('div');
     bar.className = 'input-bar';
+
+    const emojiBtn = document.createElement('button');
+    emojiBtn.className = 'emoji-btn';
+    emojiBtn.innerHTML = '😊';
+    emojiBtn.type = 'button';
+
+    const picker = document.createElement('div');
+    picker.className = 'emoji-picker';
+    picker.style.display = 'none';
+    
+    // Maximale Länge aus den Einstellungen holen (mit Fallback auf 200, falls d.settings fehlt)
+    const maxLength = (window.d && d.settings && d.settings.loraMaxMessageLength) ? d.settings.loraMaxMessageLength : 200;
+
+    emojis.forEach(emoji => {
+        const span = document.createElement('span');
+        span.innerHTML = emoji;
+        span.onclick = () => {
+            // Prüfen, ob durch das Emoji das Limit überschritten würde
+            if (input.value.length + emoji.length <= maxLength) {
+                input.value += emoji;
+                input.focus();
+            } else {
+                alert("Nachricht zu lang!"); // Optionaler Hinweis
+            }
+            picker.style.display = 'none';
+        };
+        picker.appendChild(span);
+    });
 
     const input = document.createElement('input');
     input.type = 'text';
     input.placeholder = 'type a message....';
     
+    // --- WICHTIG: Die Begrenzung direkt am Input-Feld setzen ---
+    input.maxLength = maxLength; 
+    
     const button = document.createElement('button');
     button.className = 'send-btn';
-    button.innerHTML = '➤'; // Ein einfacher Pfeil als Icon
+    button.innerHTML = '➤';
 
-    // 3. Sende-Logik
+    emojiBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isVisible = picker.style.display === 'grid';
+        picker.style.display = isVisible ? 'none' : 'grid';
+    };
+
+    document.addEventListener('click', () => { picker.style.display = 'none'; });
+    picker.onclick = (e) => e.stopPropagation();
+
     const handleSend = () => {
-        const text = input.value.trim();
+        // Sicherheitshalber auch hier nochmal kürzen (Slice)
+        const text = input.value.trim().substring(0, maxLength);
         if (text !== "") {
-            onSendCallback(sectionId, text); // Übergibt ID und Text
-            input.value = ""; // Feld leeren
+            onSendCallback(sectionId, text);
+            input.value = "";
+            picker.style.display = 'none';
         }
     };
 
     button.onclick = handleSend;
+    input.onkeydown = (e) => { if (e.key === 'Enter') handleSend(); };
 
-    // Enter-Taste zum Senden unterstützen
-    input.onkeydown = (e) => {
-        if (e.key === 'Enter') handleSend();
-    };
-
-    // Zusammenbauen
+    bar.appendChild(emojiBtn);
+    bar.appendChild(picker);
     bar.appendChild(input);
     bar.appendChild(button);
     section.appendChild(bar);
 }
 
-/**
- * Gibt eine feste Farbe für einen Namen zurück.
- * @param {string} name - Der Name des Teilnehmers
- * @returns {string} - Die HEX-Farbe
- */
+
 function getColorForName(name) {
     if (name == settings.mycall) return "#009eaf";
 
@@ -545,13 +569,7 @@ function getColorForName(name) {
 
 
 
-/**
- * Zeigt ein Modal mit einer Liste von Auswahlmöglichkeiten.
- * @param {string} title - Überschrift
- * @param {string} desc - Beschreibungstext
- * @param {Array<string>} options - Liste der Texte für die Buttons
- * @returns {Promise<string|null>} - Der gewählte Text oder null bei Abbruch
- */
+
 function showSelectionModal(title, desc, options = []) {
     return new Promise((resolve) => {
         const modal = document.getElementById('custom-modal');
@@ -626,10 +644,7 @@ function settingsVisibility() {
     }
 }
 
-/**
- * Setzt die Farbe des Antennensymbols direkt via Style
- * @param {string} color - 'gray', 'green', 'red' oder Hex-Codes
- */
+
 function setAntennaColor(hexColor) {
     const antenna = document.getElementById('antenna-icon');
     if (!antenna) return;

@@ -1,409 +1,48 @@
 <!DOCTYPE html>
 <html lang="de">
-	<head>
-		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" /> 
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<link rel="stylesheet" type="text/css" href="gpstyle.css" />
-        <script src="clock.js" defer></script>
-        <script src="ui.js" defer></script>
-        <script src="socket.js" defer></script>
-        <title>rMesh</title>
-	</head>
-
-    <body>
-       
-            <div class="top">
-                <div class="left">
-                    <textarea class="text-input" id="messageText0"></textarea>
-                    <textarea class="text-input" id="messageText1" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText2" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText3" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText4" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText5" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText6" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText7" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText8" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText9" style="display: none;"></textarea>
-                    <textarea class="text-input" id="messageText10" style="display: none;"></textarea>
-                    <div class="channel-switch"> 
-                        <button id="channelButton1" class="channel-button" onclick="setUI('channel1'); "></button>
-                        <button id="channelButton2" class="channel-button" onclick="setUI('channel2')"></button>
-                        <button id="channelButton3" class="channel-button" onclick="setUI('channel3')"></button>
-                        <button id="channelButton4" class="channel-button" onclick="setUI('channel4')"></button>
-                        <button id="channelButton5" class="channel-button" onclick="setUI('channel5')"></button>
-                    </div>
-                    <div class="channel-switch" style="border-top: none;">
-                        <button id="channelButton6" class="channel-button" onclick="setUI('channel6')"></button>
-                        <button id="channelButton7" class="channel-button" onclick="setUI('channel7')"></button>
-                        <button id="channelButton8" class="channel-button" onclick="setUI('channel8')"></button>
-                        <button id="channelButton9" class="channel-button" onclick="setUI('channel9')"></button>
-                        <button id="channelButton10" class="channel-button" onclick="setUI('channel10')"></button>
-                    </div>
-                    <div class="status-box">
-                        <div class="status"> DstCall: <div id="dstCall"></div> </div>
-                        <div class="status"> MyCall: <div id="myCall"></div> </div>
-                        <div class="status" style="max-width: 180px;"> Heap: <div id="heap"></div> </div>
-                        <div class="status" style="max-width: 150px;"> TRX: <div id="TRX"></div> </div>
-                        <div class="status" style="max-width: 130px;"> TX-Buffer: <div id="txBuffer"></div></div>
-                        <div class="status" style="max-width: 90px;"> Retry: <div id="retry"></div></div>
-                    </div>
-                </div>
-                <div class="right">
-                    <canvas class="clock" id="clock" ></canvas>
-                    <div id="version" class="grey-text-box">rMesh</div>
-                    <div id="date" class="grey-text-box"></div>
-                </div>
-            </div>
-
-            <div id="channel1" class="middle" style="display: none;"></div>
-            <div id="channel2" class="middle" style="display: none;"></div>
-            <div id="channel3" class="middle" style="display: none;"></div>
-            <div id="channel4" class="middle" style="display: none;"></div>
-            <div id="channel5" class="middle" style="display: none;"></div>
-            <div id="channel6" class="middle" style="display: none;"></div>
-            <div id="channel7" class="middle" style="display: none;"></div>
-            <div id="channel8" class="middle" style="display: none;"></div>
-            <div id="channel9" class="middle" style="display: none;"></div>
-            <div id="channel10" class="middle" style="display: none;"> </div>
-            <div id="monitor" class="monitor big">
-                <div style="display: flex; flex-direction: column; align-items: center;">
-                    <img src="rMesh.png" style="height: 70%;">
-                    <div style="height: 22vh;"></div>
-                </div>   
-            </div>
-            <div id="peer" class="peer" style="display: none;"></div>
-            <div id="routing" class="routing" style="display: none;"></div>
-            <div id="setup" class="setup" style="display: none;">
-                <table>
-                    <tr> <td>Callsign:</td> <td><input class="input-box" id="settingsMycall"></td> </tr>
-                    <tr> <td>Frequency:</td> <td><input class="input-box" id="settingsLoraFrequency"></td> </tr>
-                    <tr> <td>Output Power:</td> <td><input class="input-box" id="settingsLoraOutputPower"></td> </tr>
-                    <tr> <td>Bandwidth:</td> <td>
-                        <select id='settingsLoraBandwidth' class="input-box" >
-                            <option value="7.8">7,8 kHz</option>	
-                            <option value="10.4">10,4 kHz</option>	
-                            <option value="15.6">15,6 kHz</option>	
-                            <option value="20.8">20,8 kHz</option>	
-                            <option value="31.25">31,25 kHz</option>	
-                            <option value="62.5">62,5 kHz</option>	
-                            <option value="125">125 kHz</option>	
-                            <option value="250">250 kHz</option>	
-                            <option value="500">500 kHz</option>	
-                        </select> 
-                    </td> </tr>
-                    <tr> <td>Coding Rate:</td> <td>
-                        <select id='settingsLoraCodingRate' class="input-box">
-                            <option value="5">5 - Standard</option>	
-                            <option value="6">6 - Erhöhter Schutz gegen Störungen</option>	
-                            <option value="7">7 - Hoher Schutz, deutlich längere Sendezeit</option>	
-                            <option value="8">8 - Maximaler Schutz</option>	
-                        </select> 
-                    </td> </tr>				
-                    <tr> <td>Spreading Factor:</td> <td>
-                        <select id='settingsLoraSpreadingFactor' class="input-box">
-                            <option value="6">6 - Gering (Sichtverbindung)</option>	
-                            <option value="7">7 - Gut (Standard)</option>	
-                            <option value="8">8 - Besser</option>	
-                            <option value="9">9 - Sehr gut</option>	
-                            <option value="10">10 - Exzellent</option>	
-                            <option value="11">11 - Maximum</option>	
-                            <option value="12">12 - Maximum (Deep Indoor)</option>	
-                        </select> 
-                    </td> </tr>
-                    <tr> <td>Sync Word:</td> <td><input class="input-box" id="settingsLoraSyncWord"></td> </tr>		
-                    <tr> <td>Preamble Length:</td> <td><input class="input-box" id="settingsLoraPreambleLength"></td> </tr>		
-                    <tr> <td> Repeat Messages: </td> 
-                    <td> 
-                        <label class="retro-checkbox-container">
-                            <input type="checkbox" id="settingsLoraRepeat">
-                            <span class="checkmark"></span>
-                        </label>                    
-                    </td> </tr> 
-                    <tr> <td> Max Message Length: </td> <td> <span id="settingsLoraMaxMessageLength"> </span> </td> </tr> 
-                    <tr> <td>&nbsp;</td> <td>
-                        <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
-                        <button class="button" id="settingsDeleteMessages" onclick="saveSettings();">delete messages</button>
-                    </td> </tr>
-                </table>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rMesh - Weiterleitung...</title>
+    
+    <script>
+        (function() {
+            // Funktion zur Erkennung von Mobilgeräten
+            function isMobile() {
+                const userAgent = navigator.userAgent || navigator.vendor || window.opera;
                 
-            </div>
-            <div id="network" class="network" style="display: none;">
-                <table>
-                    <tr> <td> Accesspoint: </td>  <td>
-                        <label class="retro-checkbox-container">
-                            <input type="checkbox" id="settingsApMode">
-                            <span class="checkmark"></span>
-                        </label> 
-                    </td>	</tr> 
-                    <tr class="AP_MODE_ENABLED"> 
-                        <td> Networks: </td> 
-                        <td> 
-                            <select class="input-box" id='settingsSSIDList'></select> 
-                            <button class="button" id="settingsScanWifi">scan</button> 
-                        </td>
-                    </tr>
-                    <tr class="AP_MODE_ENABLED"> 
-                        <td> SSID: </td> 
-                        <td> <input class="input-box" id='settingsSSID'> </td>
-                    </tr>
-                    <tr class="AP_MODE_ENABLED"> <td> Password </td> <td> <input class="input-box" type="password" id='settingsPassword'> </td> 
-                    </tr>
-                    <tr class="AP_MODE_ENABLED"> <td> DHCP </td> 
-                        <td> 
-                            <label class="retro-checkbox-container">
-                                <input type="checkbox" id="settingsDHCP">
-                                <span class="checkmark"></span>
-                            </label> 
-                        </td> 
-                    </tr> 
-                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> IP-Address </td> <td> <input class="input-box" id='settingsWiFiIP'> </td> </tr>
-                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Subnet </td> <td> <input class="input-box" id='settingsWifiNetMask'> </td> </tr>
-                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> Gateway </td> <td> <input class="input-box" id='settingsWifiGateway'> </td> </tr>
-                    <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td> DNS </td> <td> <input class="input-box" id='settingsWifiDNS'> </td> </tr>
-                    <tr> <td> UDP-Peer 1 </td> <td> <input class="input-box" id='settingsUDPPeer0'> </td> </tr>
-                    <tr> <td> UDP-Peer 2 </td> <td> <input class="input-box" id='settingsUDPPeer1'> </td> </tr>
-                    <tr> <td> UDP-Peer 3 </td> <td> <input class="input-box" id='settingsUDPPeer2'> </td> </tr>
-                    <tr> <td> UDP-Peer 4 </td> <td> <input class="input-box" id='settingsUDPPeer3'> </td> </tr>
-                    <tr> <td> UDP-Peer 5 </td> <td> <input class="input-box" id='settingsUDPPeer4'> </td> </tr>
-                    <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input class="input-box" id="settingsNTP"></td> </tr>
-                    <tr> <td>&nbsp;</td> <td>
-                        <button class="button" onclick="saveSettings();">save</button>
-                        <button class="button" id="settingsReboot">reboot</button>  
-                        <button class="button" id="statusSyncTime">sync browser time</button>              
-                    </td> </tr>
-                </table>
-            </div>
+                // 1. Prüfung über User Agent (RegEx für gängige Mobilgeräte)
+                const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+                
+                // 2. Zusätzliche Prüfung über die Bildschirmbreite (optional, aber sicher)
+                const isSmallScreen = window.innerWidth <= 800;
 
-            <div class="bottom">
-                <button id="monitorButton" class="main-button" onclick="setUI('monitor')">
-                    <img src="monitor.png" class="button-icon">
-                    <span class="button-text">Monitor</span>
-                </button>
+                return mobileRegex.test(userAgent) || isSmallScreen;
+            }
 
-                <button id="peerButton" class="main-button" onclick="setUI('peer')">
-                    <img src="mh.png" class="button-icon">
-                    <span class="button-text">Peers</span>
-                </button>    
-
-                <button id="routingButton" class="main-button" onclick="setUI('routing')">
-                    <img src="edit.png" class="button-icon">
-                    <span class="button-text">Routing</span>
-                </button>    
-
-                <button id="dosButton" class="main-button" onclick="openDosPopup()">
-                    <img src="dos.png" class="button-icon">
-                    <span class="button-text">DOS</span>
-                </button>    
-
-                <button id="tuneButton" class="main-button">
-                    <img src="tune.png" class="button-icon">
-                    <span class="button-text">Tune</span>
-                </button>    
-
-                <button id="announceButton" class="main-button">
-                    <img src="announce.png" class="button-icon">
-                    <span class="button-text">Announce</span>
-                </button>    
-
-                <button id="setupButton" class="main-button" onclick="setUI('setup')">
-                    <img src="setup.png" class="button-icon">
-                    <span class="button-text">Setup</span>
-                </button>    
-
-                <button id="networkButton" class="main-button" onclick="setUI('network')">
-                    <img src="network.png" class="button-icon">
-                    <span class="button-text">Network</span>
-                </button>    
-            </div>
-       
-        <!-- Input/Message box -->
-        <div id="overlay">
-            <div id="modal">
-                <span id="modalTitle"></span>
-                <input class="input-box" id="modalInput" type="text" style="width:100%; padding:5px;">
-                <br>
-                <button class="button" style="display:block; margin:10px auto 0 auto;" id="modalOk">OK</button>
-            </div>
+            // Weiterleitung ausführen
+            if (isMobile()) {
+                window.location.replace("mobile.html");
+            } else {
+                window.location.replace("gp.html");
+            }
+        })();
+    </script>
+    
+    <style>
+        /* Falls JavaScript deaktiviert ist, zeigen wir Notfall-Links an */
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #1a1a1a; color: white; }
+        .fallback { text-align: center; }
+        a { color: #00d1b2; text-decoration: none; border: 1px solid #00d1b2; padding: 10px 20px; border-radius: 5px; }
+    </script>
+</head>
+<body>
+    <noscript>
+        <div class="fallback">
+            <h2>rMesh Messenger</h2>
+            <p>Bitte wählen Sie Ihre Version:</p>
+            <a href="mobile.html">Mobile Version</a> | <a href="desktop.html">Desktop Version</a>
         </div>
-
-        <script>
-            var ui = ""   
-            var activeChannel = 0;      
-			var timeout = 0;
-            let okSound = new Audio("ok.wav");
-            var channels = new Array(12).fill(false);
-
-			document.addEventListener('DOMContentLoaded', async function() {
-                //Init
-                drawClock(new Date(0));
-                let okSound = new Audio("ok.wav");
-                initUI();
-                setUI( Cookie.get("ui", "monitor") );
-
-                //Websocket verbinden
-				initWebSocket();
-                
-			});
-
-            document.addEventListener("visibilitychange", function() {
-                if (!document.hidden) { setUI(ui); }
-            });
-
-			document.getElementById("tuneButton").addEventListener("click", function() {
-				sendWS(JSON.stringify({tune: true }));
-			});   
-
-            document.getElementById("announceButton").addEventListener("click", function() {
-				sendWS(JSON.stringify({announce: true }));
-			});   
-
-			document.getElementById("settingsReboot").addEventListener("click", function() {
-				sendWS(JSON.stringify({reboot: true }));
-			});
-
-            document.getElementById("settingsDeleteMessages").addEventListener("click", function() {
-				sendWS(JSON.stringify({deleteMessages: true }));
-			});
-
-			document.getElementById("settingsSSIDList").addEventListener("click", function() {
-				document.getElementById("settingsSSID").value = document.getElementById("settingsSSIDList").value;
-			});
-
-			document.getElementById("settingsApMode").addEventListener("change", function() { 
-                settingsVisibility(); 
-            });
-
-			document.getElementById("settingsDHCP").addEventListener("change", function() { 
-                settingsVisibility(); 
-            });            
-
-            document.getElementById("statusSyncTime").addEventListener("click", function() {
-				sendWS(JSON.stringify({time: Math.floor(Date.now() / 1000) }));
-			});
-
-			document.getElementById("settingsScanWifi").addEventListener("click", function() {
-                msgBox("WiFi scan started. Results will be displayed in a few seconds.");
-                document.getElementById('settingsSSIDList').innerHTML = "";
-				sendWS(JSON.stringify({scanWifi: true }));
-			});            
-
-            //F-Tasten
-            window.addEventListener('keydown', function(e) {
-                if (e.altKey) {
-                    const key = e.key.toLowerCase(); // Damit es auch bei festgestellter Großschreibung geht
-                    if (key === 'm' ) {e.preventDefault(); setUI("monitor"); }
-                    if (key === 'p' ) {e.preventDefault(); setUI("peer"); }
-                    if (key === 'a' ) {e.preventDefault(); sendWS(JSON.stringify({announce: true })); }
-                }
-                // Extrahiert die Zahl nach dem "F"
-                const fKeyMatch = e.key.match(/^F(\d+)$/);
-                if (fKeyMatch) {
-                    const fNumber = parseInt(fKeyMatch[1]);
-                    // Nur F1 bis F10 abfangen
-                    if (fNumber >= 1 && fNumber <= 10) {
-                        e.preventDefault(); // Browser-Standard blockieren
-                        setUI("channel" + fNumber);
-                    }
-                }
-            });
-
-            function openDosPopup() {
-                // Konfiguration des Popups
-                const width = 800;
-                const height = 600;
-                const left = (screen.width - width) / 2;
-                const top = (screen.height - height) / 2;
-
-                // Das "window.open" Kommando mit Parametern für ein minimalistisches Fenster
-                window.open(
-                    'dos.html', 
-                    'DOSEmulator', 
-                    `width=${width},height=${height},left=${left},top=${top},menubar=no,toolbar=no,location=no,status=no,resizable=yes`
-                );
-            } 
-            
-            
-			const Cookie = {
-			  get(name, defaultValue = null) {
-				const cookies = document.cookie.split(";").map(c => c.trim());
-				for (const c of cookies) {
-				  const eqIndex = c.indexOf("=");
-				  const n = c.substring(0, eqIndex);
-				  const v = c.substring(eqIndex + 1);
-				  if (n === name) return v;
-				}
-				return defaultValue;
-			  },
-
-			  set(name, value, days = 3650) {
-				const expires = new Date(Date.now() + days * 864e5).toUTCString();
-				document.cookie = `${name}=${value}; expires=${expires}; path=/`;
-			  },
-
-			  delete(name) {
-				document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
-			  }
-			};       
-            
-            
-            function msgBox(title) {
-                return new Promise(resolve => {
-                    const overlay = document.getElementById("overlay");
-                    const input = document.getElementById("modalInput");
-                    const titleElem = document.getElementById("modalTitle");
-                    const okBtn = document.getElementById("modalOk");
-                    titleElem.textContent = title;
-                    input.style.display = "none";
-                    overlay.style.display = "flex";
-                    function onOk() {
-                        overlay.style.display = "none";
-                        okBtn.removeEventListener("click", onOk);
-                    }
-                    okBtn.addEventListener("click", onOk);
-                });
-            }
-
-            
-            function inputBox(title, defaultValue = "", returnFocusElement = null) {
-                return new Promise(resolve => {
-                    const overlay = document.getElementById("overlay");
-                    const input = document.getElementById("modalInput");
-                    const titleElem = document.getElementById("modalTitle");
-                    const okBtn = document.getElementById("modalOk");
-                    titleElem.textContent = title;
-                    input.value = defaultValue; 
-                    input.style.display = "flex";
-                    overlay.style.display = "flex";
-                    input.focus();
-                    if (defaultValue) input.select(); // Markiert Text, falls einer da ist
-                    function close() {
-                        overlay.style.display = "none";
-                        okBtn.removeEventListener("click", onOk);
-                        input.removeEventListener("keydown", onKey);
-                        
-                        // Fokus zurückgeben, falls ein Element übergeben wurde
-                        if (returnFocusElement && typeof returnFocusElement.focus === "function") {
-                            returnFocusElement.focus();
-                        }
-                    }
-
-                    function onOk() {
-                        const val = input.value;
-                        close();
-                        resolve(val);
-                    }
-
-                    function onKey(e) {
-                        if (e.key === "Enter") onOk();
-                        if (e.key === "Escape") { close(); resolve(null); }
-                    }
-
-                    okBtn.addEventListener("click", onOk);
-                    input.addEventListener("keydown", onKey);
-                });
-            }
-
-
-        </script>
-    </body>
+    </noscript>
+</body>
 </html>

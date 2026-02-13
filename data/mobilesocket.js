@@ -51,33 +51,35 @@ function keepAlive() {
 }
 
 function showMessages(parseAll) {
-
     //Alle Container löschen
     if (parseAll == true) {
         buildMenu();
         for (key in guiSettings.groups) { 
-            const groupName = guiSettings.groups[key]; 
+            const groupName = guiSettings.groups[key].name; 
             const div = document.getElementById("group_" + groupName);
             div.innerHTML = "";
             setupInputBar('group_' + groupName, mySendMessageFunction); 
+            //Alles als gelesen martieren
+            guiSettings.groups[key].read = true;  
         }
         document.getElementById("group_all").innerHTML = "";
         setupInputBar('group_all', mySendMessageFunction); 
         for (key in guiSettings.dm) { 
-            const callsign = guiSettings.dm[key]; 
+            const callsign = guiSettings.dm[key].name; 
             const div = document.getElementById("dm_" + callsign);
             div.innerHTML = "";
             setupInputBar('dm_' + callsign, mySendMessageFunction); 
+            guiSettings.dm[key].read = true;
         }
     }
 
-    
-    
+    var sound = false;
 
     //Alle Nachrichten durchlaufen
     messages.forEach(function(m) {
         //Abbruch, wenn Nachricht schon angezeigt wurde
         if ((m.parsed == true) && (parseAll == false)) {return;}
+
 
         //Nachricht zusammenbauen
         var found = false;
@@ -90,7 +92,8 @@ function showMessages(parseAll) {
 
         //Nachrichten zuordnen (Gruppen)
         for (key in guiSettings.groups) { 
-            const groupName  = guiSettings.groups[key];
+            const groupName  = guiSettings.groups[key].name;
+
             if ((groupName == m.dstGroup) && (m.dstCall == "")) {
                 addBubble(
                     css, 
@@ -100,19 +103,23 @@ function showMessages(parseAll) {
                     msg, 
                     "group_" + groupName
                 );   
-                if ((parseAll == false) && (m.tx == false) && (document.getElementById("group_" + groupName).classList.contains("active") == false)) document.getElementById("mnu_" + groupName).classList.add('newMessages');
+                if (document.getElementById("group_" + groupName).classList.contains("active") != false) {m.read = true;}
+                if (m.read == false) { guiSettings.groups[key].read = false; }
                 found = true;
+                sound = true;
             }
+
         }
 
         //Direkte Nachrichten empfangen
         if (m.dstCall == settings.mycall) {
             var callsign = m.srcCall;
             //Prüfen, ob bereits vorhanden
-            if (!guiSettings.dm.includes(callsign)) { 
-                guiSettings.dm.push(callsign); 
-                buildMenu();
-            }
+            var exists = false; 
+            for (var i = 0; i < guiSettings.dm.length; i++) { 
+                if (guiSettings.dm[i].name === callsign) { exists = true; break; } 
+            } 
+            if (!exists) { guiSettings.dm.push({ name: callsign, read: true }); buildMenu(); }
             //Anzeigen
             addBubble(
                 css, 
@@ -121,19 +128,26 @@ function showMessages(parseAll) {
                 getColorForName(callsign), 
                 msg, 
                 "dm_" + callsign
-            );   
-            if ((parseAll == false) && (m.tx == false) && (document.getElementById("dm_" + callsign).classList.contains("active") == false)) document.getElementById("mnu_" + callsign).classList.add('newMessages');
+            );  
+            if (document.getElementById("dm_" + callsign).classList.contains("active") != false) {m.read = true;} 
+            if (m.read == false) { 
+                for (var i = 0; i < guiSettings.dm.length; i++) { 
+                    if (guiSettings.dm[i].name === callsign) { guiSettings.dm[i].read = false; break;} 
+                } 
+            }
             found = true;
+            sound = true;
         }
 
         //Direkte Nachrichten gesendet
         if ((m.srcCall == settings.mycall) && (m.dstCall != "")) {
             var callsign = m.dstCall;
             //Prüfen, ob bereits vorhanden
-            if (!guiSettings.dm.includes(callsign)) { 
-                guiSettings.dm.push(callsign); 
-                buildMenu();
-            }
+            var exists = false; 
+            for (var i = 0; i < guiSettings.dm.length; i++) { 
+                if (guiSettings.dm[i].name === callsign) { exists = true; break; } 
+            } 
+            if (!exists) { guiSettings.dm.push({ name: callsign, read: true }); buildMenu(); }
             //Anzeigen
             addBubble(
                 css, 
@@ -143,11 +157,17 @@ function showMessages(parseAll) {
                 msg, 
                 "dm_" + callsign
             );   
-            if ((parseAll == false) && (m.tx == false) && (document.getElementById("dm_" + callsign).classList.contains("active") == false)) document.getElementById("mnu_" + callsign).classList.add('newMessages');
+            if (document.getElementById("dm_" + callsign).classList.contains("active") != false) {m.read = true;} 
+            if (m.read == false) { 
+                for (var i = 0; i < guiSettings.dm.length; i++) { 
+                    if (guiSettings.dm[i].name === callsign) { guiSettings.dm[i].read = false; break;} 
+                } 
+            }
             found = true;
+            sound = true;
         }
 
-        //Keine Gruppe gesetzt
+        //Keine Gruppe gesetzt + Rest
         if (((m.dstCall == "") && (m.dstGroup == "")) || (found == false)) {
             addBubble(
                 css, 
@@ -157,11 +177,24 @@ function showMessages(parseAll) {
                 msg, 
                 "group_all"
             );   
-
         }
-
         
     });
+
+    //Ungelesen anzeigen
+    var globalUnRead = false;
+    for (key in guiSettings.groups) { 
+        if (guiSettings.groups[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.groups[key].name).classList.add('newMessages'); }
+    }
+    for (key in guiSettings.dm) { 
+        if (guiSettings.dm[key].read == false) {globalUnRead = true; document.getElementById("mnu_" + guiSettings.dm[key].name).classList.add('newMessages'); }
+    }
+    if (globalUnRead == true)  {
+        document.getElementById("burger-icon").classList.add('newMessages');
+        if ((parseAll == false) && (sound == true)) {okSound.play(); console.log("SOUND!!!");}
+    } else {
+        document.getElementById("burger-icon").classList.remove('newMessages');
+    }
 
 }
 
@@ -173,9 +206,6 @@ function onMessage(event) {
     if (d.monitor) {
         var f = d.monitor;
         var msg = ""; 
-        //Port
-        //if (f.port == 0) {msg += "LoRa";} else {msg += "Wifi";}
-        //Zeit
         const date = new Date(d.monitor.timestamp * 1000);
         var titel = "";
 
@@ -214,12 +244,9 @@ function onMessage(event) {
     //Message empfangen
     if (d.message) {
         d.message.parsed = false;
+        d.message.read = false;
         messages.push(d.message);
         showMessages(false);
-        if (d.message.tx != true) okSound.play();
-        if (document.visibilityState !== 'visible') {
-            sendToServiceWorker('Neue rMesh Nachricht', msg);
-        }
     }
 
     //Peers
@@ -289,10 +316,9 @@ function onMessage(event) {
         document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("hardware").innerHTML = d.settings.hardware;
-        document.getElementById("title").innerHTML = "rMesh - " + d.settings.mycall;
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
-        document.title = settings.name + " - " + settings.mycall;
+
         //UDP Peers
         if (d.settings.udpPeers) {
             d.settings.udpPeers.forEach(function(p, index) {
@@ -301,7 +327,6 @@ function onMessage(event) {
         }
 
         if (init == false) {
-            init = true;
             settingsVisibility();
             messages = [];
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
@@ -315,10 +340,13 @@ function onMessage(event) {
                         if (line.trim().length === 0) return;
                         var m = JSON.parse(line);
                         m.message.parsed = false;
+                        if (m.message.timestamp > guiSettings.update) {m.message.read = false;} else {m.message.read = true;}
+                        m.message.update = guiSettings.update;
                         messages.push(m.message);
                     });
-                    showMessages(true);
                     showContent(guiSettings.menu);
+                    init = true;
+
                 });
         }
     }
@@ -336,12 +364,17 @@ function onMessage(event) {
         document.getElementById("retry").innerHTML = d.status.retry; 
         document.getElementById("heap").innerHTML = d.status.heap; 
         const time = new Date(d.status.time * 1000);
-        
         document.getElementById("time").innerHTML = time.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "");
 
-        
+        //Antennensymbol anpassen
         clearTimeout(heartBeatTimer);
         heartBeatTimer = setTimeout(function() { setAntennaColor("#525252"); }, 2000);
+
+        //Letzte online Zeit speichern
+        if (init == true) {
+            guiSettings.update = d.status.time;
+            saveGuiSettings();
+        }
     }
 
     //WiFi Scan

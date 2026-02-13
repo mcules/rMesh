@@ -16,6 +16,10 @@
     color: #afaf00 !important;
 }
 
+.newMessages span {
+    background-color: #afaf00 !important;
+}
+
 html, body {
     /* Verhindert, dass das gesamte Fenster "hüpft", erlaubt aber Scrollen */
     overflow-x: hidden; 
@@ -255,7 +259,7 @@ table.list th {
     display: none;
     padding: 10px;
     /* Berechne die Mindesthöhe: 100% Display minus 60px Header */
-    height: calc(100vh - 50px);
+    height: calc(100vh - 65px);
     width: 100%;
     box-sizing: border-box;
     
@@ -266,6 +270,7 @@ table.list th {
 /* Nur wenn die Eingabeleiste aktiv ist, rückt der Inhalt nach oben */
 .content-section.has-input {
     padding-bottom: 45px; 
+    height: calc(100vh - 120px);
 }
 
 .content-section.active {
@@ -399,7 +404,7 @@ table.list th {
 .bubble-row.system .bubble { 
     background-color: rgba(255, 255, 255, 0.151); 
     border-radius: 10px;
-    width: 100%; /* 100% minus 10px Platz auf jeder Seite */
+    width: 100%;              /* 100% minus 10px Platz auf jeder Seite */
     max-width: none;          /* Die 450px Sperre aufheben */
     box-sizing: border-box;   /* Padding wird in die Breite eingerechnet */
     padding: 8px 15px;
@@ -464,6 +469,7 @@ table.list th {
     border-top: 1px solid #004d55;
     box-sizing: border-box;
     z-index: 100; /* Sicherstellen, dass sie über den Bubbles liegt */
+    flex-grow: 1;
 }
 
 /* Das Textfeld */
@@ -484,8 +490,8 @@ table.list th {
 }
 
 /* Der Senden-Button */
-.send-btn {
-    background-color: #00f2ff;
+.send-btn, .emoji-btn {
+    background-color: #00707c;
     color: #002529;
     border: none;
     margin: 0px;
@@ -502,4 +508,32 @@ table.list th {
 
 .send-btn:active {
     transform: scale(0.9);
+}
+
+
+.emoji-picker span {
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.emoji-picker span:hover {
+    transform: scale(1.2);
+}
+
+
+
+
+.emoji-picker {
+    position: absolute;
+    bottom: 60px; /* Erscheint über der Leiste */
+    left: 10px;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 10px;
+    background: #333;
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    z-index: 100;
 }
