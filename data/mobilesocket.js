@@ -344,9 +344,9 @@ function onMessage(event) {
                         m.message.update = guiSettings.update;
                         messages.push(m.message);
                     });
-                    showContent(guiSettings.menu);
+                    showMessages(true);
+                    showContent(guiSettings.menu, guiSettings.title);
                     init = true;
-
                 });
         }
     }

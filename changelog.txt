@@ -3,7 +3,7 @@ V1.0.11-alpha
 - Mutex für Webserver
 - messages.json: Nur noch Append (weil Längenbegrenzung bis zu 30Sek. dauert und dann der Webserver blockiert)
 - Längenbegrenzung der messages.json -> als Task Nachts um 3:00
-
+- Mobile GUI: Titel sollte besser passen
 
 V1.0.10-alpha
 - Warten auf ACK bissel länger

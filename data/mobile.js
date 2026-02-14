@@ -93,7 +93,7 @@ function buildMenu() {
         { 
             label: "all" , 
             action: () => {
-                showContent("group_all");
+                showContent("group_all", "all");
                 document.getElementById("group_all").scrollTo({top: document.getElementById("group_all").scrollHeight, behavior: 'smooth' });
             }
         }            
@@ -121,7 +121,7 @@ function buildMenu() {
             { 
                 label: groupName , 
                 action: () => {
-                    showContent("group_" + groupName );
+                    showContent("group_" + groupName, groupName);
                     document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight, behavior: 'smooth' });
                 },
                 longPressAction: () => {
@@ -134,7 +134,7 @@ function buildMenu() {
                             } 
                             guiSettings.groups = newGroups;
                             showMessages(true);
-                            showContent("group_all");
+                            showContent("group_all", "all");
                         } 
                     });
                 }     
@@ -152,7 +152,8 @@ function buildMenu() {
                 if (name) {
                     guiSettings.groups.push(newGroup);
                     showMessages(true);
-                    showContent("group_" + name);
+                    showContent("group_" + name, name);
+
                 }
             }    
         },    
@@ -176,7 +177,7 @@ function buildMenu() {
             { 
                 label: callsign , 
                 action: () => {
-                    showContent("dm_" + callsign );
+                    showContent("dm_" + callsign, callsign );
                     document.getElementById("dm_" + callsign).scrollTo({top: document.getElementById("dm_" + callsign).scrollHeight, behavior: 'smooth' });
                 }
             }            
@@ -193,7 +194,6 @@ function buildMenu() {
                         name: name, 
                         read: true
                     };
-
                     var exists = false;
                     for (var i = 0; i < guiSettings.dm.length; i++) {
                         if (guiSettings.dm[i].name === name) {
@@ -204,7 +204,7 @@ function buildMenu() {
                     if (!exists) {
                         guiSettings.dm.push(newDM);
                         showMessages(true);
-                        showContent("dm_" + name);
+                        showContent("dm_" + name, name);
                     }
 
                     showMessages(true);
@@ -218,7 +218,7 @@ function buildMenu() {
         { 
             label: 'Monitor', 
             action: function() { 
-                showContent('cMonitor'); 
+                showContent('cMonitor', "Monitor"); 
                 window.scrollTo({ 
                     top: document.body.scrollHeight, 
                     behavior: 'smooth' 
@@ -227,25 +227,25 @@ function buildMenu() {
         },
         { 
             label: 'Peers', 
-            action: () => showContent('cPeers') 
+            action: () => showContent('cPeers', "Peers") 
         },
         { 
             label: 'Routing', 
-            action: () => showContent('cRouting') 
+            action: () => showContent('cRouting', "Routing") 
         },
         { type: 'spacer' },
         { type: 'header', label: 'Settings' },
         { 
             label: 'Network', 
-            action: () => showContent('cNetwork') 
+            action: () => showContent('cNetwork', "Network") 
         },
         { 
             label: 'LoRa', 
-            action: () => showContent('cLora') 
+            action: () => showContent('cLora', "Lora") 
         },
         { 
             label: 'About', 
-            action: () => showContent('cAbout') 
+            action: () => showContent('cAbout', "About") 
         }
     ]);
 
@@ -299,9 +299,6 @@ function buildMenu() {
             li.onclick = () => {
                 if (typeof item.action === 'function') {
                     item.action();
-                    //document.getElementById("mnu_" + item.label).classList.remove('newMessages');
-                    document.getElementById("title").innerHTML = settings.name + " - " + item.label;
-                    document.title = settings.name + " - " + item.label;
                 }
                 toggleMenu();
             };
@@ -335,7 +332,8 @@ function loadGuiSettings() {
         groups: [],
         dm: [],
         menu: "cMonitor",
-        update: 0
+        update: 0,
+        title: "rMesh"
     };
 }
 
@@ -345,9 +343,14 @@ function toggleMenu() {
 	menu.classList.toggle('open');
 }
 
-function showContent(sectionId) {
+function showContent(sectionId, title = "") {
 	// 1. Alle Sektionen verstecken
-	const sections = document.querySelectorAll('.content-section');
+    if (title) {
+    	document.getElementById("title").innerHTML = settings.name + " - " + title;
+    } else {
+        document.getElementById("title").innerHTML = settings.name;        
+    }    
+    const sections = document.querySelectorAll('.content-section');
 	sections.forEach(section => {
 		section.classList.remove('active');
 	});
@@ -361,6 +364,7 @@ function showContent(sectionId) {
     showMessages(true);
     window.scrollTo(0, 0); 
     guiSettings.menu = sectionId;
+    guiSettings.title = title;
     saveGuiSettings();
 
 }
