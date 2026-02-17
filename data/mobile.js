@@ -13,6 +13,7 @@ const emojis = [
 
 var guiSettings;
 let wakeLock = null;
+var focus = true;
 
 // Der Speicher im Hintergrund (während die Seite geladen ist)
 const nameColorMap = {};
@@ -55,6 +56,15 @@ window.addEventListener('DOMContentLoaded', async function() {
     initWebSocket();
     
 	
+});
+
+document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible") {
+        focus = true;
+        showMessages(true);
+    } else {
+        focus = false;
+    }
 });
 
 
@@ -119,15 +129,16 @@ function buildMenu() {
         //Menüeinträge hinzu
         menuItems.push(
             { 
-                label: groupName , 
+                label: groupName,
+                mute:  guiSettings.groups[key].mute,
                 action: () => {
                     showContent("group_" + groupName, groupName);
                     document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight, behavior: 'smooth' });
                 },
                 longPressAction: () => {
                     //Gruppe löschen
-                    showSelectionModal("Delete?", "Do you really want to delete " + groupName + "?",   ["yes"]).then(function(choice) {
-                        if (choice === "yes") {
+                     showSelectionModal("Group Actions", "",   ["delete", "mute", "unmute"]).then(function(choice) {
+                        if (choice === "delete") {
                             var newGroups = []; 
                             for (var i = 0; i < guiSettings.groups.length; i++) { 
                                 if (guiSettings.groups[i].name !== groupName) { newGroups.push(guiSettings.groups[i]); } 
@@ -135,7 +146,19 @@ function buildMenu() {
                             guiSettings.groups = newGroups;
                             showMessages(true);
                             showContent("group_all", "all");
-                        } 
+                        }  
+                        if (choice === "mute") {
+                            for (var i = 0; i < guiSettings.groups.length; i++) { 
+                                if (guiSettings.groups[i].name == groupName) { guiSettings.groups[i].mute = true; } 
+                            }                             
+                            buildMenu();                         
+                        }                       
+                        if (choice === "unmute") {
+                            for (var i = 0; i < guiSettings.groups.length; i++) { 
+                                if (guiSettings.groups[i].name == groupName) { guiSettings.groups[i].mute = false; } 
+                            }    
+                            buildMenu();                         
+                        }                       
                     });
                 }     
             }            
@@ -159,7 +182,7 @@ function buildMenu() {
             }    
         },    
         { type: 'spacer' },
-        { type: 'header', label: 'Direct Messages' }]);
+        { type: 'header', label: 'Direct Messages' }]); 
 
     //DM hinzufügen
     for (key in guiSettings.dm) { 
@@ -267,6 +290,7 @@ function buildMenu() {
         } 
         else {
             li.textContent = item.label;
+            if (item.mute == true) { li.textContent += " 🔕";}
             li.id = "mnu_" + item.label;
             
             let pressTimer;

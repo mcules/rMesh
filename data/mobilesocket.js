@@ -17,8 +17,8 @@ function initWebSocket() {
     } else {
         gateway = "ws://192.168.33.60/socket";
         baseURL = "http://192.168.33.60/"
-        //gateway = "ws://10.10.253.161/socket";
-        //baseURL = "http://10.10.253.161/"
+        gateway = "ws://10.10.253.161/socket";
+        baseURL = "http://10.10.253.161/"
     }
 
     //Websocket init
@@ -106,10 +106,10 @@ function showMessages(parseAll) {
                     msg, 
                     "group_" + groupName
                 );   
-                if (document.getElementById("group_" + groupName).classList.contains("active") != false) {m.read = true;}
+                if ((document.getElementById("group_" + groupName).classList.contains("active")) && focus) {m.read = true;}
                 if (m.read == false) { guiSettings.groups[key].read = false; }
                 found = true;
-                sound = true;
+                if (guiSettings.groups[key].mute != true) {sound = true};
             }
 
         }
@@ -132,7 +132,8 @@ function showMessages(parseAll) {
                 msg, 
                 "dm_" + callsign
             );  
-            if (document.getElementById("dm_" + callsign).classList.contains("active") != false) {m.read = true;} 
+            if ((document.getElementById("dm_" + callsign).classList.contains("active")) && focus) {m.read = true;}
+            //if (document.getElementById("dm_" + callsign).classList.contains("active") != false) {m.read = true;} 
             if (m.read == false) { 
                 for (var i = 0; i < guiSettings.dm.length; i++) { 
                     if (guiSettings.dm[i].name === callsign) { guiSettings.dm[i].read = false; break;} 
@@ -160,7 +161,7 @@ function showMessages(parseAll) {
                 msg, 
                 "dm_" + callsign
             );   
-            if (document.getElementById("dm_" + callsign).classList.contains("active") != false) {m.read = true;} 
+            if ((document.getElementById("dm_" + callsign).classList.contains("active")) && focus) {m.read = true;}
             if (m.read == false) { 
                 for (var i = 0; i < guiSettings.dm.length; i++) { 
                     if (guiSettings.dm[i].name === callsign) { guiSettings.dm[i].read = false; break;} 
@@ -180,7 +181,8 @@ function showMessages(parseAll) {
                 msg, 
                 "group_all"
             );   
-            if (document.getElementById("group_all").classList.contains("active") != false) {m.read = true;}
+            if ((document.getElementById("group_all").classList.contains("active")) && focus) {m.read = true;}
+            //if (document.getElementById("group_all").classList.contains("active") != false) {m.read = true;}
             if (m.read == false) { guiSettings.readAll = false; }
         }
         
@@ -198,8 +200,10 @@ function showMessages(parseAll) {
     if (globalUnRead == true)  {
         document.getElementById("burger-icon").classList.add('newMessages');
         if ((parseAll == false) && (sound == true)) {okSound.play(); console.log("SOUND!!!");}
+        document.title = settings.name + " ✉️";
     } else {
         document.getElementById("burger-icon").classList.remove('newMessages');
+        document.title = settings.name;
     }
 
 }
@@ -429,7 +433,7 @@ function saveSettings() {
         });
     }
     sendWS(JSON.stringify({settings: settings}));
-    showModal("Note", "Settings saved.", "", false);
+    showModal("Note", "Settings saved.", "", false); 
 }
 
 function reboot() {

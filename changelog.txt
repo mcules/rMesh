@@ -1,3 +1,7 @@
+V1.0.13-a
+- Nachrichtensymbol in Webseite Titel
+- Gruppen Stumm
+
 V1.0.12-alpha
 - Optimierung der messages.json durch zeitgesteuertes Trimmen. Der erste Bereinigungszyklus startet nun 30 Minuten nach Systemstart, um die Boot-Phase nicht zu belasten. Danach erfolgt die Wartung automatisch in einem 24-Stunden-Intervall.
 - Ungelesen-Markierung für den "All"-Gruppe.
