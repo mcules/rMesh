@@ -11,7 +11,7 @@ struct Frame {
     char dstCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char nodeCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};
-    uint8_t message[280] = {0};
+    uint8_t message[260] = {0};
     size_t messageLength = 0;
     uint8_t messageType = TEXT_MESSAGE;
     uint32_t id = millis();

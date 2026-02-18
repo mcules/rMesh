@@ -1,13 +1,11 @@
 V1.0.13-a
-- Nachrichtensymbol in Webseite Titel
-- Gruppen können nun gemutet werden
-- 🤮 und 🤦 Emoji hinzu
-- Scrollbars passend zum Design
-- Wieder hartes scrolling
-- Announce Timing 10Min / 60Min
-- ACKs werden immer parallel auf WiFi und LoRa gesendet
-
-
+- Der Seitentitel zeigt nun ein Nachrichtensymbol an, sobald neue Mitteilungen eingegangen sind.
+- Die Scrollbars wurden optisch an das rMesh-Design angepasst.
+- Rückkehr zum „harten Scrolling“ für eine direktere und präzisere Navigation in langen Chat-Verläufen.
+- Erweiterte Emoji-Palette für Meshtastic: Unterstützung für 🤮 (Kotzen) und 🤦 (Facepalm) hinzugefügt – für die Momente, in denen Worte nicht mehr ausreichen.
+- Mute-Funktion: Einzelne Gruppen können nun stummgeschaltet werden, um die Benachrichtigungsflut in aktiven Kanälen zu bändigen.
+- Parallele Quittierung (Multi-Path ACKs): Bestätigungen (ACKs) werden nun immer zeitgleich über WLAN (UDP) und LoRa versendet. Dies minimiert unnötige Retransmissions und erhöht die Zuverlässigkeit im Hybrid-Betrieb massiv.
+- Angepasstes Announce-Timing: Das Intervall für Knoten-Ankündigungen wurde zur Schonung der Airtime auf 10 Minuten gesetzt.
 
 V1.0.12-alpha
 - Optimierung der messages.json durch zeitgesteuertes Trimmen. Der erste Bereinigungszyklus startet nun 30 Minuten nach Systemstart, um die Boot-Phase nicht zu belasten. Danach erfolgt die Wartung automatisch in einem 24-Stunden-Intervall.

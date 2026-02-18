@@ -6,7 +6,6 @@ var gateway = "";
 var init = false;
 let heartBeatTimer;
 let okSound = new Audio("ok.wav");
-var globalUnRead = false;
 
 
 function initWebSocket() {
@@ -15,10 +14,10 @@ function initWebSocket() {
         gateway = `ws://${window.location.hostname}/socket`;
         baseURL = "";
     } else {
-        gateway = "ws://192.168.33.60/socket";
-        baseURL = "http://192.168.33.60/"
-        gateway = "ws://10.10.253.161/socket";
-        baseURL = "http://10.10.253.161/"
+        gateway = "ws://192.168.33.68/socket";
+        baseURL = "http://192.168.33.68/"
+        //gateway = "ws://10.10.253.161/socket";
+        //baseURL = "http://10.10.253.161/"
     }
 
     //Websocket init
@@ -77,6 +76,8 @@ function showMessages(parseAll) {
     }
 
     var sound = false;
+    var globalUnRead = false;
+
 
     //Alle Nachrichten durchlaufen
     messages.forEach(function(m) {
@@ -191,7 +192,6 @@ function showMessages(parseAll) {
     });
 
     //Ungelesen anzeigen
-    globalUnRead = false;
     //All
     if (guiSettings.readAll == false) {globalUnRead = true; document.getElementById("mnu_all").classList.add('newMessages'); }
     //Gruppen
