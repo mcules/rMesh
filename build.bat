@@ -1,5 +1,5 @@
 set Envs=ESP32_Without_LoRa LILYGO_T3_LoRa32_V1_6_1 LILYGO_T-Beam HELTEC_Wireless_Stick_Lite_V3 HELTEC_WiFi_LoRa_32_V3 HELTEC_WiFi_LoRa_32_V4
-set VersionOLD=V1.0.12-a
+set VersionOLD=V1.0.13-a
 
 
 echo %Version%

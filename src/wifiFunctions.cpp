@@ -21,7 +21,6 @@ bool apModeKey = false;
 
 void checkForUpdates() {
     WiFiClient client;
-    client.setTimeout(1000); // Timeout in ms
     // LittleFS Update prüfen
     httpUpdate.updateSpiffs(client, "http://dh1nfj.de/rMesh/update.php?file=" PIO_ENV_NAME "/" VERSION "/littlefs.bin");
     //Firmware prüfen
