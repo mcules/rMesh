@@ -53,9 +53,7 @@ document.addEventListener('click', requestWakeLock);
 window.addEventListener('DOMContentLoaded', async function() {
     loadGuiSettings();
     buildMenu();
-
     initWebSocket();
-    
 	
 });
 
@@ -80,7 +78,6 @@ document.getElementById("settingsSSIDList").addEventListener("click", function()
 });
 
 
-
 function buildMenu() {
 
     //Menüstruktur dynamisch bauen
@@ -96,6 +93,7 @@ function buildMenu() {
             mute: guiSettings.muteAll,
             action: () => {
                 showContent("group_all", "all");
+                setupSendMessage('', true);   
                 document.getElementById("group_all").scrollTo({top: document.getElementById("group_all").scrollHeight });
             },
             longPressAction: () => {
@@ -113,24 +111,13 @@ function buildMenu() {
             }
         }            
     );    
-    const div = document.createElement("div"); 
-    div.id = "group_all";
-    div.classList.add("content-section"); 
-    document.querySelector(".content-container").appendChild(div); 
-    setupInputBar('group_all', mySendMessageFunction);   
+    createMainSection("group_all");
 
     //Gruppen hinzufügen
     for (var key in guiSettings.groups) { 
         const groupName  = guiSettings.groups[key].name; 
-        //DIVs hinzu
-        const container = document.querySelector(".content-container"); 
-        if (!document.getElementById("group_" + groupName)) {
-            const div = document.createElement("div"); 
-            div.id = "group_" + groupName ;
-            div.classList.add("content-section"); 
-            container.appendChild(div);
-            setupInputBar('group_' + groupName, mySendMessageFunction); 
-        }
+        //Main Section erzeugen
+        createMainSection("group_" + groupName);
         //Menüeinträge hinzu
         menuItems.push(
             { 
@@ -138,6 +125,7 @@ function buildMenu() {
                 mute:  guiSettings.groups[key].mute,
                 action: () => {
                     showContent("group_" + groupName, groupName);
+                    setupSendMessage(groupName, true);   
                     document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight });
                 },
                 longPressAction: () => {
@@ -182,6 +170,7 @@ function buildMenu() {
                     guiSettings.groups.push(newGroup);
                     showMessages(true);
                     showContent("group_" + name, name);
+                    setupSendMessage(name, true);  
 
                 }
             }    
@@ -191,22 +180,16 @@ function buildMenu() {
 
     //DM hinzufügen
     for (var key in guiSettings.dm) { 
-        const callsign  = guiSettings.dm[key].name; 
-        //DIVs hinzu
-        const container = document.querySelector(".content-container"); 
-        if (!document.getElementById("dm_" + callsign)) {
-            const div = document.createElement("div"); 
-            div.id = "dm_" + callsign ;
-            div.classList.add("content-section"); 
-            container.appendChild(div);
-            setupInputBar('dm_' + callsign, mySendMessageFunction); 
-        }
+        const callsign = guiSettings.dm[key].name; 
+        //Main Section erzeugen
+        createMainSection("dm_" + callsign);        
         //Menüeinträge hinzu
         menuItems.push(
             { 
                 label: callsign , 
                 action: () => {
                     showContent("dm_" + callsign, callsign );
+                    setupSendMessage(callsign, false);  
                     document.getElementById("dm_" + callsign).scrollTo({top: document.getElementById("dm_" + callsign).scrollHeight });
                 }
             }            
@@ -235,6 +218,7 @@ function buildMenu() {
                         guiSettings.dm.push(newDM);
                         showMessages(true);
                         showContent("dm_" + name, name);
+                        setupSendMessage(name, false); 
                     }
 
                     showMessages(true);
@@ -271,7 +255,7 @@ function buildMenu() {
         },
         { 
             label: 'LoRa', 
-            action: () => showContent('cLora', "Lora") 
+            action: () => showContent('cLora', "LoRa") 
         },
         { 
             label: 'About', 
@@ -343,24 +327,52 @@ function buildMenu() {
 }
 
 
+function createMainSection(sectionId) {
+    // 1. Sicherheits-Check: Gibt es die Sektion vielleicht schon?
+    if (document.getElementById(sectionId)) {
+         return; // Abbruch, wir müssen nichts doppelt bauen!
+    }
+    const newMain = document.createElement('main');
+    newMain.id = sectionId;
+    newMain.innerHTML = "****" + sectionId + "****";
+    newMain.className = 'content-section'; // WICHTIG: Damit unser CSS und showContent() es finden!
+    document.body.appendChild(newMain);
+}
+
 function saveGuiSettings() {
-    const json = JSON.stringify(guiSettings);
-    document.cookie = "guiSettings=" + encodeURIComponent(json) + "; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/";
+    localStorage.setItem("guiSettings", JSON.stringify(guiSettings));
 }
 
 
 function loadGuiSettings() {
-    const cookies = document.cookie.split("; ");
-    for (const c of cookies) {
-        const [name, value] = c.split("=");
-        if (name === "guiSettings") {
-            guiSettings =  JSON.parse(decodeURIComponent(value));
+    const savedData = localStorage.getItem("guiSettings");
+
+    if (savedData) {
+        try {
+            guiSettings = JSON.parse(savedData);
             guiSettings.dm = [];
             return;
+        } catch (e) {
+            console.error("Fehler beim Laden der Settings aus dem localStorage", e);
         }
     }
-    guiSettings = { groups: [], dm: [], menu: "cMonitor", update: 0, title: "rMesh" };
+    // Fallback: Deine gewünschten Standardwerte, falls noch nie etwas gespeichert wurde
+    guiSettings = { 
+        groups: [ 
+            { name: "Herzog", read: false }, 
+            { name: "Wetter", read: false }, 
+            { name: "Verkehr", read: false }
+        ], 
+        dm: [], 
+        menu: "cMonitor", 
+        update: 0, 
+        title: "Monitor",
+        sendBar: {active: false, dst: null, group: null},
+        content: {content: "cLora", title: "LoRa"}
+    };
 }
+
+
 
 
 function toggleMenu() {
@@ -369,36 +381,37 @@ function toggleMenu() {
 }
 
 function showContent(sectionId, title = "") {
-    // Sicherer Zugriff auf settings
+    //Alle content-sections suchen und unsichtbar machen
+    const alleSektionen = document.querySelectorAll('.content-section');
+    alleSektionen.forEach(sektion => {
+        sektion.classList.remove('active'); // Nimmt die Klasse weg -> display: none greift wieder
+    });    
+
+    //Footer weg
+    document.getElementById("dynamic-footer").style.display = "none";
+    guiSettings.sendBar = {active: false, dst: null, group: null};
+    saveGuiSettings();
+
+
+    //Titel
     const currentName = (settings && settings.name) ? settings.name : "rMesh";
-    
     const titleElem = document.getElementById("title");
     if (titleElem) {
         titleElem.innerHTML = title ? currentName + " - " + title : currentName;
-    }
+    }    
 
-    // Alle Sektionen verstecken
-    const sections = document.querySelectorAll('.content-section');
-    sections.forEach(section => {
-        section.classList.remove('active');
-    });
+    //Nur den gewünschten Block suchen und sichtbar machen
+    const zielSektion = document.getElementById(sectionId);
+    if (zielSektion) {
+        zielSektion.classList.add('active'); // Fügt die Klasse hinzu -> display: block greift
+    } 
 
-    // Gewählte Sektion aktivieren
-    const target = document.getElementById(sectionId);
-    if (target) {
-        target.classList.add('active');
-    } else {
-        // Fallback zu Monitor, falls ID nicht gefunden
-        const monitor = document.getElementById("cMonitor");
-        if (monitor) monitor.classList.add('active');
-    }
     showMessages(true);
     window.scrollTo(0, 0); 
     
-    // UI-Zustand speichern (Safari-sicher)
+    //UI-Zustand speichern (Safari-sicher)
     if (guiSettings) {
-        guiSettings.menu = sectionId;
-        guiSettings.title = title;
+        guiSettings.content = {content: sectionId, title: title};
         saveGuiSettings();
     }
 }
@@ -485,18 +498,11 @@ function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) 
 
 
 
-
-function setupInputBar(sectionId, onSendCallback) {
-    const section = document.getElementById(sectionId);
-    if (!section) return;
-
-    section.classList.add('has-input');
-    const existingBar = section.querySelector('.input-bar');
-    if (existingBar) existingBar.remove();
-
-    const bar = document.createElement('div');
-    bar.className = 'input-bar';
-
+function setupSendMessage(dst, group = true) {
+    const bar = document.getElementById("dynamic-footer");
+    bar.innerHTML = "";
+    bar.style.display = 'flex';
+ 
     const emojiBtn = document.createElement('button');
     emojiBtn.className = 'emoji-btn';
     emojiBtn.innerHTML = '😊';
@@ -549,7 +555,17 @@ function setupInputBar(sectionId, onSendCallback) {
         // Sicherheitshalber auch hier nochmal kürzen (Slice)
         const text = input.value.trim().substring(0, maxLength);
         if (text !== "") {
-            onSendCallback(sectionId, text);
+
+            //Nachricht vorbereiten und über Websocket senden
+            var message = {};
+            message["text"] = text;
+            message["dst"] = dst;
+            if (group == true) {
+                sendWS(JSON.stringify({sendGroup: message}));  
+            } else {
+                sendWS(JSON.stringify({sendMessage: message}));  
+            }
+
             input.value = "";
             picker.style.display = 'none';
         }
@@ -576,7 +592,11 @@ function setupInputBar(sectionId, onSendCallback) {
     bar.appendChild(picker);
     bar.appendChild(input);
     bar.appendChild(button);
-    section.appendChild(bar);
+
+    //Speichern
+    guiSettings.sendBar = {active: true, dst: dst, group: group};
+    saveGuiSettings();
+
 }
 
 
@@ -683,27 +703,3 @@ function setAntennaColor(hexColor) {
 }
 
 
-// 4. Die Funktion, die beim Senden aufgerufen wird (Beispiel)
-function mySendMessageFunction(id, text) {
-    if (id) {
-        //DM
-        if (id.substring(0, 3) == "dm_") {
-            var dst = id.substring(3).toUpperCase();
-            //Nachricht vorbereiten und über Websocket senden
-            var message = {};
-            message["text"] = text;
-            message["dst"] = dst;
-            sendWS(JSON.stringify({sendMessage: message}));                    
-
-        }
-        //Group
-        if (id.substring(0, 6) == "group_") {
-            var dst = id.substring(6);
-            if (dst == "all") dst = "";
-            var message = {};
-            message["text"] = text;
-            message["dst"] = dst;
-            sendWS(JSON.stringify({sendGroup: message}));                    
-        }
-    }
-}

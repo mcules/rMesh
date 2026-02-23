@@ -64,7 +64,6 @@ function showMessages(parseAll) {
             const div = document.getElementById("group_" + groupName);
             if (div) { // WICHTIG: Nur wenn das Element existiert
                 div.innerHTML = "";
-                setupInputBar('group_' + groupName, mySendMessageFunction); 
             }
             guiSettings.groups[key].read = true;  
         }
@@ -72,7 +71,6 @@ function showMessages(parseAll) {
         const divAll = document.getElementById("group_all");
         if (divAll) {
             divAll.innerHTML = "";
-            setupInputBar('group_all', mySendMessageFunction); 
         }
         // DMs aufräumen
         for (let key in guiSettings.dm) { 
@@ -80,7 +78,6 @@ function showMessages(parseAll) {
             const div = document.getElementById("dm_" + callsign);
             if (div) {
                 div.innerHTML = "";
-                setupInputBar('dm_' + callsign, mySendMessageFunction); 
             }
             guiSettings.dm[key].read = true;
         }
@@ -89,7 +86,6 @@ function showMessages(parseAll) {
 
     var sound = false;
     var globalUnRead = false;
-
 
     //Alle Nachrichten durchlaufen
     messages.forEach(function(m) {
@@ -371,8 +367,20 @@ function onMessage(event) {
                         messages.push(m.message);
                         showMessages(false);
                     });
-                    showMessages(true);
-                    showContent(guiSettings.menu, guiSettings.title);
+
+                    //Letzten Ansicht laden
+                    if (document.getElementById(guiSettings.content.content)) {
+                        if (guiSettings.sendBar.active == true) {
+                            showContent(guiSettings.content.content, guiSettings.content.title);
+                            setupSendMessage(guiSettings.sendBar.dst, guiSettings.sendBar.group);
+                        } else {
+                            showContent(guiSettings.content.content, guiSettings.content.title);
+                        }
+                    } else {
+                        showContent("cMonitor", "Monitor");
+                    }
+
+
                     init = true;
                 });
         }

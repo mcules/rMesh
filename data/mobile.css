@@ -1,78 +1,56 @@
-.status-icon {
-    width: 24px;
-    height: 24px;
-    margin-left: auto; /* Schiebt es nach rechts */
-}
-
-.red {
-    color: #ff0000 !important;
-}
-
-.green {
-    color: #00fc00 !important;
-}
-
-.newMessages {
-    color: #afaf00 !important;
-}
-
-.newMessages span {
-    background-color: #afaf00 !important;
+/* --- 1. GRUND-RESET & VARIABLEN --- */
+* { 
+    box-sizing: border-box; 
+    margin: 0; 
+    padding: 0; 
+    /* Firefox Scrollbar direkt hier für alle Elemente */
+    scrollbar-width: thin;
+    scrollbar-color: #005c66 #001214;
 }
 
 html, body {
-    /* Verhindert, dass das gesamte Fenster "hüpft", erlaubt aber Scrollen */
-    overflow-x: hidden; 
-    height: auto;
-     /*-webkit-overflow-scrolling: touch; Sorgt für flüssiges Scrollen auf iPhones */
-}
-
-body {
+    height: 100dvh; 
+    width: 100vw;
+    overflow: hidden; /* Verhindert das "Hüpfen" des Viewports */
+    display: flex;
+    flex-direction: column;
     font-family: sans-serif;
-    margin: 0;
-    padding-top: 60px; /* Platz für Statusleiste */
     background-color: #000000;
     color: #e0e0e0;
-    /* WICHTIG: Kein overflow: hidden hier! */
-    max-width: 800px;
-    margin-left: 0;   /* Stellt sicher, dass es links klebt */
-    margin-right: auto; /* Erlaubt Platz nach rechts bei breiten Monitoren */    
 }
 
+/* --- 2. HILFSKLASSEN --- */
+.red { color: #ff0000 !important; }
+.green { color: #00fc00 !important; }
+.newMessages { color: #afaf00 !important; }
+.newMessages span { background-color: #afaf00 !important; }
+
 h1 {
-    font-family: sans-serif;
     color: #009eaf; 
-    font-size: 1.3rem; /* Entspricht ca. 24px, je nach Basisgröße */
+    font-size: 1.3rem; 
     font-weight: bold;
-    margin: 0;
-    padding: 0;
     padding-bottom: 10px;
     line-height: 1; 
 }
 
-/* Globale Text-Inputs und Select-Boxen */
-input, 
-select, 
-textarea {
+/* --- 3. FORMULARE & BUTTONS --- */
+input, select, textarea {
     display: inline-block;
     padding: 5px;
-    border: 1px solid #005c66; /* Gleiches Cyan wie Modal-Box */
+    border: 1px solid #005c66; 
     border-radius: 8px;
-    background-color: #121212; /* Sehr dunkles Grau/Schwarz */
+    background-color: #121212; 
     color: #e0e0e0;
     font-size: 1rem;
     outline: none;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-/* Fokus-Effekt für Inputs */
 input:focus, select:focus {
-    border-color: #00f2ff; /* Helles Cyan bei Klick */
+    border-color: #00f2ff; 
     box-shadow: 0 0 5px rgba(0, 242, 255, 0.3);
 }
 
-
-/* Globale Buttons */
 button {
     background-color: #005c66;
     margin: 5px;
@@ -85,19 +63,16 @@ button {
     transition: background 0.2s, transform 0.1s;
 }
 
-button:hover {
-    background-color: #007a85;
-}
-
+button:hover { background-color: #007a85; }
 button:active {
-    transform: scale(0.97); /* Kleiner Druck-Effekt */
+    transform: scale(0.97); 
     background-color: #00f2ff;
     color: #002529;
 }
 
-/* Checkboxen stylen (etwas kniffliger ohne Klassen) */
+/* Checkboxen */
 input[type="checkbox"] {
-    appearance: none; /* Entfernt Standard-Look */
+    appearance: none; 
     -webkit-appearance: none;
     width: 20px;
     height: 20px;
@@ -114,7 +89,6 @@ input[type="checkbox"]:checked {
     border-color: #00f2ff;
 }
 
-/* Das Häkchen im Checked-Zustand */
 input[type="checkbox"]:checked::after {
     content: '✔';
     position: absolute;
@@ -125,63 +99,51 @@ input[type="checkbox"]:checked::after {
     font-size: 14px;
 }
 
-/* Tabellen-Anpassung für die Labels */
+/* --- 4. TABELLEN --- */
 td {
     color: #cfcfcf;
     padding: 5px 10px 5px 0;
 }
 
-/* Schriftgröße für die gesamte Tabelle anpassen */
 table.list {
-    font-size: 0.85rem; /* Etwas kleiner als Standard */
-    border-collapse: collapse; /* Verhindert doppelte Linien zwischen den Zellen */
+    font-size: 0.85rem; 
+    border-collapse: collapse; 
     width: 100%;
     margin: 10px 0;
 }
 
-/* Rahmen nur für die Zellen (td) innerhalb von .xyz */
-table.list td {
-    border: 1px solid #005c66; /* Dezentes Cyan passend zum Design */
+table.list td, table.list th {
+    border: 1px solid #005c66; 
     padding: 3px 3px;
     color: #cfcfcf;
 }
+table.list th { text-align: left; }
 
-/* Optional: Auch die Tabellenköpfe (th) einbeziehen, falls vorhanden */
-table.list th {
-    border: 1px solid #005c66;
-    text-align: left;
-}
-
-
+/* --- 5. BLOCK 1: HEADER & MENÜ --- */
 .status-bar {
-    position: fixed;
-    top: 0;
-    left: 0; /* Sicherheitshalber hinzufügen */
+    order: 1; /* 3-Block-Layout: Oben */
     width: 100%;
-    height: 50px;
+    min-height: 50px;
+    max-height: 50px;
     background-color: #002e33;
     color: #cfcfcf;
     display: flex;
     align-items: center;
     padding: 0 15px;
-    z-index: 1000;
     box-shadow: 0 2px 10px rgba(0,0,0,0.5);
-    box-sizing: border-box; 
-    max-width: 800px;
-    z-index: 9999;
-    -webkit-transform: translateZ(0);
-    transform: translateZ(0);   
+    /* Safe-Area für iOS (Notch) */
+    padding-top: env(safe-area-inset-top, 0px); 
+    height: calc(50px + env(safe-area-inset-top, 0px));
 }
 
 .status-icon {
-    width: 30px; /* Bei 30px Header-Höhe ist 24px oft etwas knapp */
+    width: 30px; 
     height: 30px;
     margin-left: auto; 
     transition: all 0.3s ease;
     flex-shrink: 0; 
 }
 
-/* Burger Button Style */
 .burger-icon {
     cursor: pointer;
     display: flex;
@@ -197,315 +159,99 @@ table.list th {
     background-color: #cfcfcf;
 }
 
-/* Das seitliche Menü */
 .menu {
     position: fixed;
-    top: 50px;
+    top: calc(50px + env(safe-area-inset-top, 0px));
     left: -250px;
     width: 250px;
-    height: calc(100% - 50px); /* WICHTIG: passt die Höhe korrekt an */
+    height: calc(100% - 50px - env(safe-area-inset-top, 0px)); 
     background: #002e33;
     transition: 0.3s;
     z-index: 999;
     pointer-events: none;
-    overflow-y: auto; /* <-- Scrollen aktivieren */
+    overflow-y: auto; 
 }
-
 
 .menu.open {
-    left: 0; /* Erscheint beim Klicken */
-    pointer-events: auto; /* Erlaubt Klicks, wenn offen */    
+    left: 0; 
+    pointer-events: auto;     
 }
 
-.menu ul {
-    list-style: none;
-    padding: 8px 0px;
-    margin: 0px;
-}
-
+.menu ul { list-style: none; padding: 8px 0px; }
 .menu li {
     color: #cfcfcf;
-    padding: 8px 0;
-    cursor: pointer;
-    list-style: none;
-    transition: color 0.2s;
     padding: 8px;
+    cursor: pointer;
+    transition: color 0.2s;
 }
+.menu li:hover { color: #ffffff; }
 
-.menu li:hover {
-    color: #ffffff; /* Highlight beim Drüberfahren */
-}
-
-/* Style für die neue dynamische Trennlinie */
 .menu li.separator {
     padding: 0;
-    margin: 0px 0;
     height: 1px;
-    background-color: #005c66; /* Dunkle Trennlinie */
+    background-color: #005c66; 
     cursor: default;
 }
 
-/* Style für die Menü-Überschrift - Jetzt zentriert */
 .menu li.menu-header {
     color: #009eaf;
     font-size: 0.75rem;
     font-weight: bold;
-    /* padding: 20px 10px 5px 10px;  */
     padding: 8px 0;
     cursor: default;
     letter-spacing: 1.5px;
-    text-align: center;         /* Text mittig ausrichten */
-    text-transform: uppercase;  /* Optional: Sieht bei zentrierten Headern oft edler aus */
+    text-align: center;         
+    text-transform: uppercase;  
 }
 
-.content-container {
-    width: 100%;
-}
-
-.content-section {
-    display: none;
-    padding: 10px;
-    /* Berechne die Mindesthöhe: 100% Display minus 60px Header */
-    min-height: calc(100vh - 65px);
-    max-height: calc(100vh - 65px);
-    width: 100%;
-    box-sizing: border-box;
-    /* Erlaubt vertikales Scrollen innerhalb der Sektion */
+/* --- 6. BLOCK 2: MAIN CONTENT --- */
+.content-section { 
+    order: 2; /* 3-Block-Layout: Mitte */
+    display: none; 
+    flex-grow: 1;   
     overflow-y: auto; 
+    -webkit-overflow-scrolling: touch;
+    padding: 5px;
 }
+.content-section.active { display: block; }
 
-/* Nur wenn die Eingabeleiste aktiv ist, rückt der Inhalt nach oben */
-.content-section.has-input {
-    padding-bottom: 45px; 
-    min-height: calc(100vh - 130px);
-    max-height: calc(100vh - 130px);
-}
-
-.content-section.active {
-    display: block !important;
-}
-
-
-/* Modal Dark Theme */
-.modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(0,0,0,0.8); /* Dunklerer Overlay */
-    z-index: 2000;
-    justify-content: center;
+/* --- 7. BLOCK 3: DYNAMISCHER FOOTER --- */
+#dynamic-footer {
+    order: 3; /* 3-Block-Layout: Unten */
+    flex-shrink: 0; 
+    display: none; /* Wird vom JS auf "flex" geschaltet! */
     align-items: center;
-}
-
-.modal-box {
-    background: #005c66; /* Dunkle Box */
-    color: white;
-    padding: 25px;
-    border-radius: 12px;
-    width: 85%;
-    max-width: 400px;
-    box-shadow: 0 15px 35px rgba(0,0,0,0.5);
-    border: 1px solid #383838;
-}
-
-.modal-input-field {
-    width: 100%;
-    padding: 12px;
-    margin: 15px 0;
-    box-sizing: border-box;
-    background: #121212; /* Dunkler Input */
-    border: 1px solid #444;
-    border-radius: 6px;
-    color: white;
-    outline: none;
-}
-
-.modal-input-field:focus {
-    border-color: #888; /* Fokus-Effekt */
-}
-
-.modal-buttons {
-    display: flex;
-    justify-content: flex-end;
-    gap: 12px;
-    margin-top: 10px;
-}
-
-.modal-buttons button {
-    padding: 10px 22px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    transition: 0.2s;
-}
-
-#modal-cancel { 
-    background: transparent; 
-    color: #aaa; 
-}
-
-#modal-cancel:hover { 
-    color: white; 
-}
-
-#modal-submit { 
-    background: #e0e0e0; 
-    color: #121212; 
-}
-
-#modal-submit:hover { 
-    background: #ffffff; 
-}
-
-
-.modal-option {
-    width: 100%;
-    padding: 12px;
-    margin-bottom: 8px;
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    color: white;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.2s;
-    border: none;
-    font-size: 1rem;
-}
-
-.modal-option:active {
-    background-color: #00f2ff;
-    color: #002529;
-}
-
-
-/* Container für die Sprechblase (regelt die Ausrichtung) */
-.bubble-row {
-    display: flex;
-    flex-direction: column;
-    margin-bottom: 15px;
-    width: 100%;
-}
-
-/* Rechtsbündig (eigene Nachrichten) */
-.bubble-row.right {
-    align-items: flex-end;
-}
-
-/* Linksbündig (fremde Nachrichten) */
-.bubble-row.left {
-    align-items: flex-start;
-}
-
-
-/* SYSTEM (Zentriert und exakt bildschirmfüllend) */
-.bubble-row.system { 
-    justify-content: center; 
-    padding: 0;           /* Wir steuern den Abstand lieber über die Bubble selbst */
-    margin: 5px 0;        /* Vertikaler Abstand zwischen den Nachrichten */
-    width: 100%;          /* Die Zeile selbst nimmt 100% ein */
-}
-
-.bubble-row.system .bubble { 
-    background-color: rgba(255, 255, 255, 0.151); 
-    border-radius: 10px;
-    width: 100%;              /* 100% minus 10px Platz auf jeder Seite */
-    max-width: none;          /* Die 450px Sperre aufheben */
-    box-sizing: border-box;   /* Padding wird in die Breite eingerechnet */
-    padding: 8px 15px;
-    box-shadow: none;
-    border: none;
-}
-
-/* Die eigentliche Sprechblase */
-.bubble {
-    max-width: 80%;
-    padding: 10px 15px;
-    border-radius: 15px;
-    position: relative;
-    font-size: 1rem;
-    line-height: 1.4;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-}
-
-.right .bubble {
-    background-color: #004850; /* Dunkles Lila wie im Bild */
-    color: white;
-    border-bottom-right-radius: 2px; /* Kleiner Knick */
-}
-
-.left .bubble {
-    background-color: #003035; /* Dunkles Grau-Blau */
-    color: white;
-    border-bottom-left-radius: 2px;
-}
-
-/* Header innerhalb der Blase */
-.bubble-header {
-    display: flex;
-    justify-content: space-between;
-    gap: 15px;
-    font-size: 0.8rem;
-    font-weight: bold;
-    margin-bottom: 4px;
-}
-
-.bubble-time {
-    font-weight: normal;
-    color: rgba(255, 255, 255, 0.6);
-}
-
-.bubble-text {
-    white-space: pre-wrap; /* Erkennt Zeilenumbrüche (\n) im Text an */
-    word-wrap: break-word; /* Verhindert, dass langer Text die Bubble sprengt */
-}
-
-
-/* Container für die Eingabeleiste */
-.input-bar {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    display: flex;
     gap: 10px;
-    padding: 10px;
     background-color: #002529;
     border-top: 1px solid #004d55;
-    box-sizing: border-box;
-    z-index: 900;
-    max-width: 800px;
-    align-items: center;
+    transition: background-color 0.3s; 
+    
+    /* iOS Safe-Area Padding clever gelöst */
+    padding: 10px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); 
 }
 
-
-/* Input-Feld Safari Fix */
-.input-bar input {
+#dynamic-footer input {
     flex: 1;
-    background-color: #001214;
+    background-color: #161616;
     border: 1px solid #005f69;
     border-radius: 20px;
     padding: 10px 15px;
     color: #e0f7f8;
     outline: none;
     font-size: 1rem;
-    min-height: 26px; /* Safari braucht das */
+    min-height: 26px; /* Safari Fix */
 }
 
+#dynamic-footer input:focus { border-color: #00f2ff; }
 
-.input-bar input:focus {
-    border-color: #00f2ff;
-}
-
-/* Der Senden-Button */
 .send-btn, .emoji-btn {
     background-color: #00707c;
     color: #002529;
     border: none;
     margin: 0px;
-    width: 45px;
-    height: 45px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     cursor: pointer;
     display: flex;
@@ -516,25 +262,12 @@ table.list th {
     transition: transform 0.2s;
     -webkit-tap-highlight-color: transparent;
 }
+.send-btn:active { transform: scale(0.9); }
 
-.send-btn:active {
-    transform: scale(0.9);
-}
-
-
-.emoji-picker span {
-    font-size: 1.5rem;
-    cursor: pointer;
-    transition: transform 0.1s;
-}
-
-.emoji-picker span:hover {
-    transform: scale(1.2);
-}
-
+/* --- 8. EMOJI PICKER --- */
 .emoji-picker {
     position: fixed;
-    bottom: 70px; /* Erscheint über der Leiste */
+    bottom: calc(60px + env(safe-area-inset-bottom, 0px)); /* Passt sich dem iPhone an */
     left: 10px;
     display: grid;
     grid-template-columns: repeat(6, 1fr);
@@ -545,65 +278,145 @@ table.list th {
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     z-index: 100;
 }
+.emoji-picker span {
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+.emoji-picker span:hover { transform: scale(1.2); }
 
+/* --- 9. CHAT BUBBLES --- */
+.bubble-row {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 15px;
+    width: 100%;
+}
+.bubble-row.right { align-items: flex-end; }
+.bubble-row.left { align-items: flex-start; }
 
-/* Hintergrund der Scrollbar-Spur */
-::-webkit-scrollbar-track {
-    background: #001214;      /* Passend zum dunklen Hintergrund der Input-Bar */
+.bubble-row.system { 
+    justify-content: center; 
+    padding: 0;           
+    margin: 5px 0;        
+}
+.bubble-row.system .bubble { 
+    background-color: rgba(255, 255, 255, 0.151); 
+    border-radius: 10px;
+    width: 100%;              
+    max-width: none;          
+    padding: 8px 15px;
+    box-shadow: none;
+    border: none;
 }
 
-/* Der bewegliche Schieber (Handle) */
+.bubble {
+    max-width: 80%;
+    padding: 10px 10px;
+    border-radius: 20px;
+    position: relative;
+    font-size: 1rem;
+    line-height: 1.4;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.right .bubble {
+    background-color: #004850; 
+    color: white;
+    border-bottom-right-radius: 2px; 
+}
+.left .bubble {
+    background-color: #003035; 
+    color: white;
+    border-bottom-left-radius: 2px;
+}
+
+.bubble-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 15px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    margin-bottom: 4px;
+}
+.bubble-time {
+    font-weight: normal;
+    color: rgba(255, 255, 255, 0.6);
+}
+.bubble-text {
+    white-space: pre-wrap; 
+    word-wrap: break-word; 
+}
+
+/* --- 10. MODAL / POPUPS --- */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8); 
+    z-index: 2000;
+    justify-content: center;
+    align-items: center;
+}
+.modal-box {
+    background: #005c66; 
+    color: white;
+    padding: 25px;
+    border-radius: 12px;
+    width: 85%;
+    max-width: 400px;
+    box-shadow: 0 15px 35px rgba(0,0,0,0.5);
+    border: 1px solid #383838;
+}
+.modal-input-field {
+    width: 100%;
+    padding: 12px;
+    margin: 15px 0;
+    background: #121212; 
+    border: 1px solid #444;
+    border-radius: 6px;
+    color: white;
+    outline: none;
+}
+.modal-input-field:focus { border-color: #888; }
+.modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 10px;
+}
+.modal-buttons button {
+    padding: 10px 22px;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+}
+#modal-cancel { background: transparent; color: #aaa; }
+#modal-cancel:hover { color: white; }
+#modal-submit { background: #e0e0e0; color: #121212; }
+#modal-submit:hover { background: #ffffff; }
+
+.modal-option {
+    width: 100%;
+    padding: 12px;
+    margin-bottom: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: white;
+    text-align: left;
+    border: none;
+    font-size: 1rem;
+}
+.modal-option:active {
+    background-color: #00f2ff;
+    color: #002529;
+}
+
+/* --- 11. SCROLLBARS (Webkit) --- */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #001214; }
 ::-webkit-scrollbar-thumb {
-    background: #005c66;      /* Dein primäres Dunkel-Cyan */
-    border-radius: 4px;       /* Abgerundete Ecken */
-    border: 1px solid #001214; /* Kleiner Abstand zum Rand */
+    background: #005c66; 
+    border-radius: 4px; 
 }
-
-/* Handle beim Drüberfahren (Hover) */
-::-webkit-scrollbar-thumb:hover {
-    background: #009eaf;      /* Dein helleres Cyan aus den Überschriften */
-}
-
-/* --- Scrollbar Styling für Firefox --- */
-* {
-    scrollbar-width: thin;
-    scrollbar-color: #005c66 #001214;
-}
-
-
-/* iOS Safari Fix: Safe Area + Keyboard */
-@supports (-webkit-touch-callout: none) {
-    .input-bar {
-        padding-bottom: calc(10px + env(safe-area-inset-bottom));
-    }
-
-    body {
-        height: 100%;
-        overflow-x: hidden;
-        overflow-y: auto;
-    }
-
-    html {
-        height: 100%;
-    }
-
-    /* Speziell für iOS Safari */
-    .input-bar {
-        /* Verhindert, dass das UI unter die Tastatur rutscht */
-        position: sticky; 
-        bottom: 0;
-        -webkit-transform: translateZ(0);
-        transform: translateZ(0);
-        bottom: 0px;
-    }
-
-    .send-btn, .emoji-btn {
-        /* Explizit als klickbar markieren */
-        cursor: pointer;
-        /* Verhindert das "Highlight"-Grau beim Tippen */
-        -webkit-tap-highlight-color: transparent;
-    }
-
-
-}
-
+::-webkit-scrollbar-thumb:hover { background: #009eaf; }

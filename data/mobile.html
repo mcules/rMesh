@@ -12,15 +12,18 @@
 </head>
 
 <body>
+	<nav id="side-menu" class="menu"> 
+		<ul id="menu-list"> </ul>
+	</nav>
+
+
     <header class="status-bar">
         <div class="burger-icon" id="burger-icon" onclick="toggleMenu()">
             <span></span>
             <span></span>
             <span></span>
         </div>
-        
         <div class="logo" id="title">rMesh</div>
-
         <svg id="antenna-icon" class="status-icon off" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <circle cx="12" cy="19" r="2" />
             <path d="M8.5 15.5a5 5 0 0 1 7 0" fill="none" stroke-width="2" stroke-linecap="round"/>
@@ -29,126 +32,121 @@
         </svg>
     </header>
 
-	<nav id="side-menu" class="menu"> 
-		<ul id="menu-list"> </ul>
-	</nav>
 
-    <main class="content-container">
-
-        <div id="cNetwork" class="content-section">
-            <table>
-                <tr> <td>Accesspoint</td> <td><input type="checkbox" id="settingsApMode" onclick="settingsVisibility();"></td> </tr> 
-                <tr class="AP_MODE_ENABLED"> 
-                    <td>WiFi<br>Networks</nr> </td> 
-                    <td> 
-                        <select id='settingsSSIDList'></select> 
-                        <button id="settingsScanWifi">scan</button> 
-                    </td>
-                </tr>
-                <tr class="AP_MODE_ENABLED"> <td>SSID</td> <td><input id='settingsSSID'></td> </tr>
-                <tr class="AP_MODE_ENABLED"> <td>Password</td> <td><input type="password" id='settingsPassword'></td> </tr>
-                <tr class="AP_MODE_ENABLED"> <td>DHCP</td> <td><input type="checkbox" id="settingsDHCP" onclick="settingsVisibility();"></td> </tr> 
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>IP-Address</td> <td> <input id='settingsWiFiIP'> </td> </tr>
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Subnet</td> <td> <input id='settingsWifiNetMask'> </td> </tr>
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Gateway</td> <td> <input id='settingsWifiGateway'> </td> </tr>
-                <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>DNS</td> <td> <input id='settingsWifiDNS'> </td> </tr>
-                <tr> <td> UDP-Peer 1 </td> <td> <input id='settingsUDPPeer0'> </td> </tr>
-                <tr> <td> UDP-Peer 2 </td> <td> <input id='settingsUDPPeer1'> </td> </tr>
-                <tr> <td> UDP-Peer 3 </td> <td> <input id='settingsUDPPeer2'> </td> </tr>
-                <tr> <td> UDP-Peer 4 </td> <td> <input id='settingsUDPPeer3'> </td> </tr>
-                <tr> <td> UDP-Peer 5 </td> <td> <input id='settingsUDPPeer4'> </td> </tr>
-                <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input id="settingsNTP"></td> </tr>
-            </table>
-            <button class="button" onclick="saveSettings();">save</button>
-            <button class="button" onclick="reboot();">reboot</button>  
-            <button class="button" onClick="syncTime();">sync browser time</button>              
-        </div>
-
-        <div id="cLora" class="content-section">
-            <table>
-                <tr> <td>Callsign</td> <td><input id="settingsMycall"></td> </tr>
-                <tr> <td>Frequency</td> <td><input id="settingsLoraFrequency"></td> </tr>
-                <tr> <td>Output Power</td> <td><input id="settingsLoraOutputPower"></td> </tr>
-                <tr> <td>Bandwidth</td> <td>
-                    <select id='settingsLoraBandwidth'>
-                        <option value="7.8">7,8 kHz</option>	
-                        <option value="10.4">10,4 kHz</option>	
-                        <option value="15.6">15,6 kHz</option>	
-                        <option value="20.8">20,8 kHz</option>	
-                        <option value="31.25">31,25 kHz</option>	
-                        <option value="62.5">62,5 kHz</option>	
-                        <option value="125">125 kHz</option>	
-                        <option value="250">250 kHz</option>	
-                        <option value="500">500 kHz</option>	
-                    </select> 
-                </td> </tr>
-                <tr> <td>Coding Rate</td> <td>
-                    <select id='settingsLoraCodingRate'>
-                        <option value="5">5 - Standard</option> 
-                        <option value="6">6 - Improved robustness</option>  
-                        <option value="7">7 - High reliability</option> 
-                        <option value="8">8 - Maximum redundancy</option>
-                    </select> 
-                </td> </tr>				
-                <tr> <td>Spreading Factor</td> <td>
-                    <select id='settingsLoraSpreadingFactor'>
-                        <option value="6">6 - Short range</option> 
-                        <option value="7">7 - Normal</option>   
-                        <option value="8">8 - Improved range</option>   
-                        <option value="9">9 - High range</option> 
-                        <option value="10">10 - Long range</option>  
-                        <option value="11">11 - Extreme range</option>    
-                        <option value="12">12 - Maximum range</option>
-                    </select> 
-                </td> </tr>
-                <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord"></td> </tr>		
-                <tr> <td>Preamble Length</td> <td> <input id="settingsLoraPreambleLength"></td> </tr>		
-                <tr> <td> Repeat Messages </td> <td> <input type="checkbox" id="settingsLoraRepeat"> </td> </tr> 
-            </table>
-            <button class="button" onclick="saveSettings();">save</button>
-        </div>
-
-        <div id="cAbout" class="content-section">
-            <table>
-                <tr> <td> Hardware </td> <td id="hardware"> </td> </tr> 
-                <tr> <td> Version </td> <td id="version"></td> </tr> 
-                <tr> <td> Max Message Length </td> <td id="settingsLoraMaxMessageLength"> </td> </tr> 
-                <tr> <td> Heap </td> <td id="heap"> </td> </tr> 
-                <tr> <td> TX Buffer </td> <td id="txBuffer"> </td> </tr> 
-                <tr> <td> Retry </td> <td id="retry"> </td> </tr> 
-                <tr> <td> System Time </td> <td id="time"> </td> </tr> 
-            </table>
-            <!-- <button class="button" onclick="deleteMessages();">delete messages</button>  -->
-        </div>
-
-        <div id="cPeers" class="content-section">
-             <div id="peer"></div>
-            <button class="button" onclick="sendAnnounce();">send announce</button>
-            <button class="button" onclick="sendTuning();">send tuning</button>
-        </div>        
-
-        <div id="cRouting" class="content-section"> 
-             <div id="routing"></div>
-        </div>  
-        
-        <div id="cMonitor" class="content-section">
-        </div>          
-		
-		<div id="custom-modal" class="modal-overlay">
-			<div class="modal-box">
-				<h2 id="modal-title">Titel</h2>
-				<p id="modal-description">Beschreibung...</p>
-				<input type="text" id="modal-input" class="modal-input-field">
-                <div id="modal-selection-list" style="display: none; margin-top: 15px;"> </div>
-				<div class="modal-buttons">
-					<button id="modal-cancel" onclick="closeModal()">abort</button>
-					<button id="modal-submit">OK</button>
-				</div>
-			</div>
-		</div>	
-		
+    <main id="cNetwork" class="content-section">
+        <table>
+            <tr> <td>Accesspoint</td> <td><input type="checkbox" id="settingsApMode" onclick="settingsVisibility();"></td> </tr> 
+            <tr class="AP_MODE_ENABLED"> 
+                <td>WiFi<br>Networks</nr> </td> 
+                <td> 
+                    <select id='settingsSSIDList'></select> 
+                    <button id="settingsScanWifi">scan</button> 
+                </td>
+            </tr>
+            <tr class="AP_MODE_ENABLED"> <td>SSID</td> <td><input id='settingsSSID'></td> </tr>
+            <tr class="AP_MODE_ENABLED"> <td>Password</td> <td><input type="password" id='settingsPassword'></td> </tr>
+            <tr class="AP_MODE_ENABLED"> <td>DHCP</td> <td><input type="checkbox" id="settingsDHCP" onclick="settingsVisibility();"></td> </tr> 
+            <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>IP-Address</td> <td> <input id='settingsWiFiIP'> </td> </tr>
+            <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Subnet</td> <td> <input id='settingsWifiNetMask'> </td> </tr>
+            <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>Gateway</td> <td> <input id='settingsWifiGateway'> </td> </tr>
+            <tr class="DHCP_ENABLED AP_MODE_ENABLED"> <td>DNS</td> <td> <input id='settingsWifiDNS'> </td> </tr>
+            <tr> <td> UDP-Peer 1 </td> <td> <input id='settingsUDPPeer0'> </td> </tr>
+            <tr> <td> UDP-Peer 2 </td> <td> <input id='settingsUDPPeer1'> </td> </tr>
+            <tr> <td> UDP-Peer 3 </td> <td> <input id='settingsUDPPeer2'> </td> </tr>
+            <tr> <td> UDP-Peer 4 </td> <td> <input id='settingsUDPPeer3'> </td> </tr>
+            <tr> <td> UDP-Peer 5 </td> <td> <input id='settingsUDPPeer4'> </td> </tr>
+            <tr class="AP_MODE_ENABLED"> <td>NTP-Server:</td> <td><input id="settingsNTP"></td> </tr>
+        </table>
+        <button class="button" onclick="saveSettings();">save</button>
+        <button class="button" onclick="reboot();">reboot</button>  
+        <button class="button" onClick="syncTime();">sync browser time</button>              
     </main>
-	
+
+    <main id="cLora" class="content-section">
+        <table>
+            <tr> <td>Callsign</td> <td><input id="settingsMycall"></td> </tr>
+            <tr> <td>Frequency</td> <td><input id="settingsLoraFrequency"></td> </tr>
+            <tr> <td>Output Power</td> <td><input id="settingsLoraOutputPower"></td> </tr>
+            <tr> <td>Bandwidth</td> <td>
+                <select id='settingsLoraBandwidth'>
+                    <option value="7.8">7,8 kHz</option>	
+                    <option value="10.4">10,4 kHz</option>	
+                    <option value="15.6">15,6 kHz</option>	
+                    <option value="20.8">20,8 kHz</option>	
+                    <option value="31.25">31,25 kHz</option>	
+                    <option value="62.5">62,5 kHz</option>	
+                    <option value="125">125 kHz</option>	
+                    <option value="250">250 kHz</option>	
+                    <option value="500">500 kHz</option>	
+                </select> 
+            </td> </tr>
+            <tr> <td>Coding Rate</td> <td>
+                <select id='settingsLoraCodingRate'>
+                    <option value="5">5 - Standard</option> 
+                    <option value="6">6 - Improved robustness</option>  
+                    <option value="7">7 - High reliability</option> 
+                    <option value="8">8 - Maximum redundancy</option>
+                </select> 
+            </td> </tr>				
+            <tr> <td>Spreading Factor</td> <td>
+                <select id='settingsLoraSpreadingFactor'>
+                    <option value="6">6 - Short range</option> 
+                    <option value="7">7 - Normal</option>   
+                    <option value="8">8 - Improved range</option>   
+                    <option value="9">9 - High range</option> 
+                    <option value="10">10 - Long range</option>  
+                    <option value="11">11 - Extreme range</option>    
+                    <option value="12">12 - Maximum range</option>
+                </select> 
+            </td> </tr>
+            <tr> <td>Sync Word</td> <td><input id="settingsLoraSyncWord"></td> </tr>		
+            <tr> <td>Preamble Length</td> <td> <input id="settingsLoraPreambleLength"></td> </tr>		
+            <tr> <td> Repeat Messages </td> <td> <input type="checkbox" id="settingsLoraRepeat"> </td> </tr> 
+        </table>
+        <button class="button" onclick="saveSettings();">save</button>
+    </main>
+
+    <main id="cAbout" class="content-section">
+        <table>
+            <tr> <td> Hardware </td> <td id="hardware"> </td> </tr> 
+            <tr> <td> Version </td> <td id="version"></td> </tr> 
+            <tr> <td> Max Message Length </td> <td id="settingsLoraMaxMessageLength"> </td> </tr> 
+            <tr> <td> Heap </td> <td id="heap"> </td> </tr> 
+            <tr> <td> TX Buffer </td> <td id="txBuffer"> </td> </tr> 
+            <tr> <td> Retry </td> <td id="retry"> </td> </tr> 
+            <tr> <td> System Time </td> <td id="time"> </td> </tr> 
+        </table>
+        <!-- <button class="button" onclick="deleteMessages();">delete messages</button>  -->
+    </main>
+
+    <main id="cPeers" class="content-section">
+            <div id="peer"></div>
+        <button class="button" onclick="sendAnnounce();">send announce</button>
+        <button class="button" onclick="sendTuning();">send tuning</button>
+    </main>        
+
+    <main id="cRouting" class="content-section"> 
+            <div id="routing"></div>
+    </main>  
+    
+    <main id="cMonitor" class="content-section">
+    </main>          
+
+    <footer id="dynamic-footer"></footer>
+    
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h2 id="modal-title">Titel</h2>
+            <p id="modal-description">Beschreibung...</p>
+            <input type="text" id="modal-input" class="modal-input-field">
+            <div id="modal-selection-list" style="display: none; margin-top: 15px;"> </div>
+            <div class="modal-buttons">
+                <button id="modal-cancel" onclick="closeModal()">abort</button>
+                <button id="modal-submit">OK</button>
+            </div>
+        </div>
+    </div>	
+
 	<script src="mobile.js" defer></script>
 	<script src="mobilesocket.js" defer></script>
 
