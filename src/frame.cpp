@@ -136,6 +136,7 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
     doc["message"]["id"] = id;
     doc["message"]["tx"] = tx;
     doc["message"]["timestamp"] = timestamp;
+    doc["message"]["hopCount"] = hopCount;
     size_t len = serializeJson(doc, buffer, length);
     return len;
 }

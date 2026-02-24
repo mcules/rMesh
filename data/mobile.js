@@ -122,8 +122,7 @@ function buildMenu() {
             label: "all",
             mute: guiSettings.muteAll,
             action: () => {
-                showContent("group_all", "all");
-                setupSendMessage('', true);   
+                showContent("group_all", "all", "", true);
                 document.getElementById("group_all").scrollTo({top: document.getElementById("group_all").scrollHeight });
             },
             longPressAction: () => {
@@ -142,7 +141,6 @@ function buildMenu() {
         }            
     );    
     createMainSection("group_all");
-
     //Gruppen hinzufügen
     for (var key in guiSettings.groups) { 
         const groupName  = guiSettings.groups[key].name; 
@@ -154,8 +152,7 @@ function buildMenu() {
                 label: groupName,
                 mute:  guiSettings.groups[key].mute,
                 action: () => {
-                    showContent("group_" + groupName, groupName);
-                    setupSendMessage(groupName, true);   
+                    showContent("group_" + groupName, groupName, groupName, true);
                     document.getElementById("group_" + groupName).scrollTo({top: document.getElementById("group_" + groupName).scrollHeight });
                 },
                 longPressAction: () => {
@@ -199,9 +196,7 @@ function buildMenu() {
                         read: true};
                     guiSettings.groups.push(newGroup);
                     showMessages(true);
-                    showContent("group_" + name, name);
-                    setupSendMessage(name, true);  
-
+                    showContent("group_" + name, name, name, true);
                 }
             }    
         },    
@@ -218,8 +213,7 @@ function buildMenu() {
             { 
                 label: callsign , 
                 action: () => {
-                    showContent("dm_" + callsign, callsign );
-                    setupSendMessage(callsign, false);  
+                    showContent("dm_" + callsign, callsign, callsign, false);
                     document.getElementById("dm_" + callsign).scrollTo({top: document.getElementById("dm_" + callsign).scrollHeight });
                 }
             }            
@@ -247,8 +241,7 @@ function buildMenu() {
                     if (!exists) {
                         guiSettings.dm.push(newDM);
                         showMessages(true);
-                        showContent("dm_" + name, name);
-                        setupSendMessage(name, false); 
+                        showContent("dm_" + name, name, name, false);
                     }
 
                     showMessages(true);
@@ -320,9 +313,7 @@ function buildMenu() {
                 pressTimer = setTimeout(() => {
                     if (typeof item.longPressAction === 'function') {
                         item.longPressAction();
-                        // Optional: Vibration für haptisches Feedback auf dem Handy
                         toggleMenu();
-                        if (navigator.vibrate) navigator.vibrate(50);
                     }
                 }, 800);
             };
@@ -364,7 +355,6 @@ function createMainSection(sectionId) {
     }
     const newMain = document.createElement('main');
     newMain.id = sectionId;
-    newMain.innerHTML = "****" + sectionId + "****";
     newMain.className = 'content-section'; // WICHTIG: Damit unser CSS und showContent() es finden!
     document.body.appendChild(newMain);
 }
@@ -394,15 +384,10 @@ function loadGuiSettings() {
             { name: "Verkehr", read: false }
         ], 
         dm: [], 
-        menu: "cMonitor", 
         update: 0, 
-        title: "Monitor",
-        sendBar: {active: false, dst: null, group: null},
-        content: {content: "cLora", title: "LoRa"}
+        content: {content: "cLora", title: "LoRa", dst: null, group: true}
     };
 }
-
-
 
 
 function toggleMenu() {
@@ -410,7 +395,7 @@ function toggleMenu() {
 	menu.classList.toggle('open');
 }
 
-function showContent(sectionId, title = "") {
+function showContent(sectionId, title = "", dst = null, group = true) {
     //Alle content-sections suchen und unsichtbar machen
     const alleSektionen = document.querySelectorAll('.content-section');
     alleSektionen.forEach(sektion => {
@@ -421,7 +406,6 @@ function showContent(sectionId, title = "") {
     document.getElementById("dynamic-footer").style.display = "none";
     guiSettings.sendBar = {active: false, dst: null, group: null};
     saveGuiSettings();
-
 
     //Titel
     const currentName = (settings && settings.name) ? settings.name : "rMesh";
@@ -436,94 +420,19 @@ function showContent(sectionId, title = "") {
         zielSektion.classList.add('active'); // Fügt die Klasse hinzu -> display: block greift
     } 
 
+    //Footer zusammenbauen 
+    if (dst !== null) {
+        setupSendMessage(dst, group);
+    }
+
     showMessages(true);
     window.scrollTo(0, 0); 
     
     //UI-Zustand speichern (Safari-sicher)
     if (guiSettings) {
-        guiSettings.content = {content: sectionId, title: title};
+        guiSettings.content = {content: sectionId, title: title, dst: dst, group: group};
         saveGuiSettings();
     }
-}
-
-
-function showModal(title, desc, defaultValue = "", isInput = true) {
-    return new Promise((resolve) => {
-        const modal = document.getElementById('custom-modal');
-        const inputField = document.getElementById('modal-input');
-        const submitBtn = document.getElementById('modal-submit');
-
-        // Inhalte setzen
-        document.getElementById('modal-title').textContent = title;
-        document.getElementById('modal-description').textContent = desc;
-        
-        // Input-Box zeigen oder verstecken
-        inputField.style.display = isInput ? "block" : "none";
-        inputField.value = defaultValue;
-
-        // Modal anzeigen
-        modal.style.display = "flex";
-
-        // Event-Handler für den Submit-Button
-        submitBtn.onclick = () => {
-            const result = isInput ? inputField.value : true;
-            closeModal();
-            resolve(result);
-        };
-
-        // Abbrechen-Logik
-        document.getElementById('modal-cancel').onclick = () => {
-            closeModal();
-            resolve(null); // Gibt null zurück, wenn abgebrochen wurde
-        };
-    });
-}
-
-function closeModal() {
-    document.getElementById('custom-modal').style.display = "none";
-}
-
-
-function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) {
-    var container = document.getElementById(containerId);
-    if (!container) return;
-
-    var row = document.createElement('div');
-    // Klassische String-Verknüpfung
-    row.className = 'bubble-row ' + bubbleClass;
-
-    var bubble = document.createElement('div');
-    bubble.className = 'bubble';
-
-    var header = document.createElement('div');
-    header.className = 'bubble-header';
-    
-    var titleSpan = document.createElement('span');
-    titleSpan.textContent = title;
-    titleSpan.style.color = titleColor;
-
-    var timeSpan = document.createElement('span');
-    timeSpan.className = 'bubble-time';
-    timeSpan.textContent = subtitle;
-
-    header.appendChild(titleSpan);
-    header.appendChild(timeSpan);
-
-    var content = document.createElement('div');
-    content.className = 'bubble-text';
-    content.textContent = text;
-
-    bubble.appendChild(header);
-    bubble.appendChild(content);
-    row.appendChild(bubble);
-
-    container.appendChild(row);
-
-    container.scrollTo({
-        top: container.scrollHeight,
-        //behavior: 'smooth'
-    });
-
 }
 
 
@@ -623,11 +532,90 @@ function setupSendMessage(dst, group = true) {
     bar.appendChild(input);
     bar.appendChild(button);
 
-    //Speichern
-    guiSettings.sendBar = {active: true, dst: dst, group: group};
-    saveGuiSettings();
+}
+
+
+
+
+function showModal(title, desc, defaultValue = "", isInput = true) {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('custom-modal');
+        const inputField = document.getElementById('modal-input');
+        const submitBtn = document.getElementById('modal-submit');
+
+        // Inhalte setzen
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-description').textContent = desc;
+        
+        // Input-Box zeigen oder verstecken
+        inputField.style.display = isInput ? "block" : "none";
+        inputField.value = defaultValue;
+
+        // Modal anzeigen
+        modal.style.display = "flex";
+
+        // Event-Handler für den Submit-Button
+        submitBtn.onclick = () => {
+            const result = isInput ? inputField.value : true;
+            closeModal();
+            resolve(result);
+        };
+
+        // Abbrechen-Logik
+        document.getElementById('modal-cancel').onclick = () => {
+            closeModal();
+            resolve(null); // Gibt null zurück, wenn abgebrochen wurde
+        };
+    });
+}
+
+function closeModal() {
+    document.getElementById('custom-modal').style.display = "none";
+}
+
+
+function addBubble(bubbleClass, title, subtitle, titleColor, text, containerId) {
+    var container = document.getElementById(containerId);
+    if (!container) return;
+
+    var row = document.createElement('div');
+    // Klassische String-Verknüpfung
+    row.className = 'bubble-row ' + bubbleClass;
+
+    var bubble = document.createElement('div');
+    bubble.className = 'bubble';
+
+    var header = document.createElement('div');
+    header.className = 'bubble-header';
+    
+    var titleSpan = document.createElement('span');
+    titleSpan.textContent = title;
+    titleSpan.style.color = titleColor;
+
+    var timeSpan = document.createElement('span');
+    timeSpan.className = 'bubble-time';
+    timeSpan.textContent = subtitle;
+
+    header.appendChild(titleSpan);
+    header.appendChild(timeSpan);
+
+    var content = document.createElement('div');
+    content.className = 'bubble-text';
+    content.textContent = text;
+
+    bubble.appendChild(header);
+    bubble.appendChild(content);
+    row.appendChild(bubble);
+
+    container.appendChild(row);
+
+    container.scrollTo({
+        top: container.scrollHeight,
+        //behavior: 'smooth'
+    });
 
 }
+
 
 
 function getColorForName(name) {

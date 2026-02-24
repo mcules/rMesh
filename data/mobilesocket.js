@@ -101,6 +101,11 @@ function showMessages(parseAll) {
         var date = new Date(m.timestamp * 1000);
         var dateString = date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
         m.parsed = true;
+        var hopCount = "";
+        if (m.hopCount) {
+            hopCount = `${m.hopCount} ${m.hopCount === 1 ? 'Hop ' : 'Hops '}`;
+        }
+
 
         //Nachrichten zuordnen (Gruppen)
         for (var key in guiSettings.groups) { 
@@ -110,7 +115,7 @@ function showMessages(parseAll) {
                 addBubble(
                     css, 
                     titel, 
-                    dateString,
+                    hopCount + " " + dateString,
                     getColorForName(m.srcCall), 
                     msg, 
                     "group_" + groupName
@@ -139,7 +144,7 @@ function showMessages(parseAll) {
             addBubble(
                 css, 
                 titel, 
-                dateString,
+                hopCount + " " + dateString,
                 getColorForName(callsign), 
                 msg, 
                 "dm_" + callsign
@@ -181,7 +186,7 @@ function showMessages(parseAll) {
             addBubble(
                 css, 
                 titel, 
-                date.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" }) + " " + date.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }),
+                hopCount + " " + dateString,
                 getColorForName(m.srcCall), 
                 msg, 
                 "group_all"
@@ -371,14 +376,9 @@ function onMessage(event) {
 
                     //Letzten Ansicht laden
                     if (document.getElementById(guiSettings.content.content)) {
-                        if (guiSettings.sendBar.active == true) {
-                            showContent(guiSettings.content.content, guiSettings.content.title);
-                            setupSendMessage(guiSettings.sendBar.dst, guiSettings.sendBar.group);
-                        } else {
-                            showContent(guiSettings.content.content, guiSettings.content.title);
-                        }
+                        showContent(guiSettings.content.content, guiSettings.content.title, guiSettings.content.dst, guiSettings.content.group);
                     } else {
-                        showContent("cMonitor", "Monitor");
+                        showContent("cLora", "LoRa");
                     }
 
 
