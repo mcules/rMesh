@@ -1,3 +1,28 @@
+// --- DER ULTIMATIVE VISUAL VIEWPORT FIX ---
+function applyVisualViewport() {
+    if (window.visualViewport) {
+        // Zwingt den Body auf die exakt sichtbaren Pixel (abzüglich Tastatur)
+        document.body.style.height = window.visualViewport.height + 'px';
+        
+        // Blockiert das heimliche Hochschieben von Android
+        window.scrollTo(0, 0); 
+    }
+}
+
+if (window.visualViewport) {
+    // Reagiert in Echtzeit auf das Öffnen/Schließen der Tastatur
+    window.visualViewport.addEventListener('resize', applyVisualViewport);
+    
+    // Falls Firefox trotzdem versucht zu scrollen, nageln wir es fest
+    window.visualViewport.addEventListener('scroll', () => window.scrollTo(0,0));
+    
+    applyVisualViewport();
+} else {
+    // Fallback für sehr alte Browser
+    document.body.style.height = '100dvh';
+}
+// ------------------------------------------
+
 const emojis = [
         // Gesichter & Smileys
         '😊','😂','🤣','😍','😎','🤔','😅','😉','🙄','🤨','😏','🥳', '🤮', '😡', '😭','😤','😱','🥱','😴', '😜', '☠️', '🙈', '🤷‍♂️', '💩',
@@ -50,12 +75,17 @@ async function requestWakeLock() {
 
 document.addEventListener('click', requestWakeLock);
 
+
+
+
 window.addEventListener('DOMContentLoaded', async function() {
     loadGuiSettings();
     buildMenu();
     initWebSocket();
 	
 });
+
+
 
 document.addEventListener("visibilitychange", function () {
     if (document.visibilityState === "visible") {

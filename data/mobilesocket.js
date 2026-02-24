@@ -318,6 +318,7 @@ function onMessage(event) {
     //Einstellungen
     if (d.settings) {
         settings = d.settings;
+        document.getElementById("myCall").innerHTML = d.settings.mycall;
         document.getElementById("settingsMycall").value = d.settings.mycall;
         document.getElementById("settingsNTP").value = d.settings.ntp;
         document.getElementById("settingsSSID").value = d.settings.wifiSSID;
