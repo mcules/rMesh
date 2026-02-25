@@ -1,0 +1,4 @@
+KI: Absorption: 868 MHz wird durch dichte Vegetation (Wälder) und Hügel im Bergischen massiv geschluckt.
+Beugung: 433 MHz "umfließt" Hügelkuppen besser und dringt tiefer in Täler ein.
+Link-Budget: 433 MHz bietet ca. 20-25 dB mehr Reserve. Das entspricht rechnerisch fast der 16-fachen Reichweite bei identischer Hardware.
+
