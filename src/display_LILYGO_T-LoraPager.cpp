@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "helperFunctions.h"
 #include "config.h"
+#include "main.h"
 #include "frame.h"
 #include "routing.h"
 #include "peer.h"
@@ -197,6 +198,7 @@ static void doDeleteMessages();
 static void doSaveDisplay();
 static void doSaveGroups();
 static void doNewGroup();
+static void doAnnounce();
 static void buildGroupMenu();
 static void deleteGroup(int idx);
 
@@ -830,12 +832,12 @@ static void drawMenuTop() {
     spr.setTextSize(1);
     drawStrS("rMesh  Einstellungen", 4, 5);
 
-    const char* labels[7] = {"Network", "Setup", "Display", "Gruppen",
-                              "Routing", "Peers", "Monitor"};
+    const char* labels[8] = {"Network", "Setup", "Display", "Gruppen",
+                              "Routing", "Peers", "Monitor", "Announce"};
     const int colW  = DISP_W / 2;   // 240 px per column
     const int itemW = colW - 30;    // 210 px
     const int itemH = 40, gap = 4, startY = MENU_HDR_H + 2;
-    for (int i = 0; i < 7; i++) {
+    for (int i = 0; i < 8; i++) {
         int col = i / 4;            // col 0: items 0-3, col 1: items 4-6
         int row = i % 4;
         int x   = col * colW + 15;
@@ -993,6 +995,15 @@ static void doDeleteMessages() {
     historyCount = 0; historyHead = 0;
     uiMode = UI_CHAT; needRedraw = true;
 }
+static void doAnnounce() {
+    Frame f;
+    f.frameType = Frame::FrameTypes::ANNOUNCE_FRAME;
+    f.transmitMillis = 0;
+    f.port = 0; txBuffer.push_back(f);
+    f.port = 1; txBuffer.push_back(f);
+    announceTimer = millis() + ANNOUNCE_TIME;  // reset periodic timer
+    uiMode = UI_CHAT; needRedraw = true;
+}
 static void doSave() {
     for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], extSettings.udpPeer[i]);
     uiMode = UI_CHAT; needRedraw = true;
@@ -1038,6 +1049,7 @@ static void enterSubmenu(int idx) {
         case 4: infoScroll = 0; uiMode = UI_ROUTING; needRedraw = true; return;
         case 5: infoScroll = 0; uiMode = UI_PEERS;   needRedraw = true; return;
         case 6: infoScroll = 0; uiMode = UI_MONITOR; needRedraw = true; return;
+        case 7: doAnnounce(); return;
         default: return;
     }
     listSel = 0; listScroll = 0; uiMode = UI_MENU_LIST; needRedraw = true;
@@ -1319,8 +1331,8 @@ void displayUpdateLoop() {
         }
     }
     else if (uiMode == UI_MENU_TOP) {
-        if (rot.dir == ROTARY_DIR_UP)   { topSel = (topSel + 1) % 7; needRedraw = true; }
-        if (rot.dir == ROTARY_DIR_DOWN) { topSel = (topSel + 6) % 7; needRedraw = true; }
+        if (rot.dir == ROTARY_DIR_UP)   { topSel = (topSel + 1) % 8; needRedraw = true; }
+        if (rot.dir == ROTARY_DIR_DOWN) { topSel = (topSel + 7) % 8; needRedraw = true; }
         if (shortPress) enterSubmenu(topSel);
         if (longPress)  { uiMode = UI_CHAT; needRedraw = true; }
     }
