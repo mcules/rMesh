@@ -558,7 +558,8 @@ static void drawGroupTabs() {
 static void infoHeader(const char* title) {
     spr.fillScreen(COL_BG);
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
-    spr.setTextSize(2);
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_HDR_FG);
     char hdr[48];
     snprintf(hdr, sizeof(hdr), "rMesh > %s", title);
@@ -567,6 +568,7 @@ static void infoHeader(const char* title) {
 static void infoFooter(int total, int vis, int scroll) {
     int fy = DISP_H - MENU_FOT_H;
     spr.fillRect(0, fy, DISP_W, MENU_FOT_H, COL_MENU_FOT);
+    spr.setFont(&fonts::Font0);
     spr.setTextSize(1);
     spr.setTextColor(COL_MENU_FOT_FG);
     drawStrS("Drehen=Scr  Druecken=Zurueck", 4, fy + 1);
@@ -587,16 +589,17 @@ static void drawRouting() {
     const int vis     = areaH / lineH;
 
     // Column header
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     spr.setTextColor(0x7BEFu);  // dim gray
-    spr.setTextSize(2);
     drawStrS("Rufzeichen  Via          H  Alter", 4, MENU_HDR_H + 2);
     spr.drawFastHLine(0, MENU_HDR_H + colHdrH - 1, DISP_W, COL_SEPARATOR);
 
     int n = (int)routingList.size();
     int start = max(0, min(infoScroll, n > vis ? n - vis : 0));
     if (n == 0) {
+        spr.setFont(&fonts::FreeSans9pt7b);
         spr.setTextColor(COL_MENU_FG);
-        spr.setTextSize(2);
         drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 8);
     }
     for (int i = start; i < n && (i - start) < vis; i++) {
@@ -606,8 +609,9 @@ static void drawRouting() {
         char line[MON_LINE_W];
         snprintf(line, sizeof(line), "%-11s %-12s %2d  %s",
                  r.srcCall, r.viaCall, r.hopCount, age);
+        spr.setFont(&fonts::FreeMono9pt7b);
+        spr.setTextSize(1);
         spr.setTextColor(COL_MENU_FG);
-        spr.setTextSize(2);
         drawStrS(line, 4, areaY + (i - start) * lineH + 3);
     }
     infoFooter(max(1, n), vis, start);
@@ -624,16 +628,17 @@ static void drawPeers() {
     const int vis     = areaH / lineH;
 
     // Column header
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     spr.setTextColor(0x7BEFu);
-    spr.setTextSize(2);
     drawStrS("Rufzeichen  Typ  RSSI   SNR  Alter", 4, MENU_HDR_H + 2);
     spr.drawFastHLine(0, MENU_HDR_H + colHdrH - 1, DISP_W, COL_SEPARATOR);
 
     int n = (int)peerList.size();
     int start = max(0, min(infoScroll, n > vis ? n - vis : 0));
     if (n == 0) {
+        spr.setFont(&fonts::FreeSans9pt7b);
         spr.setTextColor(COL_MENU_FG);
-        spr.setTextSize(2);
         drawStrS("(keine Eintraege)", 4, areaY + areaH / 2 - 8);
     }
     for (int i = start; i < n && (i - start) < vis; i++) {
@@ -646,8 +651,9 @@ static void drawPeers() {
                  p.port == 0 ? "LoRa" : "WiFi",
                  p.rssi, p.snr,
                  age);
+        spr.setFont(&fonts::FreeMono9pt7b);
+        spr.setTextSize(1);
         spr.setTextColor(p.available ? 0x07E0u : 0xAD55u);  // green or gray
-        spr.setTextSize(2);
         drawStrS(line, 4, areaY + (i - start) * lineH + 3);
     }
     infoFooter(max(1, n), vis, start);
@@ -667,15 +673,16 @@ static void drawMonitor() {
     int visEnd  = monCount - clampedScroll;
     int start   = max(0, visEnd - vis);
 
+    spr.setFont(&fonts::FreeMono9pt7b);
+    spr.setTextSize(1);
     for (int i = start; i < visEnd; i++) {
         int ri = (monHead - monCount + i + MON_HISTORY) % MON_HISTORY;
         spr.setTextColor(COL_MENU_FG);
-        spr.setTextSize(2);
         drawStrS(monLines[ri], 4, areaY + (i - start) * lineH + 3);
     }
     if (monCount == 0) {
+        spr.setFont(&fonts::FreeSans9pt7b);
         spr.setTextColor(COL_MENU_FG);
-        spr.setTextSize(2);
         drawStrS("(kein Traffic)", 4, areaY + areaH / 2 - 8);
     }
     infoFooter(max(1, monCount), vis, clampedScroll);
@@ -948,8 +955,9 @@ static void drawMenuTop() {
 
     spr.fillScreen(COL_BG);
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_HDR_FG);
-    spr.setTextSize(2);
     drawStrS("rMesh  Einstellungen", 4, 2);
 
     int end = min(topScroll + TOP_MENU_VIS, TOP_MENU_N);
@@ -960,7 +968,8 @@ static void drawMenuTop() {
         uint16_t icol = sel ? COL_MENU_SEL_FG : COL_MENU_FG;
         uint16_t ibg  = sel ? COL_MENU_SEL : COL_BG;
         drawMenuIcon(i, 6, y + 6, icol, ibg);
-        spr.setTextSize(2);
+        spr.setFont(&fonts::FreeSans9pt7b);
+        spr.setTextSize(1);
         spr.setTextColor(icol);
         drawStrS(labels[i], 26, y + (TOP_ITEM_H - 16) / 2);
         if (sel) drawStrS(">", DISP_W - 20, y + (TOP_ITEM_H - 16) / 2);
@@ -985,13 +994,15 @@ static void drawMenuTop() {
 static void drawMenuList() {
     const char* catNames[4] = {"Network", "Setup", "Display", "Gruppen"};
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
-    spr.setTextSize(2);
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_HDR_FG);
     char title[48];
     snprintf(title, sizeof(title), "rMesh > %s", catNames[topSel]);
     drawStrS(title, 4, 2);
     spr.fillRect(0, MENU_HDR_H, DISP_W, MENU_AREA_H_, COL_BG);
-    spr.setTextSize(2);
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     int end = min(listScroll + MENU_ITEMS_VIS, curMenuLen);
     for (int i = listScroll; i < end; i++) {
         int y   = MENU_HDR_H + (i - listScroll) * MENU_ITEM_H;
@@ -1000,13 +1011,13 @@ static void drawMenuList() {
         MenuItem& item = curMenu[i];
 
         if (item.type == FTYPE_ACTION) {
-            int lw = (int)strlen(item.label) * 12;
+            int lw = spr.textWidth(item.label);
             spr.fillRect(DISP_W/2 - lw/2 - 8, y+1, lw+16, MENU_ITEM_H-2,
                          sel ? COL_MENU_SEL : COL_MENU_EDIT_BG);
             spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_HDR_FG);
             drawStrS(item.label, DISP_W/2 - lw/2, y+3);
         } else if (item.type == FTYPE_DELETE_GROUP) {
-            int lw = (int)strlen(item.label) * 12;
+            int lw = spr.textWidth(item.label);
             int bx = DISP_W - lw - 16;
             spr.fillRect(bx - 4, y+1, lw + 12, MENU_ITEM_H-2,
                          sel ? 0xF800u : COL_DELETE_BG);
@@ -1017,7 +1028,7 @@ static void drawMenuList() {
             drawStrS(item.label, 6, y+3);
             char val[80]; fmtValue(val, sizeof(val), item);
             if (strlen(val) > 0) {
-                int vx = DISP_W - (int)strlen(val)*12 - 6;
+                int vx = DISP_W - spr.textWidth(val) - 6;
                 if (vx < DISP_W/2) vx = DISP_W/2;
                 spr.setTextColor(sel ? COL_MENU_SEL_FG : COL_MENU_VAL);
                 drawStrS(val, vx, y+3);
@@ -1031,6 +1042,8 @@ static void drawMenuList() {
     }
     int fy = DISP_H - MENU_FOT_H;
     spr.fillRect(0, fy, DISP_W, MENU_FOT_H, COL_MENU_FOT);
+    spr.setFont(&fonts::Font0);
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_FOT_FG);
     drawStrS("Drehen=Nav  Drucken=Bearb.  Halten=Zuruck", 4, fy+1);
     sprPush();
@@ -1040,6 +1053,7 @@ static void drawMenuList() {
 static void drawEditStr() {
     spr.fillScreen(COL_BG);
     spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
+    spr.setFont(&fonts::FreeSans9pt7b);
     spr.setTextSize(1);
     spr.setTextColor(COL_MENU_HDR_FG);
     char title[64];
@@ -1047,18 +1061,18 @@ static void drawEditStr() {
         snprintf(title, sizeof(title), "Neue Gruppe anlegen");
     else
         snprintf(title, sizeof(title), "Bearb.: %s", curMenu[editItemIdx].label);
-    drawStrS(title, 4, 5);
-    spr.setTextSize(2);
+    drawStrS(title, 4, 2);
     spr.setTextColor(COL_MENU_FG);
-    drawStrS("Wert:", 6, 36);
-    spr.drawRect(6, 58, DISP_W-12, 26, COL_MENU_SEL);
+    drawStrS("Wert:", 6, 26);
+    spr.drawRect(6, 46, DISP_W-12, 22, COL_MENU_SEL);
     spr.setTextColor(COL_MENU_VAL);
-    drawStrS(editStrBuf, 10, 63);
-    int cx = 10 + (int)strlen(editStrBuf)*12;
-    if (cx < DISP_W-18) spr.drawFastVLine(cx, 62, 16, COL_CURSOR);
+    drawStrS(editStrBuf, 10, 50);
+    int cx = 10 + spr.textWidth(editStrBuf);
+    if (cx < DISP_W-18) spr.drawFastVLine(cx, 49, 14, COL_CURSOR);
+    spr.setFont(&fonts::Font0);
     spr.setTextSize(1);
     spr.setTextColor(COL_MENU_FOT_FG);
-    drawStrS("Tastatur=Eingabe  Enter/Drucken=OK  Halten=Abbr.", 6, 100);
+    drawStrS("Tastatur=Eingabe  Enter/Drucken=OK  Halten=Abbr.", 6, 90);
     sprPush();
 }
 
@@ -1067,7 +1081,8 @@ static void drawEditNum() {
     spr.fillRect(0, 0, DISP_W, DISP_H, COL_BG);
     spr.fillRoundRect(bx, by, bw, bh, 6, COL_MENU_EDIT_BG);
     spr.drawRoundRect(bx, by, bw, bh, 6, COL_MENU_SEL);
-    spr.setTextSize(2);
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_HDR_FG);
     drawStrS(curMenu[editItemIdx].label, bx+10, by+8);
     char val[48];
@@ -1077,9 +1092,9 @@ static void drawEditNum() {
     char num[24]; snprintf(num, sizeof(num), fmt, editFloat);
     if (item.unit) snprintf(val, sizeof(val), "%s %s", num, item.unit);
     else           snprintf(val, sizeof(val), "%s", num);
-    spr.setTextSize(2);
     spr.setTextColor(COL_MENU_VAL);
     drawStrS(val, bx+10, by+32);
+    spr.setFont(&fonts::Font0);
     spr.setTextSize(1);
     spr.setTextColor(COL_MENU_FOT_FG);
     drawStrS("Drehen=Wert  Drucken=OK  Halten=Abbr.", bx+10, by+82);
@@ -1096,7 +1111,8 @@ static void drawEditDrop() {
     spr.fillRect(0, 0, DISP_W, DISP_H, COL_BG);
     spr.fillRect(bx, by, bw, bh, COL_MENU_EDIT_BG);
     spr.drawRect(bx, by, bw, bh, COL_MENU_SEL);
-    spr.setTextSize(2);
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
     spr.setTextColor(COL_MENU_HDR_FG);
     drawStrS(item.label, bx+6, by+3);
     int scroll = editDropIdx - visible/2;
@@ -1113,6 +1129,7 @@ static void drawEditDrop() {
         drawStrS(lbl, bx+8, y+3);
     }
     int fy = by + bh - MENU_FOT_H;
+    spr.setFont(&fonts::Font0);
     spr.setTextSize(1);
     spr.setTextColor(COL_MENU_FOT_FG);
     drawStrS("Drehen=Wahl  Drucken=OK  Halten=Abbr.", bx+6, fy+1);
@@ -1126,7 +1143,8 @@ static void doDeleteMessages() {
 }
 static void doPowerOff() {
     spr.fillSprite(COL_BG);
-    spr.setTextColor(COL_MENU_HDR_FG); spr.setTextSize(2);
+    spr.setFont(&fonts::FreeSans9pt7b); spr.setTextSize(1);
+    spr.setTextColor(COL_MENU_HDR_FG);
     drawStrS("Ausschalten...", 4, DISP_H / 2 - 8);
     sprPush();
     delay(800);
