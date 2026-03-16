@@ -6,7 +6,7 @@
 #include <freertos/semphr.h>
 
 #include "config.h"
-#include "Hal.h"
+#include "hal.h"
 #include "frame.h"
 #include "settings.h"
 #include "main.h"
