@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>rMesh – Firmware flashen</title>
+
+    <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
+
+    <style>
+        :root {
+            --blue:      #0078ff;
+            --blue-dark: #005fcc;
+            --bg:        #f0f2f5;
+            --card:      #ffffff;
+            --text:      #1a1a2e;
+            --muted:     #6b7280;
+            --border:    #e5e7eb;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* ── Header ── */
+        header {
+            background: #0f172a;
+            color: white;
+            padding: 0 24px;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+        }
+
+        .header-inner {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+        }
+
+        .header-logo {
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 3px;
+            color: #38bdf8;
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .nav-btn, .github-btn {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .nav-btn:hover, .github-btn:hover { background: rgba(255,255,255,0.2); }
+
+        .github-btn svg { width: 20px; height: 20px; fill: white; flex-shrink: 0; }
+
+        /* ── Hero ── */
+        .hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 100%);
+            color: white;
+            text-align: center;
+            padding: 32px 24px;
+        }
+
+        .hero h1 {
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: 3px;
+            color: #38bdf8;
+            margin-bottom: 8px;
+        }
+
+        .hero p { font-size: 15px; color: #94a3b8; }
+
+        /* ── Main ── */
+        main {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 48px 24px;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 36px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+            border: 1px solid var(--border);
+        }
+
+        /* ── Selectors ── */
+        .selector-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+
+        @media (max-width: 600px) {
+            .selector-grid { grid-template-columns: 1fr; }
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 15px;
+            color: var(--text);
+            background: #f8fafc;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236b7280' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+        }
+
+        select:focus { outline: 2px solid var(--blue); outline-offset: 2px; border-color: var(--blue); }
+        select:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── Device preview ── */
+        .device-preview {
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 32px;
+            min-height: 100px;
+        }
+
+        .device-preview img {
+            width: 120px;
+            height: 85px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: white;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .device-preview-info { flex: 1; }
+
+        .device-preview-name {
+            font-size: 17px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .device-preview-chip {
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .device-preview-placeholder {
+            color: var(--muted);
+            font-style: italic;
+            font-size: 14px;
+        }
+
+        /* ── Flash button area ── */
+        .flash-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .flash-btn-wrapper esp-web-install-button {
+            --esp-tools-button-color: var(--blue);
+            --esp-tools-button-border-radius: 10px;
+        }
+
+        .flash-btn-wrapper button[slot="activate"] {
+            background: var(--blue);
+            color: white;
+            border: none;
+            padding: 13px 36px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.15s;
+        }
+
+        .flash-btn-wrapper button[slot="activate"]:hover {
+            background: var(--blue-dark);
+            transform: translateY(-1px);
+        }
+
+        .flash-btn-wrapper button[slot="activate"]:disabled {
+            background: #94a3b8;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .flash-hint {
+            font-size: 13px;
+            color: var(--muted);
+            text-align: center;
+        }
+
+        .version-badge {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 3px 10px;
+            border-radius: 20px;
+            margin-left: 8px;
+        }
+
+        .version-badge.latest { background: #dcfce7; color: #15803d; }
+
+        /* ── Warning ── */
+        .warning {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 10px;
+            padding: 14px 18px;
+            font-size: 14px;
+            color: #92400e;
+            margin-bottom: 24px;
+            display: none;
+        }
+
+        .warning.visible { display: block; }
+
+        /* ── Footer ── */
+        footer {
+            background: #0f172a;
+            color: #64748b;
+            text-align: center;
+            padding: 28px 24px;
+            font-size: 14px;
+        }
+
+        footer a { color: #38bdf8; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+    <div class="header-inner">
+        <div class="header-logo">rMesh</div>
+        <nav class="header-nav">
+            <a href="index.html" class="nav-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                </svg>
+                Installer
+            </a>
+            <a href="map.html" class="nav-btn">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+                    <line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+                </svg>
+                Netzwerkkarte
+            </a>
+            <a href="https://github.com/dn9kgb/rmesh" target="_blank" rel="noopener" class="github-btn">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+                </svg>
+                GitHub
+            </a>
+        </nav>
+    </div>
+</header>
+
+<!-- ── Hero ── -->
+<div class="hero">
+    <h1>Firmware flashen</h1>
+    <p>Gerät und Version auswählen – auch ältere Versionen installierbar</p>
+</div>
+
+<main>
+    <div class="card">
+
+        <div class="selector-grid">
+            <div>
+                <label for="select-device">Gerät</label>
+                <select id="select-device">
+                    <option value="">— Gerät auswählen —</option>
+                </select>
+            </div>
+            <div>
+                <label for="select-version">Version</label>
+                <select id="select-version" disabled>
+                    <option value="">— erst Gerät wählen —</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="device-preview" id="device-preview">
+            <span class="device-preview-placeholder">Kein Gerät ausgewählt</span>
+        </div>
+
+        <div class="warning" id="downgrade-warning">
+            Achtung: Du installierst eine ältere Version. Das kann zu Inkompatibilitäten führen.
+        </div>
+
+        <div class="flash-area">
+            <div class="flash-btn-wrapper" id="flash-btn-wrapper">
+                <esp-web-install-button id="install-btn" manifest="">
+                    <button slot="activate" disabled>Firmware flashen</button>
+                    <span slot="unsupported">Web Serial wird von diesem Browser nicht unterstützt (Chrome empfohlen).</span>
+                </esp-web-install-button>
+            </div>
+            <p class="flash-hint">Gerät per USB verbinden, dann auf "Firmware flashen" klicken.</p>
+        </div>
+
+    </div>
+</main>
+
+<!-- ── Footer ── -->
+<footer>
+    <p>
+        rMesh – Open Source unter <strong>GNU GPLv3</strong>
+        &nbsp;|&nbsp;
+        <a href="https://github.com/dn9kgb/rmesh" target="_blank" rel="noopener">github.com/dn9kgb/rmesh</a>
+    </p>
+</footer>
+
+<script>
+const GH_RAW = 'https://raw.githubusercontent.com/DN9KGB/rMesh/main';
+
+let devices    = [];
+let releases   = [];
+let latestTag  = '';
+
+const selDevice  = document.getElementById('select-device');
+const selVersion = document.getElementById('select-version');
+const installBtn = document.getElementById('install-btn');
+const preview    = document.getElementById('device-preview');
+const warning    = document.getElementById('downgrade-warning');
+
+// Geräteliste laden
+fetch(`${GH_RAW}/devices.json`)
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(data => {
+        devices = data;
+        data.forEach(({ name }) => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            selDevice.appendChild(opt);
+        });
+    })
+    .catch(() => {
+        selDevice.innerHTML = '<option>Geräteliste nicht verfügbar</option>';
+    });
+
+// Alle Releases laden
+fetch('https://api.github.com/repos/DN9KGB/rMesh/releases?per_page=50')
+    .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+    .then(data => {
+        releases  = data;
+        latestTag = data.length ? data[0].tag_name : '';
+    })
+    .catch(() => {});
+
+function updateVersionSelect() {
+    selVersion.innerHTML = '';
+    selVersion.disabled  = true;
+
+    if (!selDevice.value || !releases.length) return;
+
+    releases.forEach((rel, i) => {
+        const opt      = document.createElement('option');
+        opt.value      = rel.tag_name;
+        opt.textContent = rel.tag_name + (i === 0 ? ' (aktuell)' : '');
+        selVersion.appendChild(opt);
+    });
+
+    selVersion.disabled = false;
+    updateInstallButton();
+}
+
+function updatePreview() {
+    const name = selDevice.value;
+    if (!name) {
+        preview.innerHTML = '<span class="device-preview-placeholder">Kein Gerät ausgewählt</span>';
+        return;
+    }
+    const dev = devices.find(d => d.name === name);
+    if (!dev) return;
+    const imgUrl = dev.image
+        ? `${GH_RAW}/website/images/${dev.image}`
+        : '';
+    preview.innerHTML = `
+        ${imgUrl ? `<img src="${imgUrl}" alt="${name}" onerror="this.style.display='none'">` : ''}
+        <div class="device-preview-info">
+            <div class="device-preview-name">${name}</div>
+            <div class="device-preview-chip">${dev.chip}</div>
+        </div>
+    `;
+}
+
+function updateInstallButton() {
+    const device  = selDevice.value;
+    const version = selVersion.value;
+    const btn     = installBtn.querySelector('button[slot="activate"]');
+
+    if (!device || !version) {
+        btn.disabled = true;
+        installBtn.setAttribute('manifest', '');
+        warning.classList.remove('visible');
+        return;
+    }
+
+    const manifestUrl = `manifest.php?device=${encodeURIComponent(device)}&tag=${encodeURIComponent(version)}`;
+    installBtn.setAttribute('manifest', manifestUrl);
+    btn.disabled = false;
+
+    warning.classList.toggle('visible', latestTag && version !== latestTag);
+}
+
+selDevice.addEventListener('change', () => {
+    updatePreview();
+    updateVersionSelect();
+});
+
+selVersion.addEventListener('change', updateInstallButton);
+</script>
+
+</body>
+</html>

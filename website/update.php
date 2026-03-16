@@ -8,7 +8,18 @@ if (!preg_match('/^[a-zA-Z0-9_\-\.]+$/', $file)) {
     exit;
 }
 
+// Redirect sofort senden – kein Blocking durch DB
+header('Location: https://github.com/DN9KGB/rMesh/releases/latest/download/' . $file, true, 302);
+header('Content-Length: 0');
+header('Connection: close');
+
+if (function_exists('fastcgi_finish_request')) {
+    fastcgi_finish_request();
+} else {
+    if (ob_get_level()) ob_end_flush();
+    flush();
+}
+
+// DB-Logging nach Response
 require_once __DIR__ . '/ota_log_helper.php';
 logOtaEvent($call, $device, 'update_start', '', '', $file);
-
-header("Location: https://github.com/DN9KGB/rMesh/releases/latest/download/" . $file, true, 302);

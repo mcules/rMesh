@@ -1,7 +1,6 @@
 <?php
 /**
  * rMesh OTA Log Helper
- * Wird von latest.php und update.php eingebunden.
  */
 
 function _ensureOtaLogTable(PDO $db): void {
@@ -17,12 +16,19 @@ function _ensureOtaLogTable(PDO $db): void {
         PRIMARY KEY (`id`),
         KEY `idx_call_ts` (`call`, `timestamp`)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+    // device-Spalte nachträglich hinzufügen falls Tabelle schon ohne sie existiert
+    try {
+        $db->exec("ALTER TABLE rmesh_ota_log ADD COLUMN `device` VARCHAR(64) NOT NULL DEFAULT '' AFTER `call`");
+    } catch (Exception $e) {
+        // Spalte existiert bereits – ignorieren
+    }
 }
 
 function logOtaEvent(string $call, string $device, string $event, string $versionFrom, string $versionTo, string $error): void {
     require_once __DIR__ . '/db_config.php';
     try {
-        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET;
+        $dsn = 'mysql:host=' . DB_HOST . ';dbname=' . DB_NAME . ';charset=' . DB_CHARSET . ';connect_timeout=2';
         $db  = new PDO($dsn, DB_USER, DB_PASS, array(PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION));
         _ensureOtaLogTable($db);
         $stmt = $db->prepare("INSERT INTO rmesh_ota_log

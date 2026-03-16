@@ -15,18 +15,26 @@ $ctx = stream_context_create(['http' => [
     'timeout' => 5,
 ]]);
 
-// Get latest release tag from GitHub API
-$apiJson = @file_get_contents(
-    'https://api.github.com/repos/DN9KGB/rMesh/releases/latest',
-    false, $ctx
-);
-if (!$apiJson) {
-    http_response_code(503);
-    echo json_encode(['error' => 'Could not fetch release info']);
-    exit;
+// Optionaler ?tag= Parameter für ältere Versionen, sonst latest
+$tag = $_GET['tag'] ?? '';
+if ($tag) {
+    if (!preg_match('/^[Vv]\d+\.\d+\.\d+$/', $tag)) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid tag format']);
+        exit;
+    }
+} else {
+    $apiJson = @file_get_contents(
+        'https://api.github.com/repos/DN9KGB/rMesh/releases/latest',
+        false, $ctx
+    );
+    if (!$apiJson) {
+        http_response_code(503);
+        echo json_encode(['error' => 'Could not fetch release info']);
+        exit;
+    }
+    $tag = json_decode($apiJson)->tag_name;
 }
-$release = json_decode($apiJson);
-$tag = $release->tag_name;
 
 // Read device list from devices.json (in repo root, one level up from website/)
 $devicesPath = __DIR__ . '/../devices.json';
