@@ -30,19 +30,28 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build all environments
-        run: pio run
-
       - name: Build all filesystems
         run: pio run --target buildfs
 
+      - name: Build all environments
+        run: pio run
+
       - name: Collect and package firmware
         run: |
+          set -euo pipefail
           mkdir -p release
+
+          echo "=== .pio/build contents ==="
           for env_dir in .pio/build/*/; do
             env_name=$(basename "$env_dir")
             [ "$env_name" = "project.checksum" ] && continue
-            [ ! -f "$env_dir/firmware.bin" ] && continue
+            echo "  $env_name: $(ls "$env_dir"*.bin 2>/dev/null | xargs -r basename | tr '\n' ' ' || echo '(no .bin files)')"
+          done
+
+          for env_dir in .pio/build/*/; do
+            env_name=$(basename "$env_dir")
+            [ "$env_name" = "project.checksum" ] && continue
+            [ ! -f "$env_dir/firmware.bin" ] && { echo "SKIP $env_name (no firmware.bin)"; continue; }
 
             # Rename and copy individual files with env prefix (referenced by manifests)
             for f in firmware.bin littlefs.bin bootloader.bin partitions.bin; do
@@ -50,7 +59,8 @@ jobs:
             done
 
             # ZIP with original filenames for manual flashing with esptool
-            zip -j "release/${env_name}.zip" "$env_dir"/*.bin
+            bin_files=$(ls "$env_dir"*.bin 2>/dev/null || true)
+            [ -n "$bin_files" ] && zip -j "release/${env_name}.zip" $bin_files
           done
 
       - name: Generate esp-web-tools manifests
