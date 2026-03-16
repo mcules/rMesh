@@ -1,6 +1,10 @@
 # Changelog
 
 ## [v1.0.23]
+- FIX: WLAN verbindet sich nach Verbindungsabbruch nicht mehr neu (#2 behoben)
+- FIX: LILYGO T-LoRa Pager Build korrigiert – fehlende LilyGoLib-Abhängigkeiten ergänzt, NFC-Guards automatisch gepatcht
+- FIX: Autoupdater verwendet jetzt HTTPS statt HTTP (www.rMesh.de)
+- FIX: VERSION-Fallback und include-Pfad für Hal.h korrigiert
 - GitHub Actions: Firmware wird bei jedem Release-Tag automatisch für alle Boards gebaut
 - Versionsstring wird jetzt automatisch aus dem Git-Tag in die Firmware injiziert (kein manuelles Pflegen mehr in config.h)
 - Webinstaller komplett auf statisches HTML/JS umgestellt (kein PHP mehr erforderlich)
