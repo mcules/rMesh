@@ -431,7 +431,6 @@
 
 <script>
 const GH_RAW  = 'https://raw.githubusercontent.com/DN9KGB/rMesh/main';
-const GH_BASE = 'https://github.com/DN9KGB/rMesh/releases/latest/download';
 
 // Split-button dropdown
 function toggleDropdown(btn) {
@@ -464,13 +463,13 @@ fetch(`${GH_RAW}/devices.json`)
                      onerror="this.src='https://via.placeholder.com/250x180?text=No+Image'">
                 <div class="device-name">${device}</div>
                 <div class="btn-group">
-                    <esp-web-install-button manifest="${GH_BASE}/${device}_manifest.json">
+                    <esp-web-install-button manifest="manifest.php?device=${device}">
                         <button slot="activate">Firmware installieren</button>
                         <span slot="unsupported">Browser nicht unterstützt.</span>
                     </esp-web-install-button>
                     <button class="btn-arrow" onclick="toggleDropdown(this)">&#9660;</button>
                     <div class="dropdown-menu">
-                        <a href="${GH_BASE}/${device}.zip" download>&#8595; Firmware herunterladen</a>
+                        <a href="https://github.com/DN9KGB/rMesh/releases/latest/download/${device}.zip" download>&#8595; Firmware herunterladen</a>
                     </div>
                 </div>
             `;
