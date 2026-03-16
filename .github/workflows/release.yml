@@ -30,37 +30,36 @@ jobs:
       - name: Install PlatformIO
         run: pip install platformio
 
-      - name: Build all filesystems
-        run: pio run --target buildfs
-
       - name: Build all environments
         run: pio run
 
-      - name: Collect and package firmware
+      - name: Collect firmware binaries
         run: |
           set -euo pipefail
           mkdir -p release
-
-          echo "=== .pio/build contents ==="
-          for env_dir in .pio/build/*/; do
-            env_name=$(basename "$env_dir")
-            [ "$env_name" = "project.checksum" ] && continue
-            echo "  $env_name: $(ls "$env_dir"*.bin 2>/dev/null | xargs -r basename | tr '\n' ' ' || echo '(no .bin files)')"
-          done
-
           for env_dir in .pio/build/*/; do
             env_name=$(basename "$env_dir")
             [ "$env_name" = "project.checksum" ] && continue
             [ ! -f "$env_dir/firmware.bin" ] && { echo "SKIP $env_name (no firmware.bin)"; continue; }
-
-            # Rename and copy individual files with env prefix (referenced by manifests)
-            for f in firmware.bin littlefs.bin bootloader.bin partitions.bin; do
+            for f in firmware.bin bootloader.bin partitions.bin; do
               [ -f "$env_dir/$f" ] && cp "$env_dir/$f" "release/${env_name}_${f}"
             done
+            echo "OK $env_name"
+          done
 
-            # ZIP with original filenames for manual flashing with esptool
-            bin_files=$(ls "$env_dir"*.bin 2>/dev/null || true)
-            [ -n "$bin_files" ] && zip -j "release/${env_name}.zip" $bin_files
+      - name: Build all filesystems
+        run: pio run --target buildfs
+
+      - name: Collect filesystem images and package ZIPs
+        run: |
+          set -euo pipefail
+          for env_dir in .pio/build/*/; do
+            env_name=$(basename "$env_dir")
+            [ "$env_name" = "project.checksum" ] && continue
+            [ ! -f "release/${env_name}_firmware.bin" ] && continue
+            [ -f "$env_dir/littlefs.bin" ] && cp "$env_dir/littlefs.bin" "release/${env_name}_littlefs.bin"
+            echo "  $env_name: $(ls release/${env_name}_*.bin | xargs -r basename | tr '\n' ' ')"
+            zip -j "release/${env_name}.zip" release/${env_name}_*.bin
           done
 
       - name: Generate esp-web-tools manifests
