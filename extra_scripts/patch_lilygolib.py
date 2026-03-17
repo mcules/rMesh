@@ -1,8 +1,8 @@
 """
-Patches LilyGoLib to compile without the ST25R3916 RFAL library.
-The library unconditionally references RfalNfcClass/RfalRfST25R3916Class even
-when USING_ST25R3916 is not defined. This script wraps those references in the
-appropriate #ifdef guard.
+Patches LilyGoLib for rMesh compatibility:
+1. Removes ST25R3916 RFAL references (compile fix when USING_ST25R3916 is not defined).
+2. Replaces the blocking while(!psramFound()) loop with a one-time warning so the
+   device boots normally on boards without PSRAM (e.g. ESP32-S3FN8 variant).
 
 Idempotent: safe to run multiple times.
 """
@@ -54,6 +54,25 @@ patch_file(
         (
             '    bool res = false;\n    log_d("Init NFC");\n    res = NFCReader.rfalNfcInitialize() == ST_ERR_NONE;\n    if (!res) {\n        log_e("Failed to find NFC Reader");\n    } else {\n        log_d("Initializing NFC Reader succeeded");\n        devices_probe |= HW_NFC_ONLINE;\n        // Turn off NFC power\n        powerControl(POWER_NFC, false);\n    }\n    return res;',
             '    bool res = false;\n#ifdef USING_ST25R3916\n    log_d("Init NFC");\n    res = NFCReader.rfalNfcInitialize() == ST_ERR_NONE;\n    if (!res) {\n        log_e("Failed to find NFC Reader");\n    } else {\n        log_d("Initializing NFC Reader succeeded");\n        devices_probe |= HW_NFC_ONLINE;\n        // Turn off NFC power\n        powerControl(POWER_NFC, false);\n    }\n#endif\n    return res;',
+        ),
+        # Replace blocking while(!psramFound()) with a one-time log warning
+        (
+            "    while (!psramFound()) {\n        log_d(\"ERROR:PSRAM NOT FOUND!\"); delay(1000);\n    }",
+            "    if (!psramFound()) {\n        log_w(\"WARNING: PSRAM NOT FOUND - continuing without PSRAM\");\n    }",
+        ),
+    ],
+)
+
+# --- LilyGoDispInterface.cpp ---
+# Fix off-by-2x allocation: draw_buf was sized _width*_height*2 uint16_t elements
+# (= 4 bytes/pixel), but uint16_t is already 2 bytes so only _width*_height needed.
+# Without PSRAM this caused a std::bad_alloc crash (426 KB requested, ~250 KB available).
+patch_file(
+    os.path.join(src_dir, "LilyGoDispInterface.cpp"),
+    [
+        (
+            "std::vector<uint16_t> draw_buf(_width * _height * 2, 0x0000);",
+            "std::vector<uint16_t> draw_buf(_width * _height, 0x0000);",
         ),
     ],
 )

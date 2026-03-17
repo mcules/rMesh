@@ -75,7 +75,9 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
         return (strcmp(r.srcCall, srcCall) == 0);
     });
 
-    if (it == routingList.end()) {
+    bool isNew = (it == routingList.end());
+
+    if (isNew) {
         // Fall A: Ziel unbekannt -> Neu anlegen
         Route r;
         strncpy(r.srcCall, srcCall, MAX_CALLSIGN_LENGTH);
@@ -85,12 +87,9 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
         r.timestamp = time(NULL);
         r.hopCount = hopCount;
         routingList.push_back(r);
+        Serial.printf("[Reporting] Neue Route: %s via %s (%d Hops)\n", srcCall, viaCall, hopCount);
     } else {
         // Fall B: Ziel existiert -> Kürzester Weg gewinnt
-        
-        // Wir aktualisieren nur, wenn:
-        // - Der neue Pfad weniger Hops hat als der gespeicherte
-        // - ODER es derselbe via-Knoten ist (dann nur Zeit/Hops aktualisieren)
         if (hopCount < it->hopCount || strcmp(it->viaCall, viaCall) == 0) {
             strncpy(it->viaCall, viaCall, MAX_CALLSIGN_LENGTH);
             it->viaCall[MAX_CALLSIGN_LENGTH] = '\0';
@@ -98,7 +97,7 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
             it->hopCount = hopCount;
         } else {
             // Neuer Pfad ist länger oder gleich lang über anderen Knoten -> ignorieren
-            return; 
+            return;
         }
     }
 
@@ -109,5 +108,5 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
     });
 
     sendRoutingList();
-    markTopologyChanged();
+    if (isNew) markTopologyChanged();
 }

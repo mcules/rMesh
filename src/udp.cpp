@@ -13,12 +13,11 @@ WiFiUDP udp;
 void initUDP() {
     udp.begin(UDP_PORT);
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
-    esp_log_level_set("NetworkUdp", ESP_LOG_ERROR);
-
 }
 
 
 bool checkUDP(Frame &f) {
+    if (WiFi.status() != WL_CONNECTED) return false;
     size_t packetSize = udp.parsePacket();
     if (packetSize) {
         uint8_t packetBuffer[255];

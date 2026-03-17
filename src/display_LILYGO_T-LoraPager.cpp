@@ -16,6 +16,7 @@
 #include "peer.h"
 
 #include <LilyGoLib.h>
+#include <WiFi.h>
 
 #define LGFX_USE_V1
 #include <LovyanGFX.hpp>
@@ -156,7 +157,7 @@ public:
 enum UiMode {
     UI_CHAT, UI_MENU_TOP, UI_MENU_LIST,
     UI_EDIT_STR, UI_EDIT_NUM, UI_EDIT_DROP,
-    UI_ROUTING, UI_PEERS, UI_MONITOR,
+    UI_ROUTING, UI_PEERS, UI_MONITOR, UI_ABOUT, UI_CONFIRM_POWER,
 };
 
 enum FieldType {
@@ -871,7 +872,7 @@ static void fmtValue(char* buf, int buflen, MenuItem& item) {
 
 // ─── Menu: top level (scrollable list, textSize 2) ────────────────────
 #define TOP_ITEM_H  26   // px per row — textSize-2 glyph is 16px high
-#define TOP_MENU_N   9
+#define TOP_MENU_N  11
 #define TOP_MENU_VIS ((DISP_H - MENU_HDR_H - MENU_FOT_H) / TOP_ITEM_H)  // 7
 
 // Draw a 14×14 pixel icon at (ix, iy) for the given top-menu entry index
@@ -933,7 +934,17 @@ static void drawMenuIcon(int idx, int ix, int iy, uint16_t col, uint16_t bg) {
             spr.drawLine(ix+7, iy+5, ix+9, iy+2,  col);
             spr.drawLine(ix+7, iy+5, ix+11, iy+1, col);
             break;
-        case 8: // Ausschalten – power symbol (arc + vertical line)
+        case 8: // Tune – radio waves from center dot
+            spr.fillCircle(ix+7, iy+7, 2, col);
+            spr.drawArc(ix+7, iy+7, 5, 4, 225, 315, col);
+            spr.drawArc(ix+7, iy+7, 7, 6, 225, 315, col);
+            break;
+        case 9: // About – circle with "i"
+            spr.drawCircle(ix+7, iy+7, 6, col);
+            spr.fillCircle(ix+7, iy+4, 1, col);
+            spr.fillRect(ix+6, iy+6, 2, 5, col);
+            break;
+        case 10: // Ausschalten – power symbol (arc + vertical line)
             spr.drawArc(ix+7, iy+8, 5, 4, 40, 320, col);
             spr.drawFastVLine(ix+7, iy+3, 6, col);
             break;
@@ -950,6 +961,8 @@ static void drawMenuTop() {
         "Peers",
         "Monitor",
         "Send Announce",
+        "Tune",
+        "About",
         "Ausschalten"
     };
     const int areaH = DISP_H - MENU_HDR_H - MENU_FOT_H;
@@ -1185,6 +1198,93 @@ static void doSaveGroups() {
     uiMode = UI_CHAT; needRedraw = true;
 }
 
+static int powerConfirmSel = 0;  // 0 = Nein, 1 = Ja
+
+static void drawConfirmPower() {
+    spr.fillScreen(COL_BG);
+    spr.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
+    spr.setTextColor(COL_MENU_HDR_FG);
+    drawStrS("rMesh > Ausschalten", 4, 2);
+
+    spr.setTextColor(COL_MENU_FG);
+    spr.setTextDatum(lgfx::middle_center);
+    drawStrS("Geraet ausschalten?", DISP_W / 2, DISP_H / 2 - 22);
+    spr.setTextDatum(lgfx::top_left);
+
+    const int btnW = 80, btnH = 26;
+    const int btnY = DISP_H / 2;
+    const int btnNeinX = DISP_W / 2 - 90;
+    const int btnJaX   = DISP_W / 2 + 10;
+
+    spr.fillRoundRect(btnNeinX, btnY, btnW, btnH, 4,
+        powerConfirmSel == 0 ? COL_MENU_SEL : COL_MENU_HDR);
+    spr.setTextColor(COL_MENU_SEL_FG);
+    spr.setTextDatum(lgfx::middle_center);
+    drawStrS("Nein", btnNeinX + btnW / 2, btnY + btnH / 2);
+
+    spr.fillRoundRect(btnJaX, btnY, btnW, btnH, 4,
+        powerConfirmSel == 1 ? COL_MENU_SEL : COL_MENU_HDR);
+    drawStrS("Ja", btnJaX + btnW / 2, btnY + btnH / 2);
+    spr.setTextDatum(lgfx::top_left);
+
+    infoFooter(1, 1, 0);
+    sprPush();
+}
+
+static void doTune() {
+    Frame f;
+    f.frameType = Frame::FrameTypes::TUNE_FRAME;
+    f.transmitMillis = 0;
+    f.port = 0; txBuffer.push_back(f);
+    uiMode = UI_CHAT; needRedraw = true;
+}
+
+static void drawAbout() {
+    infoHeader("About");
+
+    const int lineH = 18;
+    int y = MENU_HDR_H + 6;
+
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
+
+    // Version
+    spr.setTextColor(0x7BEFu);
+    drawStrS("Version:", 4, y);
+    spr.setTextColor(COL_MENU_FG);
+    drawStrS(VERSION, 90, y);
+    y += lineH;
+
+    // IP-Adresse
+    char ipBuf[20] = "-";
+    if (WiFi.status() == WL_CONNECTED) {
+        IPAddress ip = WiFi.localIP();
+        snprintf(ipBuf, sizeof(ipBuf), "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
+    }
+    spr.setTextColor(0x7BEFu);
+    drawStrS("WiFi IP:", 4, y);
+    spr.setTextColor(COL_MENU_FG);
+    drawStrS(ipBuf, 90, y);
+    y += lineH + 4;
+
+    // Separator
+    spr.drawFastHLine(4, y, DISP_W - 8, COL_SEPARATOR);
+    y += 8;
+
+    // Website & GitHub
+    spr.setFont(&fonts::FreeSans9pt7b);
+    spr.setTextSize(1);
+    spr.setTextColor(0x07FFu);
+    drawStrS("www.rMesh.de", 4, y);
+    y += 16;
+    drawStrS("github.com/DN9KGB/rMesh", 4, y);
+
+    infoFooter(1, 1, 0);
+    sprPush();
+}
+
 // ─── Menu navigation ──────────────────────────────────────────────────
 static void openMenu() {
     for (int i = 0; i < 5; i++) ipToStr(extSettings.udpPeer[i], tmpPeerIP[i], sizeof(tmpPeerIP[i]));
@@ -1206,7 +1306,9 @@ static void enterSubmenu(int idx) {
         case 5: infoScroll = 0; uiMode = UI_PEERS;   needRedraw = true; return;
         case 6: infoScroll = 0; uiMode = UI_MONITOR; needRedraw = true; return;
         case 7: doAnnounce();  return;
-        case 8: doPowerOff();  return;
+        case 8: doTune();      return;
+        case 9: infoScroll = 0; uiMode = UI_ABOUT; needRedraw = true; return;
+        case 10: powerConfirmSel = 0; uiMode = UI_CONFIRM_POWER; needRedraw = true; return;
         default: return;
     }
     listSel = 0; listScroll = 0; uiMode = UI_MENU_LIST; needRedraw = true;
@@ -1347,8 +1449,13 @@ void initDisplay() {
     lcd.endWrite();
     lcd.fillScreen(COL_BG);
     lcd.startWrite();
-    lcd.setTextColor(0xFFFFu); lcd.setTextSize(1);
-    drawStr("rMesh startet...", 2, 2);
+    lcd.setFont(&fonts::FreeSans9pt7b);
+    lcd.setTextColor(0xFFFFu); lcd.setTextSize(2);
+    lcd.setTextDatum(lgfx::middle_center);
+    drawStr("Starte rMesh Pager", DISP_W / 2, DISP_H / 2);
+    lcd.setTextDatum(lgfx::top_left);
+    lcd.setTextSize(1);
+    lcd.setFont(&fonts::Font0);
     lcd.endWrite();
     instance.unlockSPI();
     Serial.println("[disp] lcd.init() done"); Serial.flush();
@@ -1552,7 +1659,15 @@ void displayUpdateLoop() {
         if (shortPress) confirmEditDrop();
         if (longPress)  { uiMode = UI_MENU_LIST; needRedraw = true; }
     }
-    else if (uiMode == UI_ROUTING || uiMode == UI_PEERS || uiMode == UI_MONITOR) {
+    else if (uiMode == UI_CONFIRM_POWER) {
+        if (rot.dir != ROTARY_DIR_NONE) { powerConfirmSel = !powerConfirmSel; needRedraw = true; }
+        if (shortPress) {
+            if (powerConfirmSel == 1) doPowerOff();
+            else { uiMode = UI_MENU_TOP; needRedraw = true; }
+        }
+        if (longPress) { uiMode = UI_MENU_TOP; needRedraw = true; }
+    }
+    else if (uiMode == UI_ROUTING || uiMode == UI_PEERS || uiMode == UI_MONITOR || uiMode == UI_ABOUT) {
         if (rot.dir == ROTARY_DIR_UP)   { infoScroll++; needRedraw = true; }
         if (rot.dir == ROTARY_DIR_DOWN && infoScroll > 0) { infoScroll--; needRedraw = true; }
         if (monNewData && uiMode == UI_MONITOR) { needRedraw = true; monNewData = false; }
@@ -1596,6 +1711,8 @@ void displayUpdateLoop() {
             case UI_ROUTING:    drawRouting();   break;
             case UI_PEERS:      drawPeers();     break;
             case UI_MONITOR:    drawMonitor();   break;
+            case UI_ABOUT:         drawAbout();        break;
+            case UI_CONFIRM_POWER: drawConfirmPower(); break;
         }
         needRedraw = false;
     }

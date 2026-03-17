@@ -101,7 +101,9 @@ void addPeerList(Frame &f) {
     // Suchen, ob Peer bereits existiert
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port) ; });
 
-    if (it != peerList.end()) {
+    bool isNew = (it == peerList.end());
+
+    if (!isNew) {
         // Peer existiert: update, aber available Flag behalten
         it->timestamp = f.timestamp;
         it->rssi = f.rssi;
@@ -119,12 +121,13 @@ void addPeerList(Frame &f) {
         p.port = f.port;
         p.available = false;
         peerList.push_back(p);
+        Serial.printf("[Reporting] Neuer Peer: %s (Port %d)\n", f.nodeCall, f.port);
     }
 
     // Sortieren nach SNR (absteigend)
     std::sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) { return a.snr > b.snr; });
     sendPeerList();
-    markTopologyChanged();
+    if (isNew) markTopologyChanged();
 }
 
 

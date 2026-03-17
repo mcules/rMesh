@@ -1,5 +1,14 @@
 # Changelog
 
+## [v1.0.25a]
+- NEU: T-LoRa Pager startet jetzt auch auf Boards ohne PSRAM (ESP32-S3FN8) – blockierende Endlosschleife in LilyGoLib bei fehlendem PSRAM durch Patch entfernt, Display-Buffer-Überlauf (426 KB → 213 KB) behoben
+- NEU: T-LoRa Pager Menü – "Tune"-Button sendet ein Tune-Frame direkt aus dem Menü
+- NEU: T-LoRa Pager Menü – "About"-Seite zeigt installierte Firmware-Version, WiFi-IP sowie Links zu www.rMesh.de und GitHub
+- NEU: T-LoRa Pager – "Ausschalten" ist jetzt der letzte Menüpunkt und erfordert eine Sicherheitsabfrage (Ja/Nein)
+- NEU: T-LoRa Pager – Boot-Splash "rMesh wird gestartet" jetzt größer und zentriert
+- FIX: UDP-Fehlerflut (`parsePacket: could not check for data`) wenn kein WLAN eingerichtet ist
+- FIX: Topologie-Reporting wurde durch häufige RSSI/SNR-Updates blockiert – Debounce-Timer wird jetzt nur noch bei echten neuen Peers/Routen zurückgesetzt
+
 ## [v1.0.25]
 - NEU: OTA-Debugging – jeder Update-Vorgang wird in der Datenbank protokolliert. Erfasst werden Versions-Anfragen, gefundene Updates, gestartete Downloads sowie Erfolg oder Misserfolg des Flashens mit Fehlermeldung und Gerätetyp.
 
@@ -12,7 +21,6 @@
 ## [v1.0.23]
 - FIX: WLAN verbindet sich nach Verbindungsabbruch nicht mehr neu (#2 behoben)
 - FIX: LILYGO T-LoRa Pager Build korrigiert – fehlende LilyGoLib-Abhängigkeiten ergänzt, NFC-Guards automatisch gepatcht
-- FIX: Autoupdater verwendet jetzt HTTPS statt HTTP (www.rMesh.de)
 - FIX: VERSION-Fallback und include-Pfad für Hal.h korrigiert
 - GitHub Actions: Firmware wird bei jedem Release-Tag automatisch für alle Boards gebaut
 - Versionsstring wird jetzt automatisch aus dem Git-Tag in die Firmware injiziert (kein manuelles Pflegen mehr in config.h)
