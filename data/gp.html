@@ -76,7 +76,17 @@
             <div id="routing" class="routing" style="display: none;"></div>
             <div id="lora" class="setup" style="display: none;">
                 <table>
-                    <tr> <td>Frequency:</td> <td><input class="input-box" id="settingsLoraFrequency"></td> </tr>
+                    <tr>
+                        <td>Preset:</td>
+                        <td>
+                            <select id="loraPreset" class="input-box" onchange="applyLoraPreset(this.value)">
+                                <option value="">– Frequenz wählen –</option>
+                                <option value="433">433 MHz – Amateurfunk (rMesh)</option>
+                                <option value="868">868 MHz – Public (500 mW, Sub-Band P)</option>
+                            </select>
+                        </td>
+                    </tr>
+                    <tr> <td>Frequency:</td> <td><input class="input-box" id="settingsLoraFrequency" readonly style="opacity:0.5;cursor:not-allowed;" title="Wird über Preset gesetzt"></td> </tr>
                     <tr> <td>Output Power:</td> <td><input class="input-box" id="settingsLoraOutputPower"></td> </tr>
                     <tr> <td>Bandwidth:</td> <td>
                         <select id='settingsLoraBandwidth' class="input-box">
@@ -110,7 +120,7 @@
                             <option value="12">12 - Maximum (Deep Indoor)</option>
                         </select>
                     </td> </tr>
-                    <tr> <td>Sync Word:</td> <td><input class="input-box" id="settingsLoraSyncWord"></td> </tr>
+                    <tr> <td>Sync Word:</td> <td><input class="input-box" id="settingsLoraSyncWord" readonly style="opacity:0.4;cursor:not-allowed;" title="Wird automatisch aus der Frequenz abgeleitet"></td> </tr>
                     <tr> <td>Preamble Length:</td> <td><input class="input-box" id="settingsLoraPreambleLength"></td> </tr>
                     <tr> <td>Repeat Messages:</td> <td>
                         <label class="retro-checkbox-container">

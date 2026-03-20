@@ -217,9 +217,39 @@ void checkSerialRX() {
                 if (strncmp(serialRxBuffer, "de", 2) == 0) {
                     std::memset(settings.mycall, 0xff, sizeof(settings.mycall));
                     nvs_flash_erase(); // Löscht die gesamte NVS-Partition
-                    nvs_flash_init();  // Initialisiert sie neu 
+                    nvs_flash_init();  // Initialisiert sie neu
                     rebootTimer = 0;
-                } 
+                }
+
+                // Frequenz-Preset
+                // "freq 433" → 433-MHz-Amateurfunk-Preset
+                // "freq 868" → 868-MHz-Public-Preset (Sub-Band P, 500 mW)
+                if (strncmp(serialRxBuffer, "fr", 2) == 0) {
+                    if (strncmp(parameter, "433", 3) == 0) {
+                        settings.loraFrequency       = 434.850f;
+                        settings.loraBandwidth       = 62.5f;
+                        settings.loraSpreadingFactor = 7;
+                        settings.loraCodingRate      = 6;
+                        settings.loraOutputPower     = 20;
+                        settings.loraPreambleLength  = 10;
+                        settings.loraSyncWord        = syncWordForFrequency(settings.loraFrequency);
+                        saveSettings();
+                        Serial.println("Preset 433 MHz (Amateurfunk) gesetzt.");
+                    } else if (strncmp(parameter, "868", 3) == 0) {
+                        settings.loraFrequency       = 869.525f;
+                        settings.loraBandwidth       = 125.0f;
+                        settings.loraSpreadingFactor = 7;
+                        settings.loraCodingRate      = 5;
+                        settings.loraOutputPower     = 22;
+                        settings.loraPreambleLength  = 10;
+                        settings.loraSyncWord        = syncWordForFrequency(settings.loraFrequency);
+                        saveSettings();
+                        Serial.println("Preset 868 MHz (Public, 500 mW) gesetzt.");
+                    } else {
+                        Serial.printf("Aktuelle Frequenz: %.3f MHz\n", settings.loraFrequency);
+                        Serial.println("Verwendung: freq 433  oder  freq 868");
+                    }
+                }
 
                 
             }

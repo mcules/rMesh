@@ -21,12 +21,13 @@ bool getKeyApMode() {
 
 void initHal() {
    //Ausgäne
-    pinMode(PIN_WIFI_LED, OUTPUT); 
-    digitalWrite(PIN_WIFI_LED, 0); 
+    pinMode(PIN_WIFI_LED, OUTPUT);
+    digitalWrite(PIN_WIFI_LED, 0);
 
     //Eingänge
     pinMode(PIN_AP_MODE_SWITCH, INPUT);
 
+    loraReady = false;  // Kein HF-Modul vorhanden
 }
 
 

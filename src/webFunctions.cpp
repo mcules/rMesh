@@ -181,10 +181,26 @@ void startWebServer() {
                 }
             }
         }
-      if (json["settings"]["loraFrequency"].is<JsonVariant>()) { settings.loraFrequency = json["settings"]["loraFrequency"].as<float>(); }
-      if (json["settings"]["loraOutputPower"].is<JsonVariant>()) { settings.loraOutputPower = json["settings"]["loraOutputPower"].as<int8_t>(); }
+      if (json["settings"]["loraFrequency"].is<JsonVariant>()) {
+        settings.loraFrequency = json["settings"]["loraFrequency"].as<float>();
+        // SyncWord automatisch aus Frequenz ableiten – verhindert Netz-Crossover
+        settings.loraSyncWord = syncWordForFrequency(settings.loraFrequency);
+        // TX-Power auf regulatorisches Maximum begrenzen (Public-Band: 27 dBm)
+        if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
+            settings.loraOutputPower = PUBLIC_MAX_TX_POWER;
+        }
+      }
+      if (json["settings"]["loraOutputPower"].is<JsonVariant>()) {
+        settings.loraOutputPower = json["settings"]["loraOutputPower"].as<int8_t>();
+        if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
+            settings.loraOutputPower = PUBLIC_MAX_TX_POWER;
+        }
+      }
       if (json["settings"]["loraBandwidth"].is<JsonVariant>()) { settings.loraBandwidth = json["settings"]["loraBandwidth"].as<float>(); }
-      if (json["settings"]["loraSyncWord"].is<JsonVariant>()) { settings.loraSyncWord = json["settings"]["loraSyncWord"].as<uint8_t>(); }
+      if (json["settings"]["loraSyncWord"].is<JsonVariant>()) {
+        // SyncWord kann nicht manuell geändert werden – wird immer aus Frequenz abgeleitet
+        // Dieser Eintrag wird ignoriert.
+      }
       if (json["settings"]["loraCodingRate"].is<JsonVariant>()) { settings.loraCodingRate = json["settings"]["loraCodingRate"].as<uint8_t>(); }
       if (json["settings"]["loraSpreadingFactor"].is<JsonVariant>()) { settings.loraSpreadingFactor = json["settings"]["loraSpreadingFactor"].as<uint8_t>(); }
       if (json["settings"]["loraPreambleLength"].is<JsonVariant>()) { settings.loraPreambleLength = json["settings"]["loraPreambleLength"].as<int16_t>(); }

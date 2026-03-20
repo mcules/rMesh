@@ -50,4 +50,5 @@ void sendSettings();
 extern Settings settings;
 extern ExtSettings extSettings;
 extern Preferences prefs;
+extern bool loraReady;  // true = HF-Modul initialisiert und betriebsbereit
 
