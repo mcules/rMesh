@@ -20,6 +20,7 @@
 #include "main.h"
 #include "helperFunctions.h"
 #include "webFunctions.h"
+#include "dutycycle.h"
 
 // LilyGoLib-Instanz (definiert in LilyGo_LoRa_Pager.cpp)
 #include <LilyGoLib.h>
@@ -86,6 +87,13 @@ void initHal() {
     sdMounted = (SD.cardType() != CARD_NONE);
     Serial.printf("[SD] %s\n", sdMounted ? "Card mounted" : "No card detected");
 
+    // LoRa-Init nur wenn Frequenz konfiguriert ist
+    if (!loraConfigured(settings.loraFrequency)) {
+        Serial.println("[LoRa] Keine Frequenz konfiguriert – HF deaktiviert.");
+        loraReady = false;
+        return;
+    }
+
     // LoRa-Init auf bereits konfiguriertem SPI-Bus, mit SPI-Lock
     instance.lockSPI();
 
@@ -107,12 +115,14 @@ void initHal() {
 
     instance.unlockSPI();
 
+    loraReady = true;
     Serial.println("[LoRa] SX1262 ready.");
 }
 
 // ─── Empfang ──────────────────────────────────────────────────────────────
 
 bool checkReceive(Frame &f) {
+    if (!loraReady) return false;
     instance.lockSPI();
     uint16_t irqFlags = radio.getIrqFlags();
     instance.unlockSPI();
@@ -159,6 +169,8 @@ bool checkReceive(Frame &f) {
 // ─── Senden ───────────────────────────────────────────────────────────────
 
 void transmitFrame(Frame &f) {
+    if (!loraReady) return;
+
     uint8_t txBuffer[255];
     size_t txBufferLength;
 
@@ -172,6 +184,18 @@ void transmitFrame(Frame &f) {
     if (strlen(f.nodeCall) == 0) { return; }
 
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
+
+    // Duty-Cycle-Check für Public-Band (10 % in 60 s)
+    if (isPublicBand(settings.loraFrequency)) {
+        instance.lockSPI();
+        uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
+        instance.unlockSPI();
+        if (!dutyCycleAllowed(toa)) {
+            Serial.println("[LoRa] Duty-Cycle-Limit erreicht, TX übersprungen.");
+            return;
+        }
+        dutyCycleTrackTx(toa);
+    }
 
     instance.lockSPI();
     radio.startTransmit(txBuffer, txBufferLength);

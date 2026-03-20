@@ -14,3 +14,4 @@ DHcp <1/0> .............. DHCP-Client aktiv
 Reboot .................. Neustart
 Version ................. Version
 DEfaults ................ Standardeinstellungen laden
+FReq <433|868> .......... Frequenz-Preset setzen (433=Amateurfunk, 868=Public)

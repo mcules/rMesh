@@ -36,6 +36,20 @@ void reportTopology() {
     doc["position"]  = settings.position;
     doc["timestamp"] = (uint32_t)time(NULL);
 
+    // Chip-ID (EFuse MAC)
+    {
+        uint64_t mac = ESP.getEfuseMac();
+        char chipId[13];
+        snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
+            (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
+            (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)(mac));
+        doc["chip_id"] = chipId;
+    }
+
+    // AFU-Flag und Band aus der eingestellten Frequenz ableiten
+    doc["is_afu"] = isAmateurBand(settings.loraFrequency);
+    doc["band"]   = isPublicBand(settings.loraFrequency) ? "868" : "433";
+
     // Peer-Liste
     JsonArray peers = doc["peers"].to<JsonArray>();
     for (auto& p : peerList) {

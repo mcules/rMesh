@@ -7,6 +7,7 @@
 #include "main.h"
 #include "helperFunctions.h"
 #include "webFunctions.h"
+#include "dutycycle.h"
 
 
 
@@ -44,6 +45,13 @@ void initHal() {
     pinMode(PIN_WIFI_LED, OUTPUT); 
     digitalWrite(PIN_WIFI_LED, 0); 
 
+    // HF-Modul nur initialisieren wenn Frequenz konfiguriert ist
+    if (!loraConfigured(settings.loraFrequency)) {
+        Serial.println("[LoRa] Keine Frequenz konfiguriert – HF deaktiviert.");
+        loraReady = false;
+        return;
+    }
+
     //Flags zurücksetzen
     int state;
 
@@ -64,6 +72,7 @@ void initHal() {
 
     //RX einschalten
     printState(radio.startReceive());
+    loraReady = true;
 
     //Test PEER eintragen
     //Peer p;
@@ -77,6 +86,7 @@ void initHal() {
 
 
 bool checkReceive(Frame &f) {
+    if (!loraReady) return false;
     //IRQ-Flags auslesen
     uint16_t irqFlags = radio.getIRQFlags();
      //Prüfen ob Kanal belegt
@@ -122,9 +132,11 @@ bool checkReceive(Frame &f) {
 
 
 void transmitFrame(Frame &f) {
+    if (!loraReady) return;
+
     uint8_t txBuffer[255];
     size_t txBufferLength;
- 
+
     //Frame ergänzen
     txFlag = 1;
     statusTimer = 0;
@@ -136,8 +148,17 @@ void transmitFrame(Frame &f) {
     //Senden
     if (strlen(f.nodeCall) == 0) {return;}
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
-    //Serial.printf("Länge: %d\n", txBufferLength);
-    //printHexArray(txBuffer, txBufferLength);
+
+    // Duty-Cycle-Check für Public-Band (10 % in 60 s)
+    if (isPublicBand(settings.loraFrequency)) {
+        uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
+        if (!dutyCycleAllowed(toa)) {
+            Serial.println("[LoRa] Duty-Cycle-Limit erreicht, TX übersprungen.");
+            return;
+        }
+        dutyCycleTrackTx(toa);
+    }
+
     radio.startTransmit(txBuffer, txBufferLength);
 
     //Frame monitoren

@@ -13,6 +13,7 @@ Settings settings;
 ExtSettings extSettings;
 
 Preferences prefs;
+bool loraReady = false;
 
 void showSettings() {
     //Einstellungen als Debug-Ausgabe
@@ -204,15 +205,27 @@ void loadSettings() {
         settings.wifiGateway = IPAddress(192,168,33,4);
         settings.wifiDNS = IPAddress(192,168,33,4);
         settings.wifiBrodcast = IPAddress(255,255,255,255);
-        settings.loraFrequency = 434.850;
+        // Keine Default-Frequenz – HF bleibt deaktiviert bis der User
+        // explizit ein Band auswählt (433 MHz AFU oder 868 MHz Public).
+        settings.loraFrequency = 0.0;
         settings.loraOutputPower = LORA_DEFAULT_TX_POWER;
         settings.loraBandwidth = 62.5;
-        settings.loraSyncWord = 0x2b;
+        settings.loraSyncWord = AMATEUR_SYNCWORD;
         settings.loraCodingRate = 6;
         settings.loraSpreadingFactor = 7;
         settings.loraPreambleLength = 10;
         settings.loraRepeat = true;
         prefs.putBytes("config", &settings, sizeof(settings));
+    }
+
+    // Band-spezifische Korrekturen nach dem Laden
+    if (loraConfigured(settings.loraFrequency)) {
+        // SyncWord immer aus Frequenz ableiten (verhindert Netz-Crossover)
+        settings.loraSyncWord = syncWordForFrequency(settings.loraFrequency);
+        // TX-Power auf regulatorisches Maximum begrenzen (Public-Band: 27 dBm)
+        if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
+            settings.loraOutputPower = PUBLIC_MAX_TX_POWER;
+        }
     }
 
     //MAX Nachrichtenlänge berechnen

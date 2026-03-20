@@ -366,13 +366,21 @@ function onMessage(event) {
         document.getElementById("settingsWifiDNS").value = d.settings.wifiDNS[0] + "." + d.settings.wifiDNS[1] + "." + d.settings.wifiDNS[2] + "." + d.settings.wifiDNS[3];
         document.getElementById("settingsDHCP").checked = d.settings.dhcpActive; 
         document.getElementById("settingsApMode").checked = d.settings.apMode; 
-        document.getElementById("settingsLoraFrequency").value = d.settings.loraFrequency; 
-        document.getElementById("settingsLoraOutputPower").value = d.settings.loraOutputPower; 
-        document.getElementById("settingsLoraBandwidth").value = d.settings.loraBandwidth; 
-        document.getElementById("settingsLoraSyncWord").value = d.settings.loraSyncWord.toString(16).padStart(2, '0').toUpperCase(); 
-        document.getElementById("settingsLoraCodingRate").value = d.settings.loraCodingRate; 
-        document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor; 
-        document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength; 
+        document.getElementById("settingsLoraFrequency").value = d.settings.loraFrequency;
+        document.getElementById("settingsLoraOutputPower").value = d.settings.loraOutputPower;
+        document.getElementById("settingsLoraBandwidth").value = d.settings.loraBandwidth;
+        document.getElementById("settingsLoraSyncWord").value = d.settings.loraSyncWord.toString(16).padStart(2, '0').toUpperCase();
+        document.getElementById("settingsLoraCodingRate").value = d.settings.loraCodingRate;
+        document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor;
+        document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength;
+        // Preset-Dropdown aus aktueller Frequenz ableiten
+        const freq = d.settings.loraFrequency;
+        const presetEl = document.getElementById("loraPreset");
+        if (presetEl) {
+            if (freq >= 430 && freq <= 440)       presetEl.value = "433";
+            else if (freq >= 869.4 && freq <= 869.65) presetEl.value = "868";
+            else                                   presetEl.value = "";
+        }
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("hardware").innerHTML = d.settings.hardware;
         var chipIdEl = document.getElementById("setupChipId");
@@ -467,6 +475,40 @@ function onMessage(event) {
     }
 
 }		
+
+// ── LoRa-Frequenz-Presets ─────────────────────────────────────────────────────
+const LORA_PRESETS = {
+    '433': {
+        frequency:       434.850,  // rMesh-Standardfrequenz im 70-cm-AFU-Band
+        bandwidth:       62.5,     // kHz – bewährter rMesh-Standard
+        spreadingFactor: 7,
+        codingRate:      6,        // CR 4/6
+        outputPower:     20,       // dBm – typisch für Amateurfunk
+        preambleLength:  10,
+        syncWord:        '2B',     // AMATEUR_SYNCWORD (Info, wird von Firmware gesetzt)
+    },
+    '868': {
+        frequency:       869.525,  // MHz – Mitte von Sub-Band P (869,4–869,65 MHz)
+        bandwidth:       125,      // kHz – passt in 250-kHz-Sub-Band, kürzere ToA
+        spreadingFactor: 7,
+        codingRate:      5,        // CR 4/5 – effizienter bei 10%-Duty-Cycle
+        outputPower:     22,       // dBm – Default 868 MHz Public
+        preambleLength:  10,
+        syncWord:        '12',     // PUBLIC_SYNCWORD (Info, wird von Firmware gesetzt)
+    }
+};
+
+function applyLoraPreset(band) {
+    const p = LORA_PRESETS[band];
+    if (!p) return;
+    document.getElementById('settingsLoraFrequency').value       = p.frequency;
+    document.getElementById('settingsLoraBandwidth').value       = p.bandwidth;
+    document.getElementById('settingsLoraSpreadingFactor').value = p.spreadingFactor;
+    document.getElementById('settingsLoraCodingRate').value      = p.codingRate;
+    document.getElementById('settingsLoraOutputPower').value     = p.outputPower;
+    document.getElementById('settingsLoraPreambleLength').value  = p.preambleLength;
+    document.getElementById('settingsLoraSyncWord').value        = p.syncWord;
+}
 
 function saveSettings() {
     // Web password handling
