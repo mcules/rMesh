@@ -78,8 +78,12 @@ void checkForUpdates() {
     callParam += PIO_ENV_NAME;
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
+    // Frischer Client für httpUpdate (der alte ist nach dem Versionscheck dirty)
+    WiFiClientSecure updateClient;
+    updateClient.setInsecure();
+
     // LittleFS
-    t_httpUpdate_return spiffsResult = httpUpdate.updateSpiffs(client,
+    t_httpUpdate_return spiffsResult = httpUpdate.updateSpiffs(updateClient,
         "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam);
     if (spiffsResult == HTTP_UPDATE_FAILED) {
         sendOtaLog("update_failed", VERSION, newVersion.c_str(),
@@ -92,7 +96,7 @@ void checkForUpdates() {
         sendOtaLog("update_success", VERSION, newVersion.c_str(), "");
     });
 
-    t_httpUpdate_return fwResult = httpUpdate.update(client,
+    t_httpUpdate_return fwResult = httpUpdate.update(updateClient,
         "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam);
     // Nur erreicht wenn fehlgeschlagen (Erfolg = Neustart)
     if (fwResult == HTTP_UPDATE_FAILED) {
