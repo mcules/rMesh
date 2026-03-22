@@ -1,33 +1,34 @@
 Befehlsübersicht:
 
-H ....................... Hilfe
-SEttings ................ Einstellungen anzeigen
-SCan .................... Wifi scannen
-SSid <ssid> ............. WiFi SSID
-PAssword <passwort> ..... WiFi Passwort
-Ip <ip-adresse> ......... WiFi IP
-DNs <ip-adresse> ........ WiFi DNS
-Gateway <ip-adresse> .... WiFi Gateway
-NEtmask <ip-maske> ...... WiFi NETmask
-Ap <1/0> ................ AP-Mode ein/aus
-DHcp <1/0> .............. DHCP-Client aktiv
-REBoot .................. Neustart
-Version ................. Version
-DEfaults ................ Standardeinstellungen laden
-FReq <433|868> .......... Frequenz-Preset setzen (433=Amateurfunk, 868=Public)
+  h                    Hilfe
+  settings             Einstellungen anzeigen
+  scan                 Wifi scannen
+  ssid <ssid>          WiFi SSID setzen
+  password <passwort>  WiFi Passwort setzen
+  ip <ip>              WiFi IP setzen
+  dns <ip>             WiFi DNS setzen
+  gateway <ip>         WiFi Gateway setzen
+  netmask <maske>      WiFi Netzmaske setzen
+  ap <1/0>             AP-Mode ein/aus
+  dhcp <1/0>           DHCP-Client ein/aus
+  reboot               Neustart
+  version              Version anzeigen
+  defaults             Standardeinstellungen laden
+  freq <433|868>       Frequenz-Preset (433=Amateurfunk, 868=Public)
 
-CALL <rufzeichen> ....... Rufzeichen (Callsign) setzen
-POS <position> .......... Position setzen (JN48mw oder 48.1234,11.5678)
-NTP <server> ............ NTP-Server setzen
-OP <dBm> ................ TX-Power setzen (Output Power in dBm)
-BW <kHz> ................ Bandbreite setzen (z.B. 62.5 oder 125)
-SF <6-12> ............... Spreading Factor setzen
-CR <5-8> ................ Coding Rate setzen
-PL <laenge> ............. Preamble Length setzen
-SW <hex> ................ Sync Word setzen (z.B. sw 2B)
-REP <1/0> ............... Nachrichten wiederholen ein/aus
-MHM <hops> .............. Max Hops für Messages
-MHP <hops> .............. Max Hops für Position
-MHT <hops> .............. Max Hops für Telemetrie
-UDP <1-5> <ip> .......... UDP-Peer setzen (z.B. udp 1 192.168.1.100)
-UDP ..................... Alle UDP-Peers anzeigen
+  call <rufzeichen>    Rufzeichen setzen
+  pos <position>       Position setzen (JN48mw oder 48.1234,11.5678)
+  ntp <server>         NTP-Server setzen
+  op <dBm>             TX-Power in dBm
+  bw <kHz>             Bandbreite setzen (z.B. 62.5 oder 125)
+  sf <6-12>            Spreading Factor setzen
+  cr <5-8>             Coding Rate setzen
+  pl <laenge>          Preamble Length setzen
+  sw <hex>             Sync Word setzen (z.B. 2B oder 12)
+  rep <1/0>            Nachrichten wiederholen ein/aus
+  mhm <hops>           Max Hops fuer Messages
+  mhp <hops>           Max Hops fuer Position
+  mht <hops>           Max Hops fuer Telemetrie
+  udp <1-5> <ip>       UDP-Peer setzen (z.B. udp 1 192.168.1.100)
+  udp                  Alle UDP-Peers anzeigen
+
