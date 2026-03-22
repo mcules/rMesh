@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.30]
+
+- NEU: Update-Kanäle – in der WebUI (Desktop & Mobile) kann zwischen „Release" (Standard) und „Dev" (Pre-releases) gewählt werden; die Node aktualisiert sich automatisch aus dem gewählten Kanal
+- NEU: Force-Install-Button – erzwingt ein Update aus dem eingestellten Kanal, auch wenn die installierte Version neuer ist oder ein lokaler Dev-Build aktiv ist
+- NEU: Display-Geräte (T-LoraPager, SenseCAP Indicator) haben im Einstellungsmenü neue Einträge „Update Release" und „Update Dev" zum erzwungenen Installieren
+- NEU: GitHub-Releases werden automatisch als Pre-release markiert, wenn der Tag ein `-` enthält (z. B. `v1.0.30-dev`) – stabile Tags ohne `-` bleiben normale Releases
+- Abwärtskompatibilität: Nodes mit älterer Firmware erhalten weiterhin stabile Release-Updates; der Backend-Default ist der Release-Kanal
+
 ## [v1.0.29b]
 
 - FIX: OTA-Update schlug in manchen Netzwerken mit "read Timeout" fehl – LittleFS- und Firmware-Download werden jetzt bei Fehler bis zu 3x wiederholt

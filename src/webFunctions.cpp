@@ -198,6 +198,7 @@ void startWebServer() {
       if (json["settings"]["maxHopMessage"].is<JsonVariant>()) { extSettings.maxHopMessage = json["settings"]["maxHopMessage"].as<uint8_t>(); }
       if (json["settings"]["maxHopPosition"].is<JsonVariant>()) { extSettings.maxHopPosition = json["settings"]["maxHopPosition"].as<uint8_t>(); }
       if (json["settings"]["maxHopTelemetry"].is<JsonVariant>()) { extSettings.maxHopTelemetry = json["settings"]["maxHopTelemetry"].as<uint8_t>(); }
+      if (json["settings"]["updateChannel"].is<JsonVariant>()) { updateChannel = json["settings"]["updateChannel"].as<uint8_t>(); }
       saveSettings();
     }
 
@@ -289,6 +290,13 @@ void startWebServer() {
     if (json["update"].is<JsonVariant>()) {
       Serial.println("OTA Update gestartet...");
       checkForUpdates();
+    }
+
+    //OTA Force-Install (umgeht Dev-Build-Sperre, erzwingt Installation)
+    if (json["forceUpdate"].is<JsonVariant>()) {
+      uint8_t ch = json["forceUpdate"].as<uint8_t>(); // 0=release, 1=dev
+      Serial.printf("Force-Install gestartet (Kanal: %s)...\n", ch == 1 ? "dev" : "release");
+      checkForUpdates(true, ch);
     }
 
   });

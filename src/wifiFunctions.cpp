@@ -47,15 +47,25 @@ static void sendUpdateStatus(const char* msg) {
     Serial.printf("[OTA] %s\n", msg);
 }
 
-void checkForUpdates() {
+void checkForUpdates(bool force, uint8_t forceChannel) {
     if (strcmp(VERSION, "unknown") == 0) {
         sendUpdateStatus("Kein Update: Dev-Build (unknown).");
         return;
     }
     // Manuell gebaute/geflashte Version (git describe: "v1.0.25a-3-gb480c38"):
-    // kein automatisches Update installieren
-    if (strchr(VERSION, '-') != nullptr) {
-        sendUpdateStatus("Kein Update: lokaler Dev-Build.");
+    // Muster: -<Ziffern>-g<Hex> – kein automatisches Update außer bei force=true
+    bool isGitDescribe = false;
+    const char* dashG = strstr(VERSION, "-g");
+    if (dashG != nullptr && dashG > VERSION) {
+        // Prüfe ob vor "-g" Ziffern und ein weiteres "-" stehen (Commit-Zähler)
+        const char* p = dashG - 1;
+        while (p > VERSION && isdigit((unsigned char)*p)) p--;
+        if (*p == '-' && p < dashG - 1 && isxdigit((unsigned char)*(dashG + 2))) {
+            isGitDescribe = true;
+        }
+    }
+    if (!force && isGitDescribe) {
+        sendUpdateStatus("Kein automatisches Update: lokaler Dev-Build.");
         return;
     }
 
@@ -64,12 +74,15 @@ void checkForUpdates() {
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
+    uint8_t activeChannel = force ? forceChannel : updateChannel;
     String latestUrl = "https://www.rMesh.de/latest.php?call=";
     latestUrl += settings.mycall;
     latestUrl += "&device=";
     latestUrl += PIO_ENV_NAME;
     latestUrl += "&version=";
     latestUrl += VERSION;
+    latestUrl += "&channel=";
+    latestUrl += (activeChannel == 1) ? "dev" : "release";
     http.begin(client, latestUrl);
     if (http.GET() != 200) {
         http.end();
@@ -88,15 +101,15 @@ void checkForUpdates() {
         sendUpdateStatus("Kein Update gefunden.");
         return;
     }
-    // Gleiche Version
-    if (strcmp(latestTag, VERSION) == 0) {
+    // Gleiche Version (bei force trotzdem installieren)
+    if (!force && strcmp(latestTag, VERSION) == 0) {
         http.end();
         sendUpdateStatus("Bereits aktuell.");
         return;
     }
     // Aktuelle Version ist ein Dev-Build ahead des Tags (git describe: "v1.0.25a-3-gb480c38")
-    // → installierte Version ist neuer, kein Update nötig
-    if (String(VERSION).startsWith(String(latestTag) + "-")) {
+    // → installierte Version ist neuer, kein Update nötig (bei force trotzdem installieren)
+    if (!force && String(VERSION).startsWith(String(latestTag) + "-")) {
         http.end();
         sendUpdateStatus("Bereits aktuell (Dev-Build).");
         return;
@@ -114,6 +127,8 @@ void checkForUpdates() {
     callParam += settings.mycall;
     callParam += "&device=";
     callParam += PIO_ENV_NAME;
+    callParam += "&tag=";
+    callParam += newVersion;
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
     // LittleFS – bis zu 3 Versuche

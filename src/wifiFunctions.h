@@ -2,6 +2,6 @@
 
 void wifiInit();
 void showWiFiStatus();
-void checkForUpdates();
+void checkForUpdates(bool force = false, uint8_t forceChannel = 0);
 
 

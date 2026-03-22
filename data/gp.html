@@ -141,6 +141,12 @@
                     <tr> <td>Position:</td> <td><input class="input-box" id="settingsPosition" placeholder="JN48mw oder 48.1234,11.5678"></td> </tr>
                     <tr> <td>Chip ID:</td> <td><span id="setupChipId"></span></td> </tr>
                     <tr> <td>Hardware:</td> <td><span id="setupHardware"></span></td> </tr>
+                    <tr> <td>Update-Kanal:</td> <td>
+                        <select class="input-box" id="settingsUpdateChannel">
+                            <option value="0">Release</option>
+                            <option value="1">Dev</option>
+                        </select>
+                    </td> </tr>
                     <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Web-Interface Passwort</td> </tr>
                     <tr> <td>Status:</td> <td><span id="settingsWebPasswordStatus">–</span></td> </tr>
                     <tr> <td>Neues Passwort:</td> <td><input class="input-box" type="password" id="settingsWebPassword" placeholder="(leer = nicht ändern)" autocomplete="new-password"></td> </tr>
@@ -154,6 +160,7 @@
                         <button class="button" id="settingsDeleteMessages">delete messages</button>
                         <button class="button" id="settingsReboot">reboot</button>
                         <button class="button" id="settingsUpdate">update</button>
+                        <button class="button" id="settingsForceInstall">force install</button>
                     </td> </tr>
                 </table>
             </div>
@@ -326,6 +333,11 @@
 
 			document.getElementById("settingsUpdate").addEventListener("click", function() {
 				sendWS(JSON.stringify({update: true }));
+			});
+
+			document.getElementById("settingsForceInstall").addEventListener("click", function() {
+				var ch = parseInt(document.getElementById("settingsUpdateChannel").value);
+				sendWS(JSON.stringify({forceUpdate: ch}));
 			});
 
             document.getElementById("settingsDeleteMessages").addEventListener("click", function() {

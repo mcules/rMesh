@@ -76,4 +76,5 @@ jobs:
         with:
           files: release/*
           body_path: release_notes.md
+          prerelease: ${{ contains(github.ref_name, '-') }}
 

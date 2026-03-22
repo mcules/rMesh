@@ -126,6 +126,15 @@
             <tr> <td>TX Buffer</td> <td><span id="txBuffer"></span></td> </tr>
             <tr> <td>Retry</td> <td><span id="retry"></span></td> </tr>
             <tr> <td>System Time</td> <td><span id="time"></span></td> </tr>
+            <tr> <td>Update-Kanal</td> <td>
+                <select id="settingsUpdateChannel">
+                    <option value="0">Release</option>
+                    <option value="1">Dev</option>
+                </select>
+            </td> </tr>
+            <tr> <td>Installieren</td> <td>
+                <button class="button" onclick="forceInstall()">force install</button>
+            </td> </tr>
             <tr> <td>Password</td> <td><span id="settingsWebPasswordStatus"></span></td> </tr>
             <tr> <td>New Password</td> <td><input type="password" id="settingsWebPassword" autocomplete="new-password"></td> </tr>
             <tr> <td>Confirm</td> <td><input type="password" id="settingsWebPasswordConfirm" autocomplete="new-password" oninput="checkPwMatch()"></td> </tr>

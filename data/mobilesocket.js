@@ -386,6 +386,7 @@ function onMessage(event) {
         var chipIdEl = document.getElementById("setupChipId");
         if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat;
+        document.getElementById("settingsUpdateChannel").value = d.settings.updateChannel || 0;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
         const pwStatus = document.getElementById("settingsWebPasswordStatus");
         if (pwStatus) {
@@ -596,6 +597,7 @@ function saveSettings() {
     settings["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
     settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    settings["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
     settings["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
@@ -612,6 +614,12 @@ function reboot() {
 
 function triggerUpdate() {
     sendWS(JSON.stringify({update: true }));
+}
+
+function forceInstall() {
+    var ch = parseInt(document.getElementById("settingsUpdateChannel").value);
+    sendWS(JSON.stringify({ forceUpdate: ch }));
+    showModal("Note", "Update wird gesucht und installiert...", "", false);
 }
 
 function syncTime() {
