@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.0.29]
+
+- FIX: Nachrichten wurden weitergeleitet, obwohl der eigene Node das Ziel war – die Weiterleiten-Bedingung prüfte `tf.dstCall`/`tf.hopCount` statt `f.dstCall`/`f.hopCount`; `tf` war zu diesem Zeitpunkt noch nicht befüllt und enthielt Leer- oder Altwerte (Issue #6)
+
 ## [v1.0.28]
 
 - NEU: UDP-Netzwerktrennung – jedes UDP-Paket enthält jetzt das SyncWord als erstes Byte. Nodes akzeptieren per UDP nur noch Pakete aus dem eigenen Frequenzband (433 MHz oder 868 MHz). Verbindet man versehentlich Nodes aus verschiedenen Bändern per UDP, bleiben die LoRa-Netze trotzdem getrennt.
