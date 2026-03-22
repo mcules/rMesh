@@ -15,6 +15,7 @@ uint8_t updateChannel = 0;
 std::vector<IPAddress> udpPeers;
 std::vector<bool> udpPeerLegacy;
 std::vector<bool> udpPeerEnabled;
+std::vector<String> udpPeerCall;
 
 Preferences prefs;
 bool loraReady = false;
@@ -155,6 +156,7 @@ void sendSettings() {
         peer["ip"][3] = udpPeers[i][3];
         peer["legacy"]  = (bool)udpPeerLegacy[i];
         peer["enabled"] = (bool)udpPeerEnabled[i];
+        peer["call"]    = (i < udpPeerCall.size()) ? udpPeerCall[i].c_str() : "";
     }
     doc["settings"]["maxHopMessage"] = extSettings.maxHopMessage;
     doc["settings"]["maxHopPosition"] = extSettings.maxHopPosition;
@@ -208,6 +210,7 @@ void loadSettings() {
                         udpPeers.push_back(addr);
                         udpPeerLegacy.push_back(legacy);
                         udpPeerEnabled.push_back(true);
+                        udpPeerCall.push_back("");
                         Serial.printf("  Peer migriert: %s%s\n", ip, legacy ? " [legacy]" : "");
                     }
                 }
@@ -230,6 +233,7 @@ void loadSettings() {
     udpPeers.clear();
     udpPeerLegacy.clear();
     udpPeerEnabled.clear();
+    udpPeerCall.clear();
     size_t peersLen = prefs.getBytesLength("udpPeers");
     if (peersLen >= 1) {
         uint8_t* buf = new uint8_t[peersLen];
@@ -242,6 +246,7 @@ void loadSettings() {
             udpPeers.push_back(IPAddress(buf[1+i*stride], buf[2+i*stride], buf[3+i*stride], buf[4+i*stride]));
             udpPeerLegacy.push_back(buf[5+i*stride] != 0);
             udpPeerEnabled.push_back(newFormat ? buf[6+i*stride] != 0 : true);
+            udpPeerCall.push_back("");
         }
         delete[] buf;
         Serial.printf("%u UDP-Peer(s) geladen.\n", (unsigned)udpPeers.size());

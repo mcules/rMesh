@@ -41,6 +41,7 @@ struct ExtSettings {
 extern std::vector<IPAddress> udpPeers;
 extern std::vector<bool> udpPeerLegacy;
 extern std::vector<bool> udpPeerEnabled;
+extern std::vector<String> udpPeerCall;  // Rufzeichen des UDP-Peers (RAM, wird beim Empfang gelernt)
 
 void loadSettings();
 void saveSettings();

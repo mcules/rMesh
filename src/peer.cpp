@@ -23,20 +23,30 @@ void checkPeerList() {
         update = true;
     } 
 
-    //Doppelte Peers -> mit weniger SNR -> available = false
+    //Doppelte Peers: WiFi (port 1) bevorzugen vor LoRa (port 0); bei gleichem Port -> besser SNR gewinnt
     for (size_t i = 0; i < peerList.size(); i++) {
         if (!peerList[i].available) continue;
         for (size_t j = i + 1; j < peerList.size(); j++) {
             if (!peerList[j].available) continue;
             if (strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0) {
-                if (peerList[i].snr < peerList[j].snr) {
-                    if (peerList[i].available != false) {
+                bool iWifi = (peerList[i].port == 1);
+                bool jWifi = (peerList[j].port == 1);
+                if (iWifi && !jWifi) {
+                    // i=WiFi, j=LoRa → LoRa deaktivieren
+                    peerList[j].available = false;
+                    update = true;
+                } else if (!iWifi && jWifi) {
+                    // i=LoRa, j=WiFi → LoRa deaktivieren
+                    peerList[i].available = false;
+                    update = true;
+                    break;
+                } else {
+                    // Gleicher Port → besseren SNR bevorzugen
+                    if (peerList[i].snr < peerList[j].snr) {
                         peerList[i].available = false;
                         update = true;
-                    }
-                    break; 
-                } else {
-                    if (peerList[j].available != false) {
+                        break;
+                    } else {
                         peerList[j].available = false;
                         update = true;
                     }

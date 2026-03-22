@@ -166,6 +166,7 @@ void startWebServer() {
             udpPeers.clear();
             udpPeerLegacy.clear();
             udpPeerEnabled.clear();
+            udpPeerCall.clear();
             for (JsonObject p : peers) {
                 JsonVariant v = p["ip"];
                 if (v.is<JsonArray>() && v.size() == 4) {
@@ -173,6 +174,7 @@ void startWebServer() {
                     udpPeers.push_back(IPAddress(ip[0]|0, ip[1]|0, ip[2]|0, ip[3]|0));
                     udpPeerLegacy.push_back(p["legacy"] | false);
                     udpPeerEnabled.push_back(p["enabled"] | true);
+                    udpPeerCall.push_back(p["call"] | "");
                 }
             }
         }
@@ -286,17 +288,17 @@ void startWebServer() {
       rebootTimer = 0;
     }
 
-    //OTA Update
+    //OTA Update (deferred – Aufruf im Main-Loop, nicht im async_tcp-Task)
     if (json["update"].is<JsonVariant>()) {
-      Serial.println("OTA Update gestartet...");
-      checkForUpdates();
+      Serial.println("OTA Update angefordert...");
+      pendingManualUpdate = true;
     }
 
-    //OTA Force-Install (umgeht Dev-Build-Sperre, erzwingt Installation)
+    //OTA Force-Install (deferred – Aufruf im Main-Loop, nicht im async_tcp-Task)
     if (json["forceUpdate"].is<JsonVariant>()) {
-      uint8_t ch = json["forceUpdate"].as<uint8_t>(); // 0=release, 1=dev
-      Serial.printf("Force-Install gestartet (Kanal: %s)...\n", ch == 1 ? "dev" : "release");
-      checkForUpdates(true, ch);
+      pendingForceChannel = json["forceUpdate"].as<uint8_t>(); // 0=release, 1=dev
+      pendingForceUpdate = true;
+      Serial.printf("Force-Install angefordert (Kanal: %s)...\n", pendingForceChannel == 1 ? "dev" : "release");
     }
 
   });

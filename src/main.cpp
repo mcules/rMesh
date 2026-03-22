@@ -51,6 +51,9 @@ uint32_t announceTimer = 5000;      //Erstes Announce nach 5 Sekunden
 uint32_t statusTimer = 0;
 uint32_t rebootTimer = 0xFFFFFFFF;
 uint8_t currentRetry = 0;
+bool pendingManualUpdate = false;
+bool pendingForceUpdate = false;
+uint8_t pendingForceChannel = 0;
 uint32_t updateCheckTimer = 60 * 60 * 1000;  //Erster Check nach 1 Stunde
 uint32_t messagesDeleteTimer = 30 * 60 * 1000;  //Erster Check nach 30 Min
 uint32_t reportingTimer = 5 * 60 * 1000;         //Erster Report nach 5 Minuten
@@ -73,6 +76,16 @@ void processRxFrame(Frame &f) {
         //Antwort auf announce
         case Frame::FrameTypes::ANNOUNCE_FRAME:
             if (strlen(f.nodeCall) > 0 ){
+                // WiFi bevorzugen: LoRa-ACK unterdrücken wenn Peer bereits als WiFi-Peer bekannt
+                if (f.port == 0) {
+                    bool peerOnWifi = false;
+                    for (size_t pi = 0; pi < peerList.size(); pi++) {
+                        if (strcmp(f.nodeCall, peerList[pi].nodeCall) == 0 && peerList[pi].port == 1) {
+                            peerOnWifi = true; break;
+                        }
+                    }
+                    if (peerOnWifi) break;
+                }
                 tf.frameType = Frame::FrameTypes::ANNOUNCE_ACK_FRAME;
                 tf.port = f.port;
                 switch (tf.port){
@@ -148,16 +161,12 @@ void processRxFrame(Frame &f) {
                 txBuffer.end()
             );
 
-            //ACK-Senden 
+            //ACK-Senden
             bool sendACK = false;
             //ACK Senden, wenn ich direkt angesprochen wurde
             if (strcmp(f.viaCall, settings.mycall) == 0) {sendACK = true;}
             //ACK Senden, wenn ich nicht direkt angesprochen wurde, aber nur 1x
             if ((strlen(f.viaCall) > 0) && (checkACK(f.srcCall, f.nodeCall, f.id) == false) && (checkACK(f.srcCall, settings.mycall, f.id) == false)) {sendACK = true;}
-            //ACK auf Port 0 nicht senden, wenn nodeCall auf Port 1 verfügbar
-            for (int i = 0; i < peerList.size(); i++) {
-                if ((strcmp(f.nodeCall, peerList[i].nodeCall) == 0) && (f.port == 0) && (peerList[i].port == 1) && (peerList[i].available == true)) {sendACK = false;}
-            } 
 
             if (sendACK) {
                 addACK(f.srcCall, f.nodeCall, f.id);
@@ -165,12 +174,23 @@ void processRxFrame(Frame &f) {
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
                 memcpy(tf.srcCall, f.nodeCall, sizeof(tf.srcCall));
                 tf.id = f.id;
-                tf.port = 0;
-                tf.transmitMillis = millis() + calculateAckTime();
-                txBuffer.push_back(tf);
-                tf.port = 1;
-                tf.transmitMillis = 0;
-                txBuffer.push_back(tf);
+                // ACK auf dem Weg senden, auf dem der Peer erreichbar ist
+                bool nodeOnWifi = false;
+                for (size_t pi = 0; pi < peerList.size(); pi++) {
+                    if (strcmp(f.nodeCall, peerList[pi].nodeCall) == 0 && peerList[pi].port == 1) {
+                        nodeOnWifi = true;
+                        break;
+                    }
+                }
+                if (nodeOnWifi) {
+                    tf.port = 1;
+                    tf.transmitMillis = 0;
+                    txBuffer.push_back(tf);
+                } else {
+                    tf.port = 0;
+                    tf.transmitMillis = millis() + calculateAckTime();
+                    txBuffer.push_back(tf);
+                }
             }
 
             //Message ID und SRC-Call in Messages Ringpuffer suchen
@@ -277,11 +297,23 @@ void processRxFrame(Frame &f) {
                     //Nach Route suchen
                     bool routing = false;
                     char viaCall[MAX_CALLSIGN_LENGTH + 1];
-                    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);            
+                    getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);
                     if (strlen(viaCall) > 0) { routing = true; }
 
-                    //Ports duchlaufen
-                    for (tf.port = 0; tf.port <= 1; tf.port++) {
+                    // WiFi bevorzugen: LoRa überspringen wenn Routing-Ziel per WiFi erreichbar
+                    bool routeViaWifi = false;
+                    if (routing) {
+                        for (size_t pi = 0; pi < peerList.size(); pi++) {
+                            if (strcmp(peerList[pi].nodeCall, viaCall) == 0 &&
+                                peerList[pi].port == 1 && peerList[pi].available) {
+                                routeViaWifi = true; break;
+                            }
+                        }
+                    }
+
+                    //Ports durchlaufen – WiFi zuerst, dann LoRa
+                    for (tf.port = 1; tf.port >= 0; tf.port--) {
+                        if (tf.port == 0 && routeViaWifi) continue;
 
                         switch (tf.port){
                             case 0: tf.transmitMillis = millis() + calculateRetryTime(); break;  //Time On Air für Antwort
@@ -436,11 +468,16 @@ void loop() {
 		Frame f;
 		f.frameType = Frame::FrameTypes::ANNOUNCE_FRAME;
 		f.transmitMillis = 0;
-		//Frame in SendeBuffer
-        f.port = 0;
-		txBuffer.push_back(f);
+		//Frame in SendeBuffer – WiFi zuerst, dann LoRa
         f.port = 1;
 		txBuffer.push_back(f);
+        f.port = 0;
+		txBuffer.push_back(f);
+        // WiFi-Peers auf "nicht verfügbar" setzen – ANNOUNCE_ACK setzt sie wieder auf true
+        for (auto& peer : peerList) {
+            if (peer.port == 1) peer.available = false;
+        }
+        sendPeerList();
 	}  
 
     //Prüfen, ob was gesendet werden muss
@@ -535,6 +572,16 @@ void loop() {
     if (millis() > updateCheckTimer) {
         updateCheckTimer = millis() + 24 * 60 * 60 * 1000; //24 Stunden
         checkForUpdates();
+    }
+
+    //Manueller Update-Trigger aus WebUI (deferred, damit kein async_tcp-Watchdog)
+    if (pendingManualUpdate) {
+        pendingManualUpdate = false;
+        checkForUpdates();
+    }
+    if (pendingForceUpdate) {
+        pendingForceUpdate = false;
+        checkForUpdates(true, pendingForceChannel);
     }
 
     //messages.json verkleinern

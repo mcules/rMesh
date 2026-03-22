@@ -536,13 +536,14 @@ function renderUdpPeers(peers) {
     var list = document.getElementById('udpPeerList');
     if (!list) return;
     list.innerHTML = '<table class="udpPeerTable">'
-        + '<thead><tr><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<thead><tr><th>Call</th><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
         + '<tbody id="udpPeerBody"></tbody></table>';
     peers.forEach(function(p) {
         var tbody = document.getElementById('udpPeerBody');
         var tr = document.createElement('tr');
         tr.className = 'udpPeerRow';
-        tr.innerHTML = '<td><input class="udpPeerIP" value="' + p.ip.join('.') + '"></td>'
+        tr.innerHTML = '<td><span class="udpPeerCall">' + (p.call || '–') + '</span></td>'
+            + '<td><input class="udpPeerIP" value="' + p.ip.join('.') + '"></td>'
             + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
             + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
             + '<td><button onclick="this.closest(\'tr\').remove()">✕</button></td>';

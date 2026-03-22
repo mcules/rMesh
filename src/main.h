@@ -10,6 +10,9 @@ struct MSG {
 };
 
 extern uint32_t rebootTimer;
+extern bool pendingManualUpdate;
+extern bool pendingForceUpdate;
+extern uint8_t pendingForceChannel;
 extern uint32_t statusTimer;
 extern uint32_t announceTimer;
 extern const char* TZ_INFO;
