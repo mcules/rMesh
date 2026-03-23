@@ -6,6 +6,12 @@
     "image": "esp32_without_lora.webp"
   },
   {
+    "name": "ESP32_E22_V1",
+    "chip": "ESP32",
+    "lfs_offset": 3735552,
+    "image": "esp32_e22_v1.webp"
+  },
+  {
     "name": "LILYGO_T3_LoRa32_V1_6_1",
     "chip": "ESP32",
     "lfs_offset": 3735552,
