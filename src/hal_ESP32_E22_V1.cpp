@@ -1,0 +1,162 @@
+#ifdef ESP32_E22_V1
+
+#include "hal.h"
+#include "RadioLib.h"
+#include "settings.h"
+#include "frame.h"
+#include "main.h"
+#include "helperFunctions.h"
+#include "webFunctions.h"
+
+
+
+SX1268 radio = new Module(LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
+#if defined(ESP8266) || defined(ESP32)
+  ICACHE_RAM_ATTR
+#endif
+
+bool txFlag = false;
+bool rxFlag = false;
+
+void printState(int state) {
+    if (state != RADIOLIB_ERR_NONE) {Serial.printf("FAILED! code %d\n", state);}
+}
+
+void setWiFiLED(bool value) {
+    #ifdef PIN_WIFI_LED
+        digitalWrite(PIN_WIFI_LED, value);
+    #endif
+}
+
+bool getKeyApMode() {
+    return false;
+}
+
+
+void initHal() {
+    txFlag = false;
+    rxFlag = false;
+
+    //SPI Init
+    SPI.begin(SPI_SCK, SPI_MISO, SPI_MOSI, SPI_SS);
+
+    //Ausgäne
+    pinMode(PIN_WIFI_LED, OUTPUT); 
+    digitalWrite(PIN_WIFI_LED, 0); 
+
+    pinMode(PIN_HW_DEBUG, OUTPUT); 
+    digitalWrite(PIN_HW_DEBUG, 0); 
+    pinMode(LORA_TX_ENA, OUTPUT); 
+    digitalWrite(LORA_TX_ENA, 0); 
+    pinMode(LORA_RX_ENA, OUTPUT); 
+    digitalWrite(LORA_RX_ENA, 1); 
+
+    //Flags zurücksetzen
+    int state;
+
+    //Init
+ 
+    radio.reset();
+    delay(100);
+    printState(radio.begin());
+//    printState(radio.setDio2AsRfSwitch(true));
+    printState(radio.setSyncWord(settings.loraSyncWord));
+    printState(radio.setFrequency(settings.loraFrequency));
+    printState(radio.setOutputPower(settings.loraOutputPower));
+    printState(radio.setBandwidth(settings.loraBandwidth));
+    printState(radio.setCodingRate(settings.loraCodingRate));
+    printState(radio.setSpreadingFactor(settings.loraSpreadingFactor));
+    printState(radio.setPreambleLength(settings.loraPreambleLength));
+    printState(radio.setCRC(true));
+    printState(radio.setCurrentLimit(140));
+    printState(radio.setRxBoostedGainMode(true));
+    printState(radio.startReceive());
+
+    //Test PEER eintragen
+    //Peer p;
+    //p.lastRX = 0xFFFFFFFF;
+    //strncpy(p.call, "DB0LUS", sizeof(p.call)-1);  //DB0LUS in p.call
+    //p.available = true;
+    //peerList.push_back(p);    
+
+}
+
+
+
+bool checkReceive(Frame &f) {
+    //IRQ-Flags auslesen
+    uint16_t irqFlags = radio.getIrqFlags();
+     //Prüfen ob Kanal belegt
+    if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
+        if (rxFlag == false) {
+            rxFlag = true;
+            statusTimer = 0;
+        }
+    } else {
+        if (rxFlag == true) {
+            rxFlag = false;
+            statusTimer = 0;
+        }
+    }
+    //Senden fertig
+    if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
+
+        digitalWrite(LORA_TX_ENA, 0); 
+        digitalWrite(LORA_RX_ENA, 1); 
+
+        radio.startReceive();
+        txFlag = false;
+        statusTimer = 0;
+    }      
+    //Daten Empfangen -> rxBuffer
+    if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
+        //Prüfen, ob was empfangen wurde
+        uint8_t rxBuffer[256];
+        size_t rxBufferLength;
+        rxBufferLength = radio.getPacketLength();
+        int16_t state = radio.readData(rxBuffer, rxBufferLength);
+        //Empfang wieder starten
+        radio.startReceive();
+        if (state == RADIOLIB_ERR_NONE) {    
+            f.importBinary(rxBuffer, rxBufferLength);
+            f.tx = false;
+            f.timestamp = time(NULL);
+            f.rssi = radio.getRSSI();
+            f.snr = radio.getSNR();
+            f.frqError = radio.getFrequencyError();
+            f.port = 0;
+            return true;
+        }
+    }
+    return false;
+}
+
+
+void transmitFrame(Frame &f) {
+    uint8_t txBuffer[255];
+    size_t txBufferLength;
+
+    digitalWrite(LORA_RX_ENA, 0); 
+    digitalWrite(LORA_TX_ENA, 1); 
+ 
+    //Frame ergänzen
+    txFlag = 1;
+    statusTimer = 0;
+    strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
+    f.tx = true;
+    f.port = 0;
+    f.timestamp = time(NULL);
+
+    //Senden
+    if (strlen(f.nodeCall) == 0) {return;}
+    txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
+    //Serial.printf("Länge: %d\n", txBufferLength);
+    //printHexArray(txBuffer, txBufferLength);
+    radio.startTransmit(txBuffer, txBufferLength);
+
+    //Frame monitoren
+    f.monitorJSON();
+
+}
+
+#endif
