@@ -16,7 +16,7 @@ import os
 import shutil
 import subprocess
 
-COMPRESS_EXTENSIONS = {".html", ".js", ".css", ".txt"}
+COMPRESS_EXTENSIONS = {".html", ".js", ".css"}
 
 project_dir = env.subst("$PROJECT_DIR")
 data_dir = os.path.join(project_dir, "data")

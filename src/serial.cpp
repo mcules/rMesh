@@ -49,23 +49,20 @@ void checkSerialRX() {
 
                 //Testfunktionen
                 if (strncmp(serialRxBuffer, "t", 1) == 0) {
-                    
-           struct tm tm;
-    tm.tm_year = 2024 - 1900; // Jahr seit 1900
-    tm.tm_mon = 1;            // Februar (0-11, also 1 = Februar)
-    tm.tm_mday = 14;          // Tag
-    tm.tm_hour = 4;           // Stunde
-    tm.tm_min = 59;           // Minute
-    tm.tm_sec = 0;            // Sekunde
-    
-    time_t t = mktime(&tm);
-    struct timeval now = { .tv_sec = t };
-    settimeofday(&now, NULL);
-    
-    Serial.println("Uhrzeit manuell auf 03:59:00 gesetzt!");         
+                    struct tm tm;
+                    tm.tm_year = 2024 - 1900; // Jahr seit 1900
+                    tm.tm_mon = 1;            // Februar (0-11, also 1 = Februar)
+                    tm.tm_mday = 14;          // Tag
+                    tm.tm_hour = 4;           // Stunde
+                    tm.tm_min = 59;           // Minute
+                    tm.tm_sec = 0;            // Sekunde
 
+                    time_t t = mktime(&tm);
+                    struct timeval now = { .tv_sec = t };
+                    settimeofday(&now, NULL);
+
+                    Serial.println("Uhrzeit manuell auf 03:59:00 gesetzt!");         
                 }
-
 
                 //Hilfe
                 if (strncmp(serialRxBuffer, "h", 1) == 0) {
@@ -76,7 +73,9 @@ void checkSerialRX() {
                             line.replace("\r", "");
                             Serial.println(line);
                         }
-                        file.close(); 
+                        file.close();
+                    } else {
+                        Serial.println("Fehler: /help.txt nicht gefunden. Filesystem neu flashen?");
                     }
                 }
 
