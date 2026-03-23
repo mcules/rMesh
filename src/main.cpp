@@ -402,7 +402,7 @@ void setup() {
     loadSettings();
 
     //Initialize LittleFS
-    if (!LittleFS.begin(true)) {
+    if (!LittleFS.begin(false)) {
         Serial.println("An error has occurred while mounting LittleFS");
     } 
     fsMutex = xSemaphoreCreateMutex();
