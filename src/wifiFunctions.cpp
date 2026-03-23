@@ -148,11 +148,9 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         if (spiffsResult != HTTP_UPDATE_FAILED) break;
     }
     if (spiffsResult == HTTP_UPDATE_FAILED) {
-        String errMsg = "Update fehlgeschlagen (LittleFS): " + httpUpdate.getLastErrorString();
-        sendUpdateStatus(errMsg.c_str());
-        sendOtaLog("update_failed", VERSION, newVersion.c_str(),
-            ("LittleFS: " + httpUpdate.getLastErrorString()).c_str());
-        return;
+        // LittleFS nicht verfügbar (z.B. kein Release-Asset) – Firmware-Update trotzdem fortsetzen
+        String warnMsg = "LittleFS nicht aktualisiert: " + httpUpdate.getLastErrorString() + " – fahre mit Firmware fort";
+        sendUpdateStatus(warnMsg.c_str());
     }
 
     // Firmware – bei Erfolg startet der Node neu, onEnd feuert kurz davor
