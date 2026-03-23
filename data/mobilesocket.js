@@ -632,6 +632,43 @@ function forceInstall() {
     showModal("Note", "Update wird gesucht und installiert...", "", false);
 }
 
+function uploadFile(type, file, noreboot) {
+    return new Promise(function(resolve, reject) {
+        var formData = new FormData();
+        formData.append('firmware', file, file.name);
+        var url = '/ota?type=' + type + (noreboot ? '&noreboot=1' : '');
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.onload = function() {
+            if (xhr.status === 200 && xhr.responseText === 'OK') { resolve(); }
+            else { reject(xhr.responseText); }
+        };
+        xhr.onerror = function() { reject('Verbindungsfehler'); };
+        xhr.send(formData);
+    });
+}
+
+async function uploadAll() {
+    var fwFile = document.getElementById('otaFwFile').files[0];
+    var fsFile = document.getElementById('otaFsFile').files[0];
+    if (!fwFile && !fsFile) { showModal("Note", "Firmware und LittleFS Datei fehlen.", "", false); return; }
+    if (!fwFile) { showModal("Note", "Firmware Datei fehlt.", "", false); return; }
+    if (!fsFile) { showModal("Note", "LittleFS Datei fehlt.", "", false); return; }
+    try {
+        if (fwFile) {
+            showModal("Note", "Firmware wird hochgeladen (" + Math.round(fwFile.size / 1024) + " KB)...", "", false);
+            await uploadFile('firmware', fwFile, !!fsFile);
+        }
+        if (fsFile) {
+            showModal("Note", "LittleFS wird hochgeladen (" + Math.round(fsFile.size / 1024) + " KB)...", "", false);
+            await uploadFile('spiffs', fsFile, false);
+        }
+        showModal("Note", "Upload abgeschlossen! Node startet neu...", "", false);
+    } catch(e) {
+        showModal("Error", "Upload fehlgeschlagen: " + e, "", false);
+    }
+}
+
 function syncTime() {
     sendWS(JSON.stringify({time: Math.floor(Date.now() / 1000) }));
     showModal("Note", "System time updated from browser.", "", false);

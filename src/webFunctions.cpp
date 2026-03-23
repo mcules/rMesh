@@ -1,6 +1,7 @@
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <LittleFS.h>
+#include <Update.h>
 
 #include "config.h"
 #include "settings.h"
@@ -353,6 +354,58 @@ void startWebServer() {
             request->send(503, "text/plain", "FS Busy");
         }
     });
+
+  // ── OTA Upload ──────────────────────────────────────────────────────────────
+  webServer.on("/ota", HTTP_POST,
+    // Antwort nach abgeschlossenem Upload
+    [](AsyncWebServerRequest *request) {
+        bool ok = !Update.hasError();
+        String msg = ok ? "OK" : String(Update.errorString());
+        AsyncWebServerResponse *resp = request->beginResponse(200, "text/plain", msg);
+        resp->addHeader("Connection", "close");
+        request->send(resp);
+        bool noreboot = request->hasParam("noreboot") && request->getParam("noreboot")->value() == "1";
+        if (ok) {
+            if (noreboot) {
+                char buf[] = "{\"updateStatus\":\"Teil-Upload OK, weiter...\"}";
+                wsBroadcast(buf, strlen(buf));
+            } else {
+                char buf[] = "{\"updateStatus\":\"Upload erfolgreich – Neustart...\"}";
+                wsBroadcast(buf, strlen(buf));
+                rebootTimer = millis() + 2000;
+            }
+        } else {
+            char buf[128];
+            snprintf(buf, sizeof(buf), "{\"updateStatus\":\"Upload fehlgeschlagen: %s\"}", Update.errorString());
+            wsBroadcast(buf, strlen(buf));
+        }
+    },
+    // Upload-Handler (chunk-weise)
+    [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+        if (!index) {
+            int updateType = U_FLASH;
+            if (request->hasParam("type")) {
+                if (request->getParam("type")->value() == "spiffs") updateType = U_SPIFFS;
+            }
+            Serial.printf("[OTA-Upload] Start: %s, Typ: %s\n", filename.c_str(), updateType == U_SPIFFS ? "SPIFFS" : "Flash");
+            if (!Update.begin(UPDATE_SIZE_UNKNOWN, updateType)) {
+                Serial.printf("[OTA-Upload] begin() Fehler: %s\n", Update.errorString());
+            }
+            char buf[] = "{\"updateStatus\":\"Upload läuft...\"}";
+            wsBroadcast(buf, strlen(buf));
+        }
+        if (len && Update.write(data, len) != len) {
+            Serial.printf("[OTA-Upload] write() Fehler: %s\n", Update.errorString());
+        }
+        if (final) {
+            if (Update.end(true)) {
+                Serial.printf("[OTA-Upload] Fertig, %u Bytes\n", index + len);
+            } else {
+                Serial.printf("[OTA-Upload] end() Fehler: %s\n", Update.errorString());
+            }
+        }
+    }
+  );
 
   webServer.begin();
 }

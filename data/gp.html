@@ -147,6 +147,7 @@
                     <tr> <td>Position:</td> <td><input class="input-box" id="settingsPosition" placeholder="JN48mw oder 48.1234,11.5678"></td> </tr>
                     <tr> <td>Chip ID:</td> <td><span id="setupChipId"></span></td> </tr>
                     <tr> <td>Hardware:</td> <td><span id="setupHardware"></span></td> </tr>
+                    <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Online Update</td> </tr>
                     <tr> <td>Update-Kanal:</td> <td>
                         <select class="input-box" id="settingsUpdateChannel">
                             <option value="0">Release</option>
@@ -156,6 +157,16 @@
                     <tr> <td>Update:</td> <td>
                         <button class="button" id="settingsUpdate">check &amp; install</button>
                         <button class="button" id="settingsForceInstall">force install</button>
+                    </td> </tr>
+                    <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Firmware Upload</td> </tr>
+                    <tr> <td>Firmware:</td> <td>
+                        <input type="file" id="otaFwFile" accept=".bin">
+                    </td> </tr>
+                    <tr> <td>Filesystem:</td> <td>
+                        <input type="file" id="otaFsFile" accept=".bin">
+                    </td> </tr>
+                    <tr> <td></td> <td>
+                        <button class="button" onclick="uploadAll()">upload &amp; flash</button>
                     </td> </tr>
                     <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Web-Interface Passwort</td> </tr>
                     <tr> <td>Status:</td> <td><span id="settingsWebPasswordStatus">–</span></td> </tr>
@@ -355,6 +366,42 @@
 				var ch = parseInt(document.getElementById("settingsUpdateChannel").value);
 				sendWS(JSON.stringify({forceUpdate: ch}));
 			});
+
+            function uploadFile(type, file, noreboot) {
+                return new Promise(function(resolve, reject) {
+                    var formData = new FormData();
+                    formData.append('firmware', file, file.name);
+                    var url = '/ota?type=' + type + (noreboot ? '&noreboot=1' : '');
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', url, true);
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) msgBox(type + ' Upload: ' + Math.round(e.loaded / e.total * 100) + '%');
+                    };
+                    xhr.onload = function() {
+                        if (xhr.status === 200 && xhr.responseText === 'OK') { resolve(); }
+                        else { reject(xhr.responseText); }
+                    };
+                    xhr.onerror = function() { reject('Verbindungsfehler'); };
+                    xhr.send(formData);
+                });
+            }
+
+            async function uploadAll() {
+                var fwFile = document.getElementById('otaFwFile').files[0];
+                var fsFile = document.getElementById('otaFsFile').files[0];
+                if (!fwFile && !fsFile) { msgBox('Firmware und LittleFS Datei fehlen.'); return; }
+                if (!fwFile) { msgBox('Firmware Datei fehlt.'); return; }
+                if (!fsFile) { msgBox('LittleFS Datei fehlt.'); return; }
+                try {
+                    msgBox('Firmware wird hochgeladen (' + Math.round(fwFile.size / 1024) + ' KB)...');
+                    await uploadFile('firmware', fwFile, true);
+                    msgBox('LittleFS wird hochgeladen (' + Math.round(fsFile.size / 1024) + ' KB)...');
+                    await uploadFile('spiffs', fsFile, false);
+                    msgBox('Upload abgeschlossen! Node startet neu...');
+                } catch(e) {
+                    msgBox('Upload fehlgeschlagen: ' + e);
+                }
+            }
 
             document.getElementById("settingsDeleteMessages").addEventListener("click", function() {
 				sendWS(JSON.stringify({deleteMessages: true }));

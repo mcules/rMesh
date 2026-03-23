@@ -127,6 +127,7 @@
             <tr> <td>TX Buffer</td> <td><span id="txBuffer"></span></td> </tr>
             <tr> <td>Retry</td> <td><span id="retry"></span></td> </tr>
             <tr> <td>System Time</td> <td><span id="time"></span></td> </tr>
+            <tr> <td colspan="2">Online Update</td> </tr>
             <tr> <td>Update-Kanal</td> <td>
                 <select id="settingsUpdateChannel">
                     <option value="0">Release</option>
@@ -136,6 +137,16 @@
             <tr> <td>Update</td> <td>
                 <button class="button" onclick="triggerUpdate();">check &amp; install</button>
                 <button class="button" onclick="forceInstall()">force install</button>
+            </td> </tr>
+            <tr> <td colspan="2">Firmware Upload</td> </tr>
+            <tr> <td>Firmware</td> <td>
+                <input type="file" id="otaFwFile" accept=".bin">
+            </td> </tr>
+            <tr> <td>Filesystem</td> <td>
+                <input type="file" id="otaFsFile" accept=".bin">
+            </td> </tr>
+            <tr> <td></td> <td>
+                <button class="button" onclick="uploadAll()">upload &amp; flash</button>
             </td> </tr>
             <tr> <td>Password</td> <td><span id="settingsWebPasswordStatus"></span></td> </tr>
             <tr> <td>New Password</td> <td><input type="password" id="settingsWebPassword" autocomplete="new-password"></td> </tr>
