@@ -2,6 +2,12 @@
 
 ## [dev-next]
 
+- NEU: Support für Seeed XIAO ESP32-S3 + Wio-SX1262 – neues HAL (`hal_SEEED_XIAO_ESP32S3_Wio_SX1262`) für das Seeed XIAO ESP32-S3 Board mit aufgestecktem Wio-SX1262 LoRa-Modul (B2B-Stecker); Build-Konfiguration in PlatformIO, Eintrag in `devices.json` für das Web-Flash-Tool
+- NEU: Manueller Firmware-Upload über die WebUI – neuer `/ota`-Endpunkt im Webserver zum direkten Flashen eigener Firmware- und LittleFS-Binaries ohne OTA-Server; Desktop- und Mobile-Interface erhalten einen „Upload & Flash"-Button, der beide Dateien sequenziell hochlädt und die Node danach neu startet
+- NEU: Akkustand-Anzeige für HELTEC WiFi LoRa 32 V3 und Wireless Stick Lite V3 – Spannung wird per ADC (GPIO1, VBAT_CTRL) mit 8-Sample-Mittelung gemessen; in der WebUI (Desktop & Mobile) als Akkubalken angezeigt; aktivierbar/deaktivierbar in den Einstellungen; Referenzspannung (Default 4,2 V) konfigurierbar
+- NEU: Zweistufige Peer-Inaktivität – Peers werden nach 25 Minuten ohne Lebenszeichen zunächst als nicht verfügbar markiert (kein Routing mehr über diesen Peer), aber erst nach 60 Minuten vollständig aus der Liste entfernt; verhindert abrupte Routing-Ausfälle bei kurz nicht erreichbaren Nodes
+- FIX: Peer-Timestamps nutzen jetzt `time()` (Unix-Sekunden) statt Millisekunden; `availablePeerList()` aktualisiert den Timestamp beim Reaktivieren eines Peers korrekt; `addPeerList()` verwendet `time(NULL)` statt `f.timestamp` für konsistente Wanduhr-Zeitstempel
+- NEU: Toast-Benachrichtigungssystem in der Desktop-WebUI – Statusmeldungen und Aktions-Feedback werden als animierte Toast-Einblendungen angezeigt (Ein- und Ausblend-Animation, automatisches Ausblenden)
 - NEU: Support für ESP32 E22 LoRa Multimodul V1 – neues HAL (`hal_ESP32_E22_V1`) für Eigenbauplatine mit ESP32 und E22 LoRa-Modul (SX1262); Build-Konfiguration in PlatformIO (`env:ESP32_E22_V1`), Eintrag in `devices.json` für Web-Flash-Tool; `-Os` Optimierungsflag für kompaktere Firmware
 - DOKU: Technische Dokumentation für alle unterstützten Boards neu strukturiert – Verzeichnis `Doku/` nach `docu/` umbenannt (einheitlich englisch); Datenblätter und Schaltpläne für HELTEC WiFi LoRa 32 V3/V4, Wireless Stick Lite V3, LILYGO T-Beam und T3 ergänzt; ESP32 E22 Multimodul-Dokumentation (Schaltplan, Bestückungsplan, Gehäuse-3MF-Dateien) hinzugefügt
 - CLEANUP: `build.bat` entfernt, ungenutztes LilyGoLib-ThirdParty-Submodul entfernt, PlatformIO-Boilerplate-README-Platzhalter entfernt
