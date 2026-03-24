@@ -143,7 +143,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         }
         WiFiClientSecure spiffsClient;
         spiffsClient.setInsecure();
-        spiffsClient.setTimeout(30000);
+        spiffsClient.setTimeout(120000);
         spiffsResult = httpUpdate.updateSpiffs(spiffsClient, spiffsUrl);
         if (spiffsResult != HTTP_UPDATE_FAILED) break;
     }
@@ -170,7 +170,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         }
         WiFiClientSecure fwClient;
         fwClient.setInsecure();
-        fwClient.setTimeout(30000);
+        fwClient.setTimeout(120000);
         fwResult = httpUpdate.update(fwClient, fwUrl);
         if (fwResult != HTTP_UPDATE_FAILED) break;
     }
