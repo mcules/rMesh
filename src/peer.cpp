@@ -1,3 +1,13 @@
+/**
+ * @file peer.cpp
+ * @brief Peer list management implementation.
+ *
+ * Maintains `peerList`, the runtime table of known remote rMesh nodes.
+ * Each entry is keyed by (callsign, port) so that a node reachable via both
+ * LoRa and WiFi can be tracked independently and the preferred transport
+ * selected automatically.
+ */
+
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
@@ -10,55 +20,99 @@
 #include "config.h"
 #include "settings.h"
 
-//Peer-Liste
+/** Runtime peer table; extern-declared in peer.h. */
 std::vector<Peer> peerList;
-//portMUX_TYPE peerListMux = portMUX_INITIALIZER_UNLOCKED;
 
+/**
+ * @brief Periodic peer-list maintenance — called once per second from loop().
+ *
+ * Three passes over the peer list:
+ *  1. **Inactivity mark** — peers not heard for PEER_INACTIVE_TIMEOUT seconds
+ *     are marked unavailable.
+ *  2. **Expiry removal** — peers silent for PEER_TIMEOUT seconds are deleted.
+ *  3. **Deduplication / transport preference** — for each callsign with
+ *     multiple active entries, at most one remains available:
+ *     WiFi (port 1) wins over LoRa (port 0); on the same port, higher SNR wins.
+ *
+ * Broadcasts the updated peer list via WebSocket and flags a topology change
+ * if anything was modified.
+ */
 void checkPeerList() {
     bool update = false;
-    //Suchen, ob Peer bereits existiert
-    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (time(NULL) - peer.timestamp) > PEER_TIMEOUT; });
-    if (it != peerList.end()) {
-        peerList.erase(it);
-        update = true;
-    } 
+    time_t now = time(NULL);
 
-    //Doppelte Peers: WiFi (port 1) bevorzugen vor LoRa (port 0); bei gleichem Port -> besser SNR gewinnt
+    // Mark peers as unavailable after inactivity timeout
+    for (auto& peer : peerList) {
+        if (peer.available && (now - peer.timestamp) > PEER_INACTIVE_TIMEOUT) {
+            peer.available = false;
+            update = true;
+            Serial.printf("[Peer] %s (Port %d) marked unavailable due to inactivity\n", peer.nodeCall, peer.port);
+        }
+    }
+
+    // Remove peers after full timeout
+    for (auto it = peerList.begin(); it != peerList.end();) {
+        if ((now - it->timestamp) > PEER_TIMEOUT) {
+            Serial.printf("[Peer] %s (Port %d) removed due to timeout\n", it->nodeCall, it->port);
+            it = peerList.erase(it);
+            update = true;
+        } else {
+            ++it;
+        }
+    }
+
+    // Prefer WiFi (port 1) over LoRa (port 0); if same port, keep better SNR
     for (size_t i = 0; i < peerList.size(); i++) {
         if (!peerList[i].available) continue;
+
         for (size_t j = i + 1; j < peerList.size(); j++) {
             if (!peerList[j].available) continue;
-            if (strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0) {
-                bool iWifi = (peerList[i].port == 1);
-                bool jWifi = (peerList[j].port == 1);
-                if (iWifi && !jWifi) {
-                    // i=WiFi, j=LoRa → LoRa deaktivieren
-                    peerList[j].available = false;
-                    update = true;
-                } else if (!iWifi && jWifi) {
-                    // i=LoRa, j=WiFi → LoRa deaktivieren
+
+            if (strcmp(peerList[i].nodeCall, peerList[j].nodeCall) != 0) continue;
+
+            bool iWifi = (peerList[i].port == 1);
+            bool jWifi = (peerList[j].port == 1);
+
+            if (iWifi && !jWifi) {
+                peerList[j].available = false;
+                update = true;
+            } else if (!iWifi && jWifi) {
+                peerList[i].available = false;
+                update = true;
+                break;
+            } else {
+                if (peerList[i].snr < peerList[j].snr) {
                     peerList[i].available = false;
                     update = true;
                     break;
                 } else {
-                    // Gleicher Port → besseren SNR bevorzugen
-                    if (peerList[i].snr < peerList[j].snr) {
-                        peerList[i].available = false;
-                        update = true;
-                        break;
-                    } else {
-                        peerList[j].available = false;
-                        update = true;
-                    }
+                    peerList[j].available = false;
+                    update = true;
                 }
             }
         }
     }
 
-    if (update == true) { sendPeerList(); markTopologyChanged(); }
-
+    if (update) {
+        sendPeerList();
+        markTopologyChanged();
+    }
 }
 
+/**
+ * @brief Broadcast the current peer list as a JSON WebSocket message.
+ *
+ * Allocates a heap buffer sized to the exact serialised length, calls
+ * wsBroadcast(), then frees the buffer.  Logs to Serial on allocation failure.
+ *
+ * JSON format:
+ * @code
+ * { "peerlist": { "peers": [
+ *     { "port", "call", "timestamp", "rssi", "snr", "frqError", "available" },
+ *     …
+ * ] } }
+ * @endcode
+ */
 void sendPeerList() {
     JsonDocument doc;
     doc["peerlist"]["peers"] = JsonArray();
@@ -83,60 +137,103 @@ void sendPeerList() {
     }
 }
 
-
-
+/**
+ * @brief Update the availability flag of a specific (callsign, port) entry.
+ *
+ * If the flag changed, broadcasts the updated peer list and flags a topology
+ * change.  When marking a peer available the inactivity timestamp is refreshed.
+ *
+ * @param call       Null-terminated callsign to look up.
+ * @param available  Desired availability state.
+ * @param port       Transport to match (0 = LoRa, 1 = WiFi/UDP).
+ */
 void availablePeerList(const char* call, bool available, uint8_t port) {
     bool update = false;
-    // Suchen, ob Peer bereits existiert
-    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, call) == 0) && (peer.port == port); });
+
+    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) {
+        return (strcmp(peer.nodeCall, call) == 0) && (peer.port == port);
+    });
 
     if (it != peerList.end()) {
-        // Peer existiert: update
         if (it->available != available) {
-            update = true;
             it->available = available;
+            update = true;
+        }
+
+        if (available) {
+            it->timestamp = time(NULL);
         }
     }
-    //Peer Liste neu senden
-    if (update == true) { sendPeerList(); markTopologyChanged(); }
+
+    if (update) {
+        sendPeerList();
+        markTopologyChanged();
+    }
 }
 
+/**
+ * @brief Insert or refresh a peer entry from a received frame.
+ *
+ * Look-up key: (nodeCall, port).
+ *  - **Existing entry**: rssi, snr, frqError and timestamp are updated;
+ *    availability state is preserved (managed separately via availablePeerList()).
+ *  - **New entry**: appended with available = false.
+ *
+ * After every call the list is sorted by SNR descending (best link first)
+ * and a WebSocket broadcast is sent.  A topology change is flagged only for
+ * new entries.  Frames from our own callsign are silently ignored.
+ *
+ * @param f  Received frame; nodeCall, port, rssi, snr, frqError are consumed.
+ */
 void addPeerList(Frame &f) {
-    if (strlen(f.nodeCall) == 0) {return;}
-    if (strcmp(f.nodeCall, settings.mycall) == 0) {return;}
+    if (strlen(f.nodeCall) == 0) {
+        return;
+    }
 
-    // Suchen, ob Peer bereits existiert
-    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port) ; });
+    if (strcmp(f.nodeCall, settings.mycall) == 0) {
+        return;
+    }
+
+    time_t now = time(NULL);
+
+    // Search for an existing peer with same callsign and port
+    auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) {
+        return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port);
+    });
 
     bool isNew = (it == peerList.end());
 
     if (!isNew) {
-        // Peer existiert: update, aber available Flag behalten
-        it->timestamp = f.timestamp;
+        // Update existing peer, but keep current availability state
+        it->timestamp = now;
         it->rssi = f.rssi;
         it->snr = f.snr;
         it->frqError = f.frqError;
         it->port = f.port;
     } else {
-        // Peer nicht gefunden: hinzufügen
+        // Add new peer
         Peer p;
         memcpy(p.nodeCall, f.nodeCall, sizeof(p.nodeCall));
-        p.timestamp = f.timestamp;
+        p.nodeCall[sizeof(p.nodeCall) - 1] = '\0';
+        p.timestamp = now;
         p.rssi = f.rssi;
         p.snr = f.snr;
         p.frqError = f.frqError;
         p.port = f.port;
         p.available = false;
         peerList.push_back(p);
-        Serial.printf("[Reporting] Neuer Peer: %s (Port %d)\n", f.nodeCall, f.port);
+
+        Serial.printf("[Reporting] New peer: %s (Port %d)\n", f.nodeCall, f.port);
     }
 
-    // Sortieren nach SNR (absteigend)
-    std::sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) { return a.snr > b.snr; });
+    // Sort by SNR descending
+    std::sort(peerList.begin(), peerList.end(), [](const Peer& a, const Peer& b) {
+        return a.snr > b.snr;
+    });
+
     sendPeerList();
-    if (isNew) markTopologyChanged();
+
+    if (isNew) {
+        markTopologyChanged();
+    }
 }
-
-
-
-
