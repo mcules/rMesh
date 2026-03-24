@@ -44,21 +44,32 @@ bool checkUDP(Frame &f) {
             udpPeers.push_back(senderIP);
             udpPeerLegacy.push_back(!hasSyncword);
             udpPeerEnabled.push_back(true);
+            udpPeerCall.push_back(strlen(f.nodeCall) > 0 ? String(f.nodeCall) : "");
             saveUdpPeers();
-            Serial.printf("UDP Peer von Announce eingetragen: %d.%d.%d.%d\n",
-                senderIP[0], senderIP[1], senderIP[2], senderIP[3]);
+            Serial.printf("UDP Peer von Announce eingetragen: %d.%d.%d.%d (%s)\n",
+                senderIP[0], senderIP[1], senderIP[2], senderIP[3], f.nodeCall);
         } else if (!hasSyncword) {
             // Legacy-Node (kein SyncWord-Präfix)
             if (peerIdx < 0) {
                 udpPeers.push_back(senderIP);
                 udpPeerLegacy.push_back(true);
                 udpPeerEnabled.push_back(true);
+                udpPeerCall.push_back(strlen(f.nodeCall) > 0 ? String(f.nodeCall) : "");
                 saveUdpPeers();
-                Serial.printf("UDP Legacy-Peer automatisch eingetragen: %d.%d.%d.%d\n",
-                    senderIP[0], senderIP[1], senderIP[2], senderIP[3]);
+                Serial.printf("UDP Legacy-Peer automatisch eingetragen: %d.%d.%d.%d (%s)\n",
+                    senderIP[0], senderIP[1], senderIP[2], senderIP[3], f.nodeCall);
             } else if (!(bool)udpPeerLegacy[peerIdx]) {
                 udpPeerLegacy[peerIdx] = true;
                 saveUdpPeers();
+            }
+        }
+
+        // Rufzeichen zum bekannten Peer nachlernen (auch wenn Peer schon eingetragen war)
+        if (peerIdx >= 0 && strlen(f.nodeCall) > 0) {
+            while ((size_t)peerIdx >= udpPeerCall.size()) udpPeerCall.push_back("");
+            if (udpPeerCall[peerIdx] != f.nodeCall) {
+                udpPeerCall[peerIdx] = f.nodeCall;
+                sendSettings();  // WebUI aktualisieren
             }
         }
         f.tx = false;

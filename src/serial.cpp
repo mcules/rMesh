@@ -49,23 +49,20 @@ void checkSerialRX() {
 
                 //Testfunktionen
                 if (strncmp(serialRxBuffer, "t", 1) == 0) {
-                    
-           struct tm tm;
-    tm.tm_year = 2024 - 1900; // Jahr seit 1900
-    tm.tm_mon = 1;            // Februar (0-11, also 1 = Februar)
-    tm.tm_mday = 14;          // Tag
-    tm.tm_hour = 4;           // Stunde
-    tm.tm_min = 59;           // Minute
-    tm.tm_sec = 0;            // Sekunde
-    
-    time_t t = mktime(&tm);
-    struct timeval now = { .tv_sec = t };
-    settimeofday(&now, NULL);
-    
-    Serial.println("Uhrzeit manuell auf 03:59:00 gesetzt!");         
+                    struct tm tm;
+                    tm.tm_year = 2024 - 1900; // Jahr seit 1900
+                    tm.tm_mon = 1;            // Februar (0-11, also 1 = Februar)
+                    tm.tm_mday = 14;          // Tag
+                    tm.tm_hour = 4;           // Stunde
+                    tm.tm_min = 59;           // Minute
+                    tm.tm_sec = 0;            // Sekunde
 
+                    time_t t = mktime(&tm);
+                    struct timeval now = { .tv_sec = t };
+                    settimeofday(&now, NULL);
+
+                    Serial.println("Uhrzeit manuell auf 03:59:00 gesetzt!");         
                 }
-
 
                 //Hilfe
                 if (strncmp(serialRxBuffer, "h", 1) == 0) {
@@ -76,7 +73,9 @@ void checkSerialRX() {
                             line.replace("\r", "");
                             Serial.println(line);
                         }
-                        file.close(); 
+                        file.close();
+                    } else {
+                        Serial.println("Fehler: /help.txt nicht gefunden. Filesystem neu flashen?");
                     }
                 }
 
@@ -101,6 +100,22 @@ void checkSerialRX() {
                 if (strncmp(serialRxBuffer, "upd", 3) == 0) {
                     Serial.println("OTA Update gestartet...");
                     checkForUpdates();
+                }
+
+                // Update-Kanal setzen: "uc 0" = Release, "uc 1" = Dev
+                if (strncmp(serialRxBuffer, "uc", 2) == 0 && (serialRxBuffer[2] == ' ' || serialRxBuffer[2] == '\0')) {
+                    if (strlen(parameter) > 0) {
+                        updateChannel = (uint8_t)atoi(parameter);
+                        saveSettings();
+                    }
+                    Serial.printf("updateChannel: %d (%s)\n", updateChannel, updateChannel == 1 ? "dev" : "release");
+                }
+
+                // Force-Install: "updf 0" = Release, "updf 1" = Dev
+                if (strncmp(serialRxBuffer, "updf", 4) == 0) {
+                    pendingForceChannel = (strlen(parameter) > 0) ? (uint8_t)atoi(parameter) : updateChannel;
+                    pendingForceUpdate = true;
+                    Serial.printf("Force-Install gestartet (Kanal: %s)...\n", pendingForceChannel == 1 ? "dev" : "release");
                 }
 
                 //Wifi Scannen
@@ -261,7 +276,7 @@ void checkSerialRX() {
 
 
                 // Callsign
-                // "call DG2NBN-1" → Callsign setzen
+                // "call DL1ABC-1" → Callsign setzen
                 if (strncmp(serialRxBuffer, "call", 4) == 0) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.mycall, parameter, sizeof(settings.mycall) - 1);

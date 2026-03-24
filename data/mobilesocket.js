@@ -386,6 +386,20 @@ function onMessage(event) {
         var chipIdEl = document.getElementById("setupChipId");
         if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
         document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat;
+        document.getElementById("settingsLoraEnabled").checked = d.settings.loraEnabled !== false;
+        document.getElementById("settingsUpdateChannel").value = d.settings.updateChannel || 0;
+        // Akku-Einstellungen
+        var hasBat = d.settings.hasBattery === true;
+        var batEnabled = d.settings.batteryEnabled !== false;
+        ["batterySettingsHeader","batterySettingsEnabled","batterySettingsVoltage"].forEach(function(id) {
+            var el = document.getElementById(id); if (el) el.style.display = hasBat ? "" : "none";
+        });
+        var batStatusRow = document.getElementById("batteryStatusRow");
+        if (batStatusRow) batStatusRow.style.display = (hasBat && batEnabled) ? "" : "none";
+        var batEnabledEl = document.getElementById("settingsBatteryEnabled");
+        if (batEnabledEl) batEnabledEl.checked = batEnabled;
+        var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
+        if (batVoltEl) batVoltEl.value = d.settings.batteryFullVoltage || 4.2;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
         const pwStatus = document.getElementById("settingsWebPasswordStatus");
         if (pwStatus) {
@@ -443,9 +457,16 @@ function onMessage(event) {
         } else {
             setAntennaColor("#afaf00");
         }
-        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
-        document.getElementById("retry").innerHTML = d.status.retry; 
-        document.getElementById("heap").innerHTML = d.status.heap; 
+        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount;
+        document.getElementById("retry").innerHTML = d.status.retry;
+        document.getElementById("heap").innerHTML = d.status.heap;
+        if (d.status.battery != null) {
+            var bv = d.status.battery;
+            var fullV = (settings && settings.batteryFullVoltage) || 4.2;
+            var pct = Math.round(Math.min(100, Math.max(0, (bv - 3.0) / (fullV - 3.0) * 100)));
+            var el = document.getElementById("battery");
+            if (el) el.innerHTML = bv.toFixed(2) + " V (" + pct + "%)";
+        }
         const time = new Date(d.status.time * 1000);
         document.getElementById("time").innerHTML = time.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "");
 
@@ -535,13 +556,14 @@ function renderUdpPeers(peers) {
     var list = document.getElementById('udpPeerList');
     if (!list) return;
     list.innerHTML = '<table class="udpPeerTable">'
-        + '<thead><tr><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<thead><tr><th>Call</th><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
         + '<tbody id="udpPeerBody"></tbody></table>';
     peers.forEach(function(p) {
         var tbody = document.getElementById('udpPeerBody');
         var tr = document.createElement('tr');
         tr.className = 'udpPeerRow';
-        tr.innerHTML = '<td><input class="udpPeerIP" value="' + p.ip.join('.') + '"></td>'
+        tr.innerHTML = '<td><span class="udpPeerCall">' + (p.call || '–') + '</span></td>'
+            + '<td><input class="udpPeerIP" value="' + p.ip.join('.') + '"></td>'
             + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
             + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
             + '<td><button onclick="this.closest(\'tr\').remove()">✕</button></td>';
@@ -596,6 +618,12 @@ function saveSettings() {
     settings["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
     settings["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     settings["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    settings["loraEnabled"] = document.getElementById("settingsLoraEnabled").checked;
+    settings["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
+    var batEnabledEl = document.getElementById("settingsBatteryEnabled");
+    if (batEnabledEl) settings["batteryEnabled"] = batEnabledEl.checked;
+    var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
+    if (batVoltEl) settings["batteryFullVoltage"] = parseFloat(batVoltEl.value);
     settings["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
@@ -610,8 +638,58 @@ function reboot() {
     sendWS(JSON.stringify({reboot: true }));
 }
 
+function shutdown() {
+    if (confirm("Gerät wirklich herunterfahren?\n\nNur durch Hardware-Reset (Reset-Button oder Stromtrennung) wieder startbar.")) {
+        showModal("Note", "Gerät wird heruntergefahren...", "", false);
+        sendWS(JSON.stringify({shutdown: true}));
+    }
+}
+
 function triggerUpdate() {
     sendWS(JSON.stringify({update: true }));
+}
+
+function forceInstall() {
+    var ch = parseInt(document.getElementById("settingsUpdateChannel").value);
+    sendWS(JSON.stringify({ forceUpdate: ch }));
+    showModal("Note", "Update wird gesucht und installiert...", "", false);
+}
+
+function uploadFile(type, file, noreboot) {
+    return new Promise(function(resolve, reject) {
+        var formData = new FormData();
+        formData.append('firmware', file, file.name);
+        var url = '/ota?type=' + type + (noreboot ? '&noreboot=1' : '');
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', url, true);
+        xhr.onload = function() {
+            if (xhr.status === 200 && xhr.responseText === 'OK') { resolve(); }
+            else { reject(xhr.responseText); }
+        };
+        xhr.onerror = function() { reject('Verbindungsfehler'); };
+        xhr.send(formData);
+    });
+}
+
+async function uploadAll() {
+    var fwFile = document.getElementById('otaFwFile').files[0];
+    var fsFile = document.getElementById('otaFsFile').files[0];
+    if (!fwFile && !fsFile) { showModal("Note", "Firmware und LittleFS Datei fehlen.", "", false); return; }
+    if (!fwFile) { showModal("Note", "Firmware Datei fehlt.", "", false); return; }
+    if (!fsFile) { showModal("Note", "LittleFS Datei fehlt.", "", false); return; }
+    try {
+        if (fwFile) {
+            showModal("Note", "Firmware wird hochgeladen (" + Math.round(fwFile.size / 1024) + " KB)...", "", false);
+            await uploadFile('firmware', fwFile, !!fsFile);
+        }
+        if (fsFile) {
+            showModal("Note", "LittleFS wird hochgeladen (" + Math.round(fsFile.size / 1024) + " KB)...", "", false);
+            await uploadFile('spiffs', fsFile, false);
+        }
+        showModal("Note", "Upload abgeschlossen! Node startet neu...", "", false);
+    } catch(e) {
+        showModal("Error", "Upload fehlgeschlagen: " + e, "", false);
+    }
 }
 
 function syncTime() {

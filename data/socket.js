@@ -76,7 +76,7 @@ function onMessage(event) {
         var f = d.monitor;
         var msg = ""; 
         //TX-Frame gelb
-        if (d.monitor.tx == true) { msg += "<span class='monitor-tx' >"; } else { msg += "<span>"; }
+        if (d.monitor.tx == true) { msg += "<span class='monitor-tx'>→ "; } else { msg += "<span>← "; }
         //Port
         if (f.port == 0) {msg += "LoRa";} else {msg += "Wifi";}
         //Zeit
@@ -199,7 +199,9 @@ function onMessage(event) {
         }
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("myCall").innerHTML = d.settings.mycall;
-        document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat; 
+        document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat;
+        document.getElementById("settingsLoraEnabled").checked = d.settings.loraEnabled !== false;
+        document.getElementById("settingsUpdateChannel").value = d.settings.updateChannel || 0;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
         settings.titel = settings.name + " - " + settings.mycall;
         settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
@@ -213,6 +215,18 @@ function onMessage(event) {
         if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
         var hwEl = document.getElementById("setupHardware");
         if (hwEl) hwEl.innerHTML = d.settings.hardware || "";
+
+        // Akku-Einstellungen (gp.html)
+        var hasBat = d.settings.hasBattery === true;
+        var batEnabled = d.settings.batteryEnabled !== false;
+        var batGpRow = document.getElementById("batteryGpRow");
+        if (batGpRow) batGpRow.style.display = (hasBat && batEnabled) ? "" : "none";
+        var batSettingsSection = document.getElementById("batterySettingsSection");
+        if (batSettingsSection) batSettingsSection.style.display = hasBat ? "" : "none";
+        var batEnabledEl = document.getElementById("settingsBatteryEnabled");
+        if (batEnabledEl) batEnabledEl.checked = batEnabled;
+        var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
+        if (batVoltEl) batVoltEl.value = d.settings.batteryFullVoltage || 4.2;
 
         // Passwort-Status anzeigen
         var pwStatus = document.getElementById("settingsWebPasswordStatus");
@@ -271,9 +285,18 @@ function onMessage(event) {
         } else {
             document.getElementById("TRX").innerHTML = "<span>stby</span>"; 
         }
-        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount; 
-        document.getElementById("retry").innerHTML = d.status.retry; 
-        document.getElementById("heap").innerHTML = d.status.heap; 
+        document.getElementById("txBuffer").innerHTML = d.status.txBufferCount;
+        document.getElementById("retry").innerHTML = d.status.retry;
+        document.getElementById("heap").innerHTML = d.status.heap;
+        if (d.status.battery != null) {
+            var bv = d.status.battery;
+            var fullV = (settings && settings.batteryFullVoltage) || 4.2;
+            var pct = Math.round(Math.min(100, Math.max(0, (bv - 3.0) / (fullV - 3.0) * 100)));
+            var battEl = document.getElementById("battery");
+            if (battEl) battEl.innerHTML = bv.toFixed(2) + " V (" + pct + "%)";
+            var battElGp = document.getElementById("batteryGp");
+            if (battElGp) battElGp.innerHTML = bv.toFixed(2) + " V (" + pct + "%)";
+        }
     }
 
     //Update verfügbar
@@ -385,13 +408,14 @@ function renderUdpPeers(peers) {
     var list = document.getElementById('udpPeerList');
     if (!list) return;
     list.innerHTML = '<table class="udpPeerTable">'
-        + '<thead><tr><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<thead><tr><th>Call</th><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
         + '<tbody id="udpPeerBody"></tbody></table>';
     peers.forEach(function(p) {
         var tbody = document.getElementById('udpPeerBody');
         var tr = document.createElement('tr');
         tr.className = 'udpPeerRow';
-        tr.innerHTML = '<td><input class="input-box udpPeerIP" value="' + p.ip.join('.') + '"></td>'
+        tr.innerHTML = '<td><span class="udpPeerCall">' + (p.call || '–') + '</span></td>'
+            + '<td><input class="input-box udpPeerIP" value="' + p.ip.join('.') + '"></td>'
             + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
             + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
             + '<td><button class="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
@@ -440,6 +464,12 @@ function saveSettings() {
     s["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
     s["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     s["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    s["loraEnabled"] = document.getElementById("settingsLoraEnabled").checked;
+    s["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
+    var batEnabledEl = document.getElementById("settingsBatteryEnabled");
+    if (batEnabledEl) s["batteryEnabled"] = batEnabledEl.checked;
+    var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
+    if (batVoltEl) s["batteryFullVoltage"] = parseFloat(batVoltEl.value);
     s["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";

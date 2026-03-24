@@ -42,10 +42,11 @@
                     <div class="status-box">
                         <div class="status"> DstCall: <div id="dstCall"></div> </div>
                         <div class="status"> MyCall: <div id="myCall"></div> </div>
-                        <div class="status" style="max-width: 180px;"> Heap: <div id="heap"></div> </div>
-                        <div class="status" style="max-width: 150px;"> TRX: <div id="TRX"></div> </div>
-                        <div class="status" style="max-width: 130px;"> TX-Buffer: <div id="txBuffer"></div></div>
-                        <div class="status" style="max-width: 90px;"> Retry: <div id="retry"></div></div>
+                        <div class="status"> Heap: <div id="heap"></div> </div>
+                        <div id="batteryGpRow" class="status" style="display:none"> Akku: <div id="batteryGp"></div> </div>
+                        <div class="status"> TRX: <div id="TRX"></div> </div>
+                        <div class="status"> TX-Buffer: <div id="txBuffer"></div></div>
+                        <div class="status"> Retry: <div id="retry"></div></div>
                     </div>
                 </div>
                 <div class="right">
@@ -128,6 +129,12 @@
                             <span class="checkmark"></span>
                         </label>
                     </td> </tr>
+                    <tr> <td>HF aktiv:</td> <td>
+                        <label class="retro-checkbox-container">
+                            <input type="checkbox" id="settingsLoraEnabled">
+                            <span class="checkmark"></span>
+                        </label>
+                    </td> </tr>
                     <tr> <td>Max Message Length:</td> <td><span id="settingsLoraMaxMessageLength"></span></td> </tr>
                     <tr> <td>&nbsp;</td> <td>
                         <button class="button" onclick="saveSettings();">save</button>
@@ -141,6 +148,27 @@
                     <tr> <td>Position:</td> <td><input class="input-box" id="settingsPosition" placeholder="JN48mw oder 48.1234,11.5678"></td> </tr>
                     <tr> <td>Chip ID:</td> <td><span id="setupChipId"></span></td> </tr>
                     <tr> <td>Hardware:</td> <td><span id="setupHardware"></span></td> </tr>
+                    <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Online Update</td> </tr>
+                    <tr> <td>Update-Kanal:</td> <td>
+                        <select class="input-box" id="settingsUpdateChannel">
+                            <option value="0">Release</option>
+                            <option value="1">Dev</option>
+                        </select>
+                    </td> </tr>
+                    <tr> <td>Update:</td> <td>
+                        <button class="button" id="settingsUpdate">check &amp; install</button>
+                        <button class="button" id="settingsForceInstall">force install</button>
+                    </td> </tr>
+                    <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Firmware Upload</td> </tr>
+                    <tr> <td>Firmware:</td> <td>
+                        <input type="file" id="otaFwFile" accept=".bin">
+                    </td> </tr>
+                    <tr> <td>Filesystem:</td> <td>
+                        <input type="file" id="otaFsFile" accept=".bin">
+                    </td> </tr>
+                    <tr> <td></td> <td>
+                        <button class="button" onclick="uploadAll()">upload &amp; flash</button>
+                    </td> </tr>
                     <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Web-Interface Passwort</td> </tr>
                     <tr> <td>Status:</td> <td><span id="settingsWebPasswordStatus">–</span></td> </tr>
                     <tr> <td>Neues Passwort:</td> <td><input class="input-box" type="password" id="settingsWebPassword" placeholder="(leer = nicht ändern)" autocomplete="new-password"></td> </tr>
@@ -149,11 +177,21 @@
                     <tr id="settingsWebPasswordRemoveRow" style="display:none;"> <td>&nbsp;</td> <td>
                         <button class="button" onclick="removeWebPassword();">Passwort entfernen</button>
                     </td> </tr>
+                    <tbody id="batterySettingsSection" style="display:none">
+                    <tr> <td colspan="2" style="padding-top:12px; padding-bottom:4px; color:#4ecca3; font-size:0.8rem; letter-spacing:1px; text-transform:uppercase;">Akku</td> </tr>
+                    <tr> <td>Akkustand anzeigen:</td> <td>
+                        <label class="retro-checkbox-container">
+                            <input type="checkbox" id="settingsBatteryEnabled">
+                            <span class="checkmark"></span>
+                        </label>
+                    </td> </tr>
+                    <tr> <td>Spannung bei 100%:</td> <td><input class="input-box" id="settingsBatteryFullVoltage" type="number" step="0.05" min="3.5" max="4.4" style="width:5em"> V</td> </tr>
+                    </tbody>
                     <tr> <td>&nbsp;</td> <td>
                         <button class="button" id="settingsSave" onclick="saveSettings();">save</button>
                         <button class="button" id="settingsDeleteMessages">delete messages</button>
                         <button class="button" id="settingsReboot">reboot</button>
-                        <button class="button" id="settingsUpdate">update</button>
+                        <button class="button" id="settingsShutdown">shutdown</button>
                     </td> </tr>
                 </table>
             </div>
@@ -285,6 +323,8 @@
             </div>
         </div>
 
+        <div id="toast-container"></div>
+
         <script>
             var ui = ""   
             var activeChannel = 0;      
@@ -324,9 +364,57 @@
 				sendWS(JSON.stringify({reboot: true }));
 			});
 
+			document.getElementById("settingsShutdown").addEventListener("click", function() {
+				if (confirm("Gerät wirklich herunterfahren?\n\nNur durch Hardware-Reset (Reset-Button oder Stromtrennung) wieder startbar.")) {
+					msgBox("Gerät wird heruntergefahren...");
+					sendWS(JSON.stringify({shutdown: true}));
+				}
+			});
+
 			document.getElementById("settingsUpdate").addEventListener("click", function() {
 				sendWS(JSON.stringify({update: true }));
 			});
+
+			document.getElementById("settingsForceInstall").addEventListener("click", function() {
+				var ch = parseInt(document.getElementById("settingsUpdateChannel").value);
+				sendWS(JSON.stringify({forceUpdate: ch}));
+			});
+
+            function uploadFile(type, file, noreboot) {
+                return new Promise(function(resolve, reject) {
+                    var formData = new FormData();
+                    formData.append('firmware', file, file.name);
+                    var url = '/ota?type=' + type + (noreboot ? '&noreboot=1' : '');
+                    var xhr = new XMLHttpRequest();
+                    xhr.open('POST', url, true);
+                    xhr.upload.onprogress = function(e) {
+                        if (e.lengthComputable) msgBox(type + ' Upload: ' + Math.round(e.loaded / e.total * 100) + '%');
+                    };
+                    xhr.onload = function() {
+                        if (xhr.status === 200 && xhr.responseText === 'OK') { resolve(); }
+                        else { reject(xhr.responseText); }
+                    };
+                    xhr.onerror = function() { reject('Verbindungsfehler'); };
+                    xhr.send(formData);
+                });
+            }
+
+            async function uploadAll() {
+                var fwFile = document.getElementById('otaFwFile').files[0];
+                var fsFile = document.getElementById('otaFsFile').files[0];
+                if (!fwFile && !fsFile) { msgBox('Firmware und LittleFS Datei fehlen.'); return; }
+                if (!fwFile) { msgBox('Firmware Datei fehlt.'); return; }
+                if (!fsFile) { msgBox('LittleFS Datei fehlt.'); return; }
+                try {
+                    msgBox('Firmware wird hochgeladen (' + Math.round(fwFile.size / 1024) + ' KB)...');
+                    await uploadFile('firmware', fwFile, true);
+                    msgBox('LittleFS wird hochgeladen (' + Math.round(fsFile.size / 1024) + ' KB)...');
+                    await uploadFile('spiffs', fsFile, false);
+                    msgBox('Upload abgeschlossen! Node startet neu...');
+                } catch(e) {
+                    msgBox('Upload fehlgeschlagen: ' + e);
+                }
+            }
 
             document.getElementById("settingsDeleteMessages").addEventListener("click", function() {
 				sendWS(JSON.stringify({deleteMessages: true }));
@@ -441,19 +529,45 @@
             
             
             function msgBox(title) {
-                return new Promise(resolve => {
-                    const overlay = document.getElementById("overlay");
-                    const input = document.getElementById("modalInput");
-                    const titleElem = document.getElementById("modalTitle");
-                    const okBtn = document.getElementById("modalOk");
-                    titleElem.textContent = title;
-                    input.style.display = "none";
-                    overlay.style.display = "flex";
-                    function onOk() {
-                        overlay.style.display = "none";
-                        okBtn.removeEventListener("click", onOk);
-                    }
-                    okBtn.addEventListener("click", onOk);
+                showToast(title);
+            }
+
+            function showToast(message) {
+                const container = document.getElementById("toast-container");
+                const toast = document.createElement("div");
+                toast.className = "toast";
+                toast.textContent = message;
+
+                let timer;
+                const startTimer = () => {
+                    timer = setTimeout(() => {
+                        removeToast(toast);
+                    }, 3000);
+                };
+
+                startTimer();
+
+                toast.onmouseenter = () => {
+                    clearTimeout(timer);
+                };
+
+                toast.onmouseleave = () => {
+                    startTimer();
+                };
+
+                toast.onclick = () => {
+                    clearTimeout(timer);
+                    removeToast(toast);
+                };
+
+                container.appendChild(toast);
+            }
+
+            function removeToast(toast) {
+                if (toast.classList.contains("fade-out")) return;
+                toast.classList.add("fade-out");
+                toast.addEventListener("animationend", () => {
+                    toast.remove();
                 });
             }
 

@@ -17,12 +17,17 @@
 #define PIN_AP_MODE_SWITCH 0     //Taster Umschaltung WiFi CLient/AP
 #define PIN_WIFI_LED 35      //LED WiFi-Status (ein = AP-Mode, blinken = Client-Mode, aus = nicht verbunden)
 
+#define PIN_VBAT_CTRL 37     //Akku-ADC aktivieren (LOW = Messung aktiv)
+#define PIN_VBAT_ADC  1      //Akku-Spannungsmessung (ADC)
+#define HAS_BATTERY_ADC
+
 
 void setWiFiLED(bool value);
 void initHal();
 bool checkReceive(Frame &f);
 void transmitFrame(Frame &f);
 bool getKeyApMode();
+float getBatteryVoltage();
 
 
 extern bool txFlag;

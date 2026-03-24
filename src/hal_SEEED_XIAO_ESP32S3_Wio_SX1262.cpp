@@ -1,4 +1,4 @@
-#ifdef HELTEC_WIFI_LORA_32_V3
+#ifdef SEEED_XIAO_ESP32S3_WIO_SX1262
 
 #include "hal.h"
 #include "RadioLib.h"
@@ -21,7 +21,7 @@ bool txFlag = false;
 bool rxFlag = false;
 
 void printState(int state) {
-    if (state != RADIOLIB_ERR_NONE) {Serial.printf("FAILED! code %d\n", state);}
+    if (state != RADIOLIB_ERR_NONE) { Serial.printf("FAILED! code %d\n", state); }
 }
 
 void setWiFiLED(bool value) {
@@ -32,46 +32,36 @@ bool getKeyApMode() {
     return !digitalRead(PIN_AP_MODE_SWITCH);
 }
 
-float getBatteryVoltage() {
-    analogSetPinAttenuation(PIN_VBAT_ADC, ADC_11db);
-    digitalWrite(PIN_VBAT_CTRL, HIGH);  // Spannungsteiler aktivieren (HIGH aktiv)
-    delay(10);
-    int sum = 0;
-    for (int i = 0; i < 8; i++) sum += analogRead(PIN_VBAT_ADC);
-    digitalWrite(PIN_VBAT_CTRL, LOW);   // Spannungsteiler deaktivieren
-    return (sum / 8.0f / 4095.0f) * 3.3f * 4.9f;
-}
-
 void initHal() {
     txFlag = false;
     rxFlag = false;
 
-    //SPI Init
-    SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
-
-    //Ausgäne
+    // Outputs
     pinMode(PIN_WIFI_LED, OUTPUT);
     digitalWrite(PIN_WIFI_LED, 0);
-    pinMode(PIN_VBAT_CTRL, OUTPUT);
-    digitalWrite(PIN_VBAT_CTRL, LOW);   // Spannungsteiler standardmäßig aus
+    pinMode(LORA_ANT_SW, OUTPUT);
+    digitalWrite(LORA_ANT_SW, HIGH);  // enable antenna switch
 
-    //Eingänge
-    pinMode(PIN_AP_MODE_SWITCH, INPUT);
+    // Inputs
+    pinMode(PIN_AP_MODE_SWITCH, INPUT_PULLUP);
 
-    // HF-Modul nur initialisieren wenn Frequenz konfiguriert ist
+    // Only initialize the radio if a frequency has been configured
     if (!loraConfigured(settings.loraFrequency)) {
-        Serial.println("[LoRa] Keine Frequenz konfiguriert – HF deaktiviert.");
+        Serial.println("[LoRa] No frequency configured – radio disabled.");
         loraReady = false;
         return;
     }
 
-    //Flags zurücksetzen
-    int state;
+    // Let RadioLib initialize the SPI bus with the board defaults (GPIO7/8/9).
+    // Do NOT call SPI.begin() here – a second call after RadioLib's internal
+    // SPI.begin() disrupts the bus configuration on the XIAO ESP32-S3.
+    int beginState = radio.begin();
+    if (beginState != RADIOLIB_ERR_NONE) {
+        Serial.printf("[LoRa] radio.begin() failed (code %d) – check wiring!\n", beginState);
+        loraReady = false;
+        return;
+    }
 
-    //Init
-    radio.reset();
-    delay(100);
-    printState(radio.begin());
     printState(radio.setDio2AsRfSwitch(true));
     printState(radio.setSyncWord(settings.loraSyncWord));
     printState(radio.setFrequency(settings.loraFrequency));
@@ -84,46 +74,38 @@ void initHal() {
     printState(radio.setCurrentLimit(140));
     printState(radio.setRxBoostedGainMode(true));
 
-    //RX einschalten
+    // Start receiving
     printState(radio.startReceive());
     loraReady = true;
-
 }
-
 
 
 bool checkReceive(Frame &f) {
     if (!loraReady) return false;
-    //IRQ-Flags auslesen
+
     uint16_t irqFlags = radio.getIrqFlags();
-    //Prüfen ob Kanal belegt
+
+    // Track channel-busy state for the status LED
     if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
-        if (rxFlag == false) {
-            rxFlag = true;
-            statusTimer = 0;
-        }
+        if (rxFlag == false) { rxFlag = true;  statusTimer = 0; }
     } else {
-        if (rxFlag == true) {
-            rxFlag = false;
-            statusTimer = 0;
-        }
+        if (rxFlag == true)  { rxFlag = false; statusTimer = 0; }
     }
-    //Senden fertig
+
+    // TX complete – switch back to RX
     if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
         radio.startReceive();
         txFlag = false;
         statusTimer = 0;
-    }      
-    //Daten Empfangen -> rxBuffer
+    }
+
+    // Packet received
     if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
-        //Prüfen, ob was empfangen wurde
         uint8_t rxBuffer[256];
-        size_t rxBufferLength;
-        rxBufferLength = radio.getPacketLength();
+        size_t rxBufferLength = radio.getPacketLength();
         int16_t state = radio.readData(rxBuffer, rxBufferLength);
-        //Empfang wieder starten
         radio.startReceive();
-        if (state == RADIOLIB_ERR_NONE) {    
+        if (state == RADIOLIB_ERR_NONE) {
             f.importBinary(rxBuffer, rxBufferLength);
             f.tx = false;
             f.timestamp = time(NULL);
@@ -143,7 +125,6 @@ void transmitFrame(Frame &f) {
     uint8_t txBuffer[255];
     size_t txBufferLength;
 
-    //Frame ergänzen
     txFlag = 1;
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
@@ -151,25 +132,21 @@ void transmitFrame(Frame &f) {
     f.timestamp = time(NULL);
     f.port = 0;
 
-    //Senden
-    if (strlen(f.nodeCall) == 0) {return;}
+    if (strlen(f.nodeCall) == 0) { return; }
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
 
-    // Duty-Cycle-Check für Public-Band (10 % in 60 s)
+    // Duty-cycle check for EU public band (max 10 % in 60 s)
     if (isPublicBand(settings.loraFrequency)) {
         uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
         if (!dutyCycleAllowed(toa)) {
-            Serial.println("[LoRa] Duty-Cycle-Limit erreicht, TX übersprungen.");
+            Serial.println("[LoRa] Duty-cycle limit reached, TX skipped.");
             return;
         }
         dutyCycleTrackTx(toa);
     }
 
     radio.startTransmit(txBuffer, txBufferLength);
-
-    //Frame monitoren
     f.monitorJSON();
-
 }
 
 

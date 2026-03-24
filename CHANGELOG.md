@@ -1,5 +1,57 @@
 # Changelog
 
+## [dev-next]
+
+- NEU: Support für Seeed XIAO ESP32-S3 + Wio-SX1262 – neues HAL (`hal_SEEED_XIAO_ESP32S3_Wio_SX1262`) für das Seeed XIAO ESP32-S3 Board mit aufgestecktem Wio-SX1262 LoRa-Modul (B2B-Stecker); Build-Konfiguration in PlatformIO, Eintrag in `devices.json` für das Web-Flash-Tool
+- NEU: Manueller Firmware-Upload über die WebUI – neuer `/ota`-Endpunkt im Webserver zum direkten Flashen eigener Firmware- und LittleFS-Binaries ohne OTA-Server; Desktop- und Mobile-Interface erhalten einen „Upload & Flash"-Button, der beide Dateien sequenziell hochlädt und die Node danach neu startet
+- NEU: Akkustand-Anzeige für HELTEC WiFi LoRa 32 V3 und Wireless Stick Lite V3 – Spannung wird per ADC (GPIO1, VBAT_CTRL) mit 8-Sample-Mittelung gemessen; in der WebUI (Desktop & Mobile) als Akkubalken angezeigt; aktivierbar/deaktivierbar in den Einstellungen; Referenzspannung (Default 4,2 V) konfigurierbar
+- NEU: Zweistufige Peer-Inaktivität – Peers werden nach 25 Minuten ohne Lebenszeichen zunächst als nicht verfügbar markiert (kein Routing mehr über diesen Peer), aber erst nach 60 Minuten vollständig aus der Liste entfernt; verhindert abrupte Routing-Ausfälle bei kurz nicht erreichbaren Nodes
+- FIX: Peer-Timestamps nutzen jetzt `time()` (Unix-Sekunden) statt Millisekunden; `availablePeerList()` aktualisiert den Timestamp beim Reaktivieren eines Peers korrekt; `addPeerList()` verwendet `time(NULL)` statt `f.timestamp` für konsistente Wanduhr-Zeitstempel
+- NEU: Toast-Benachrichtigungssystem in der Desktop-WebUI – Statusmeldungen und Aktions-Feedback werden als animierte Toast-Einblendungen angezeigt (Ein- und Ausblend-Animation, automatisches Ausblenden)
+- NEU: Support für ESP32 E22 LoRa Multimodul V1 – neues HAL (`hal_ESP32_E22_V1`) für Eigenbauplatine mit ESP32 und E22 LoRa-Modul (SX1262); Build-Konfiguration in PlatformIO (`env:ESP32_E22_V1`), Eintrag in `devices.json` für Web-Flash-Tool; `-Os` Optimierungsflag für kompaktere Firmware
+- DOKU: Technische Dokumentation für alle unterstützten Boards neu strukturiert – Verzeichnis `Doku/` nach `docu/` umbenannt (einheitlich englisch); Datenblätter und Schaltpläne für HELTEC WiFi LoRa 32 V3/V4, Wireless Stick Lite V3, LILYGO T-Beam und T3 ergänzt; ESP32 E22 Multimodul-Dokumentation (Schaltplan, Bestückungsplan, Gehäuse-3MF-Dateien) hinzugefügt
+- CLEANUP: `build.bat` entfernt, ungenutztes LilyGoLib-ThirdParty-Submodul entfernt, PlatformIO-Boilerplate-README-Platzhalter entfernt
+
+## [v1.0.29e-dev]
+
+- FIX: Serielle Konsole – `h`-Befehl (Hilfe) zeigte seit v1.0.29b keine Ausgabe mehr – `help.txt` wurde durch den Filesystem-Build per gzip komprimiert (`.txt` in `COMPRESS_EXTENSIONS`) und lag im LittleFS nur noch als `help.txt.gz`; der Code öffnete aber `/help.txt` – Datei wurde nicht gefunden, keine Ausgabe; `.txt` aus den komprimierten Erweiterungen entfernt, `help.txt` liegt jetzt wieder unkomprimiert im LittleFS
+
+## [v1.0.29d-dev]
+
+- NEU: Serielle Konsole – `uc 0` / `uc 1` setzt den Update-Kanal (Release/Dev) und speichert ihn persistent; `updf` / `updf 0` / `updf 1` startet eine Force-Installation aus dem gewählten Kanal
+- NEU: Frisch geflashte Nodes wählen den Update-Kanal automatisch passend zur Firmware: Dev-Builds (`-dev`-Suffix) setzen den Default auf „Dev", Release-Builds auf „Release" – ein bereits gespeicherter Wert im Flash bleibt erhalten
+- FIX: WebUI wurde nach dem LittleFS-Komprimierungs-Update (v1.0.29b) nicht mehr angezeigt – der Webserver suchte `index.html`, im LittleFS lag aber nur noch `index.html.gz`; Exists-Prüfung und Auslieferung explizit korrigiert: `.gz`-Pfad direkt öffnen, Content-Type anhand der Original-Extension setzen, `Content-Encoding: gzip` Header manuell hinzufügen
+- FIX: WebUI fehlte nach Installation über Web-Flash-Tool – LittleFS-Offset in `devices.json` war noch `0x290000` (alter Partitionstabellen-Stand vor v1.0.29b); korrekt ist `0x390000`; Flash-Manifest hat LittleFS an die falsche Adresse geschrieben
+- FIX: Sendeverzögerung ohne UDP-Peers – ohne konfigurierte UDP-Peers wurde vor dem LoRa-Send unnötig ein WiFi-Blind-Frame gepusht; WiFi-Blind-Send wird jetzt nur ausgeführt wenn mindestens ein UDP-Peer konfiguriert ist (Announces werden weiterhin immer per WiFi-Broadcast gesendet)
+
+## [v1.0.29c]
+
+- FIX: OTA-Update von v1.0.29a → v1.0.29b schlug auf LILYGO T3 LoRa32 V1.6.1 mit „Not Enough Space" fehl – Firmware war 749 Bytes zu groß für die alte 1.280-KB-Partition; nicht benötigte Serial-Debug-Ausgaben entfernt (Trim-Task-Status, UDP-Peer-Migration, WiFi-Scan-Tabelle, Topologie-Reporting); Firmware um 1.252 Bytes reduziert und damit OTA-Update-Pfad auf Geräten mit alter Partitionstabelle wieder freigegeben
+
+## [v1.0.29b]
+
+- FIX: OTA-Update schlug in manchen Netzwerken mit "read Timeout" fehl – LittleFS- und Firmware-Download werden jetzt bei Fehler bis zu 3x wiederholt
+- NEU: Update-Kanäle – in der WebUI (Desktop & Mobile) kann zwischen „Release" (Standard) und „Dev" (Pre-releases) gewählt werden; die Node aktualisiert sich automatisch aus dem gewählten Kanal
+- NEU: Force-Install-Button – erzwingt ein Update aus dem eingestellten Kanal, auch wenn die installierte Version neuer ist oder ein lokaler Dev-Build aktiv ist
+- NEU: Display-Geräte (T-LoraPager, SenseCAP Indicator) haben im Einstellungsmenü neue Einträge „Update Release" und „Update Dev" zum erzwungenen Installieren
+- NEU: GitHub-Releases werden automatisch als Pre-release markiert, wenn der Tag ein `-` enthält (z. B. `v1.0.30-dev`) – stabile Tags ohne `-` bleiben normale Releases
+- Abwärtskompatibilität: Nodes mit älterer Firmware erhalten weiterhin stabile Release-Updates; der Backend-Default ist der Release-Kanal
+- FIX: Doppelte ACKs bei Nodes die gleichzeitig per WiFi und LoRa erreichbar sind – WiFi wird jetzt konsequent bevorzugt: ACKs, Announce-ACKs und weitergeleitete Nachrichten gehen nur noch über den jeweils verfügbaren Weg (WiFi oder LoRa, nie beide)
+- NEU: WiFi ist primärer Übertragungsweg, LoRa ist Fallback – Nachrichten an Peers die per UDP erreichbar sind, werden ausschließlich per WiFi gesendet; LoRa wird nur genutzt wenn kein WiFi-Pfad zum Ziel existiert
+- NEU: Announcements und Broadcast-Nachrichten werden weiterhin auf beiden Wegen gesendet (WiFi und LoRa), damit LoRa-only Nodes nicht ausgeschlossen werden
+- NEU: Sendreihenfolge – WiFi wird vor LoRa in den Sendepuffer eingereiht, da UDP deutlich schneller übertragen wird
+- NEU: UDP-Peer-Verfügbarkeit wird regelmäßig geprüft – beim Senden eines Announces werden alle WiFi-Peers auf „nicht verfügbar" gesetzt und erst durch den eintreffenden Announce-ACK wieder aktiviert; offline gegangene Nodes werden so spätestens nach einem Announce-Zyklus (~10 Min) erkannt
+- NEU: Rufzeichen je UDP-Peer wird automatisch gelernt – sobald eine Node einen Frame sendet, wird ihr Rufzeichen der IP-Adresse zugeordnet und in der WebUI (Desktop & Mobile) bei den UDP-Peers angezeigt
+- NEU: HF-Deaktivierungsschalter in der WebUI (Desktop & Mobile) – ist HF deaktiviert, werden alle LoRa-Frames still verworfen und es wird garantiert nichts über HF gesendet; Zustand wird persistent gespeichert
+- NEU: Shutdown-Button in der WebUI (Desktop & Mobile) mit Sicherheitsabfrage – versetzt das Gerät in Tiefschlaf (kein Senden mehr); Aufwecken nur per Hardware-Reset oder Stromtrennung; nützlich für Akku-Geräte ohne Antenne
+- FIX: Flash-Overflow bei LILYGO T3 LoRa32 V1.6.1 und T-Beam – Partitionstabelle neu ausbalanciert: App-Partition auf 1.792 KB vergrößert (war 1.280 KB), LittleFS auf 448 KB verkleinert; Firmware-Auslastung sinkt von 95 % auf 71 %
+- Optimierung: WebUI-Assets (HTML, JS, CSS, TXT) werden beim Filesystem-Build automatisch per gzip komprimiert und als .gz-Dateien ins LittleFS-Image verpackt; ESPAsyncWebServer liefert sie transparent komprimiert aus – LittleFS-Inhalt um 61 % reduziert (275 KB → 110 KB); Quellfiles bleiben unverändert editierbar
+- Optimierung: Retro-Font „Fixedsys Excelsior" (167 KB) aus dem LittleFS entfernt – Desktop-WebUI verwendet nun den systemseitigen Fallback-Font „Courier New" (optisch nahezu identisch)
+
+## [v1.0.29a]
+
+- FIX: Migration – UDP-Peers aus altem Firmware-Format werden beim ersten Boot automatisch in die neue dynamische Peer-Liste übernommen und gehen nicht mehr verloren
+
 ## [v1.0.29]
 
 - NEU: UDP-Peer-Liste ist jetzt unbegrenzt dynamisch – vorher war sie auf 5 Einträge begrenzt; Verwaltung über WebUI, Display und serielle Konsole (`udp add`, `udp del`, `udp <N>`, `udp clear`)

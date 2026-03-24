@@ -2,19 +2,25 @@
   {
     "name": "ESP32_Without_LoRa",
     "chip": "ESP32",
-    "lfs_offset": 2686976,
+    "lfs_offset": 3735552,
     "image": "esp32_without_lora.webp"
+  },
+  {
+    "name": "ESP32_E22_V1",
+    "chip": "ESP32",
+    "lfs_offset": 3735552,
+    "image": "esp32_e22_v1.webp"
   },
   {
     "name": "LILYGO_T3_LoRa32_V1_6_1",
     "chip": "ESP32",
-    "lfs_offset": 2686976,
+    "lfs_offset": 3735552,
     "image": "lilygo_t3_lora32_v1.6.1.webp"
   },
   {
     "name": "LILYGO_T-Beam",
     "chip": "ESP32",
-    "lfs_offset": 2686976,
+    "lfs_offset": 3735552,
     "image": "lilygo_t-beam.webp"
   },
   {
@@ -26,19 +32,19 @@
   {
     "name": "HELTEC_Wireless_Stick_Lite_V3",
     "chip": "ESP32-S3",
-    "lfs_offset": 2686976,
+    "lfs_offset": 3735552,
     "image": "heltec_wireless_stick_lite_v3.webp"
   },
   {
     "name": "HELTEC_WiFi_LoRa_32_V3",
     "chip": "ESP32-S3",
-    "lfs_offset": 2686976,
+    "lfs_offset": 3735552,
     "image": "heltec_wifi_lora32_v3.webp"
   },
   {
     "name": "HELTEC_WiFi_LoRa_32_V4",
     "chip": "ESP32-S3",
-    "lfs_offset": 2686976,
+    "lfs_offset": 3735552,
     "image": "heltec_wifi_lora32_v4.webp"
   },
   {
@@ -46,5 +52,11 @@
     "chip": "ESP32-S3",
     "lfs_offset": 4259840,
     "image": "seeed-sensecap-indicator.svg"
+  },
+  {
+    "name": "SEEED_XIAO_ESP32S3_Wio_SX1262",
+    "chip": "ESP32-S3",
+    "lfs_offset": 4259840,
+    "image": "seeed_xiao_esp32s3_wio_sx1262.svg"
   }
 ]

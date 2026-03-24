@@ -18,6 +18,10 @@
     #include "hal_SEEED_SenseCAP_Indicator.h"
 #elif defined(ESP32_WITHOUT_LORA)
     #include "hal_ESP32_Without_LoRa.h"
+#elif defined(ESP32_E22_V1)
+    #include "hal_ESP32_E22_V1.h"
+#elif defined(SEEED_XIAO_ESP32S3_WIO_SX1262)
+    #include "hal_SEEED_XIAO_ESP32S3_Wio_SX1262.h"
 #else
     #error "No HAL defined for this board!"
 #endif

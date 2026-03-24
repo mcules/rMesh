@@ -36,7 +36,22 @@ void sendFrame(Frame &f) {
     getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);    
     if (strlen(viaCall) > 0) { routing = true; }
 
-    for (int port = 0; port <= 1; port++) {
+    // Prüfen ob das geroutete Ziel per WiFi erreichbar ist
+    bool routeViaWifi = false;
+    if (routing) {
+        for (size_t pi = 0; pi < peerList.size(); pi++) {
+            if (strcmp(peerList[pi].nodeCall, viaCall) == 0 &&
+                peerList[pi].port == 1 && peerList[pi].available) {
+                routeViaWifi = true;
+                break;
+            }
+        }
+    }
+
+    for (int port = 1; port >= 0; port--) {
+        // LoRa komplett überspringen wenn geroutetes Ziel per WiFi erreichbar (WiFi = primär, HF = Fallback)
+        if (port == 0 && routeViaWifi) continue;
+
         uint8_t availableNodeCount = 0;
         f.viaCall[0] = 0;
         f.retry = TX_RETRY;
@@ -46,24 +61,22 @@ void sendFrame(Frame &f) {
         //An alle Peers senden
         for (int i = 0; i < peerList.size(); i++) {
             if ((peerList[i].available) && (peerList[i].port == port)) {
-                //if ((strlen(f.dstCall) == 0) || (checkRoute(f.dstCall, peerList[i].nodeCall))) {
-                if ((routing == false) || ( strcmp(peerList[i].nodeCall, viaCall) == 0)) {                    
-                    availableNodeCount ++;
+                if ((routing == false) || (strcmp(peerList[i].nodeCall, viaCall) == 0)) {
+                    availableNodeCount++;
                     f.port = peerList[i].port;
                     memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
                     if (txBuffer.size() == 0) {f.syncFlag = true;} else {f.syncFlag = false;}
                     txBuffer.push_back(f);
                 }
             }
-        } 
+        }
 
-        //Wenn keine Peers, Frame ohne Ziel und Retry senden
-        if (availableNodeCount == 0) {
-            //Frame in Sendebuffer
+        //Wenn keine Peers, Frame ohne Ziel und Retry senden (WiFi nur wenn Peers konfiguriert sind)
+        if (availableNodeCount == 0 && !(port == 1 && udpPeers.empty())) {
             f.viaCall[0] = 0;
             f.retry = 1;
             f.initRetry = 1;
-            f.syncFlag = false;            
+            f.syncFlag = false;
             f.port = port;
             txBuffer.push_back(f);
         }
@@ -231,7 +244,6 @@ void trimFileTask(void * pvParameters) {
             }
             countFile.close();
         }
-        Serial.printf("Trim-Task gestartet: Datei=%s, Zeilen aktuell=%d, Behalten=%d\n", p->fileName, lineCount, p->maxLines);
         // Berechnen, wie viele Zeilen übersprungen werden müssen
         if (lineCount > p->maxLines) {
             size_t linesToSkip = lineCount - p->maxLines;
@@ -275,7 +287,6 @@ void trimFileTask(void * pvParameters) {
                 
             }
         }
-        Serial.printf("Datei %s bereinigt. Zeilen vorher: %d, nachher: %d\n", p->fileName, lineCount, p->maxLines);
         xSemaphoreGive(fsMutex);
     }
 

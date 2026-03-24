@@ -322,6 +322,8 @@ static void doSave();
 static void doSaveSetup();
 static void doReboot();
 static void doUpdate();
+static void doForceUpdateRelease();
+static void doForceUpdateDev();
 static void doSaveGroups();
 static void doNewGroup();
 static void doAnnounce();
@@ -390,6 +392,8 @@ static MenuItem setupItems[] = {
     {"Speichern",       FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doSaveSetup},
     {"Neustart",        FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doReboot},
     {"Update",          FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doUpdate},
+    {"Update Release",  FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doForceUpdateRelease},
+    {"Update Dev",      FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, doForceUpdateDev},
     {"Nachr. loeschen", FTYPE_ACTION,       nullptr,            0, nullptr, nullptr, 0.f, 0.f, 0.f, nullptr},
 };
 
@@ -462,6 +466,14 @@ static void doReboot() {
 }
 static void doUpdate() {
     checkForUpdates();
+    uiMode = UI_CHAT; needRedraw = true;
+}
+static void doForceUpdateRelease() {
+    checkForUpdates(true, 0);
+    uiMode = UI_CHAT; needRedraw = true;
+}
+static void doForceUpdateDev() {
+    checkForUpdates(true, 1);
     uiMode = UI_CHAT; needRedraw = true;
 }
 static void doSaveGroups() {

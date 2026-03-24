@@ -33,6 +33,16 @@ bool getKeyApMode() {
     return !digitalRead(PIN_AP_MODE_SWITCH);
 }
 
+float getBatteryVoltage() {
+    analogSetPinAttenuation(PIN_VBAT_ADC, ADC_11db);
+    digitalWrite(PIN_VBAT_CTRL, HIGH);  // Spannungsteiler aktivieren (HIGH aktiv)
+    delay(10);
+    int sum = 0;
+    for (int i = 0; i < 8; i++) sum += analogRead(PIN_VBAT_ADC);
+    digitalWrite(PIN_VBAT_CTRL, LOW);   // Spannungsteiler deaktivieren
+    return (sum / 8.0f / 4095.0f) * 3.3f * 4.9f;
+}
+
 void initHal() {
     txFlag = false;
     rxFlag = false;
@@ -41,8 +51,10 @@ void initHal() {
     SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
 
     //Ausgäne
-    pinMode(PIN_WIFI_LED, OUTPUT); 
-    digitalWrite(PIN_WIFI_LED, 0); 
+    pinMode(PIN_WIFI_LED, OUTPUT);
+    digitalWrite(PIN_WIFI_LED, 0);
+    pinMode(PIN_VBAT_CTRL, OUTPUT);
+    digitalWrite(PIN_VBAT_CTRL, HIGH);  // Spannungsteiler standardmäßig aus
 
     //Eingänge
     pinMode(PIN_AP_MODE_SWITCH, INPUT);

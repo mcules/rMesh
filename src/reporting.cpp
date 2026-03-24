@@ -79,10 +79,7 @@ void reportTopology() {
     http.end();
 
     if (code == 200) {
-        Serial.println("Topology reported to rMesh.de");
         topologyChanged = false;
-    } else {
-        Serial.printf("Topology report failed: HTTP %d\n", code);
     }
 }
 
