@@ -1,5 +1,26 @@
 # Changelog
 
+## [v1.0.31-dev]
+
+### Web UI
+- NEU: Mobile und Desktop UI in ein einziges responsives Interface zusammengeführt
+- NEU: Mehrsprachigkeit (i18n) mit Sprachumschaltung Deutsch/Englisch über `i18n`
+- NEU: Digitale Uhr als Widget, altes Debug-Panel entfernt
+- NEU: Einheitliches Stylesheet
+- NEU: SVG-Icons (`announce.svg`, `logo.svg`) ersetzen PNG-Versionen
+- NEU: Einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts
+- FIX: Eingabefeld wird nach dem Senden automatisch geleert
+- CLEANUP: Obsolete Dateien entfernt
+
+### WiFi & Netzwerk
+- NEU: Erweiterte WiFi- und AP-Verwaltung mit neuen seriellen Befehlen
+- NEU: Verbesserte WiFi-Client/AP-Tabelle in der WebUI
+- NEU: WebSocket-Kommunikation überarbeitet
+
+### System
+- NEU: Erweitertes serielles Kommando-Interface
+- NEU: Erweiterte Settings-Verwaltung
+
 ## [v1.0.30a-dev]
 
 - FIX: OTA-Update schlug auf langsamen Verbindungen mit „HTTP error: read Timeout" fehl – TCP-Read-Timeout für LittleFS- und Firmware-Download von 30 s auf 120 s erhöht; betrifft sowohl automatische als auch manuelle Updates

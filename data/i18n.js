@@ -5,6 +5,7 @@ const I18N = {
         'nav.monitor': 'Monitor', 'nav.peers': 'Peers', 'nav.routing': 'Routing',
         'nav.dos': 'DOS', 'nav.tune': 'Tune', 'nav.announce': 'Announce',
         'nav.lora': 'LoRa', 'nav.setup': 'Setup', 'nav.network': 'Network', 'nav.about': 'About',
+        'nav.messaging': 'Messaging',
         'nav.section_nav': 'Navigation', 'nav.section_settings': 'Settings',
         'about.version': 'Version:', 'about.changelog': 'Changelog',
         'lora.section_freq': 'Frequency & Power', 'lora.section_mod': 'Modulation', 'lora.section_msg': 'Messages',
@@ -37,6 +38,7 @@ const I18N = {
         'setup.bat_full': 'Voltage at 100%:',
         'setup.section_system': 'System',
         'setup.language': 'Language:',
+        'setup.chat_fontsize': 'Chat font size:',
         // Network
         'net.ap': 'Access Point:', 'net.ap_name': 'AP Name:', 'net.ap_password': 'AP Password:',
         'net.wifi_networks': 'WiFi Networks', 'net.favorite': 'Preferred',
@@ -59,18 +61,21 @@ const I18N = {
         'auth.password_required': 'Password required', 'auth.login': 'Login',
         // Mobile
         'mob.message_placeholder': 'Message...',
+        'msg.max_length': 'Max message length reached: ',
         // Setup password status
         'pw.set': 'Password is set', 'pw.not_set': 'No password set',
         // Peer / Routing table headers
         'peer.port': 'Port', 'peer.call': 'Call', 'peer.last_rx': 'Last RX',
         'peer.rssi': 'RSSI', 'peer.snr': 'SNR', 'peer.frq_err': 'Frq. Error',
         'route.call': 'Call', 'route.node': 'Node', 'route.hops': 'HopCount', 'route.last_rx': 'Last RX',
+        'settings.saved': 'Settings saved.',
         'settings.unsaved_confirm': 'There are unsaved changes. Discard and continue?',
     },
     de: {
         'nav.monitor': 'Monitor', 'nav.peers': 'Peers', 'nav.routing': 'Routing',
         'nav.dos': 'DOS', 'nav.tune': 'Tune', 'nav.announce': 'Announce',
         'nav.lora': 'LoRa', 'nav.setup': 'Setup', 'nav.network': 'Netzwerk', 'nav.about': 'Über',
+        'nav.messaging': 'Messaging',
         'nav.section_nav': 'Navigation', 'nav.section_settings': 'Einstellungen',
         'about.version': 'Version:', 'about.changelog': 'Changelog',
         'lora.section_freq': 'Frequenz & Leistung', 'lora.section_mod': 'Modulation', 'lora.section_msg': 'Nachrichten',
@@ -100,6 +105,7 @@ const I18N = {
         'setup.bat_full': 'Spannung bei 100%:',
         'setup.section_system': 'System',
         'setup.language': 'Sprache:',
+        'setup.chat_fontsize': 'Chat-Schriftgröße:',
         'net.ap': 'Accesspoint:', 'net.ap_name': 'AP-Name:', 'net.ap_password': 'AP-Passwort:',
         'net.wifi_networks': 'WLAN-Netzwerke', 'net.favorite': 'Bevorzugt',
         'net.ssid': 'SSID:', 'net.password': 'Passwort:',
@@ -118,10 +124,12 @@ const I18N = {
         'udp.legacy': 'Legacy', 'udp.active': 'Aktiv',
         'auth.password_required': 'Passwort erforderlich', 'auth.login': 'Anmelden',
         'mob.message_placeholder': 'Nachricht...',
+        'msg.max_length': 'Maximale Nachrichtenlänge erreicht: ',
         'pw.set': 'Passwort ist gesetzt', 'pw.not_set': 'Kein Passwort gesetzt',
         'peer.port': 'Port', 'peer.call': 'Call', 'peer.last_rx': 'Last RX',
         'peer.rssi': 'RSSI', 'peer.snr': 'SNR', 'peer.frq_err': 'Frq. Error',
         'route.call': 'Call', 'route.node': 'Node', 'route.hops': 'HopCount', 'route.last_rx': 'Last RX',
+        'settings.saved': 'Einstellungen gespeichert.',
         'settings.unsaved_confirm': 'Es gibt ungespeicherte Änderungen. Verwerfen und fortfahren?',
     }
 };

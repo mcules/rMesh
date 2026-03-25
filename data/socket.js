@@ -197,7 +197,8 @@ function onMessage(event) {
         settings = d.settings;
         function fmtIP(a) { return (a && a[0] !== undefined) ? a[0]+'.'+a[1]+'.'+a[2]+'.'+a[3] : '-'; }
         fillSettingsForm(settings);
-        document.getElementById("appName").innerHTML = d.settings.name;
+        var appText = document.getElementById("appNameText");
+        if (appText) appText.textContent = d.settings.name;
         document.getElementById("version").innerHTML = d.settings.version;
         document.getElementById("myCall").innerHTML = d.settings.mycall;
         document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
@@ -438,9 +439,9 @@ function renderUdpPeers(peers) {
         var enabledSwitch = udpPeerToggle(p.enabled !== false);
         tr.innerHTML = '<td><span class="udpPeerCall">' + (p.call || '–') + '</span></td>'
             + '<td><input class="input-box udpPeerIP" value="' + p.ip.join('.') + '"></td>'
-            + '<td class="udpPeerLegacyCell">' + legacySwitch + '</td>'
-            + '<td class="udpPeerEnabledCell">' + enabledSwitch + '</td>'
-            + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()">' + t('btn.remove_peer') + '</button></td>';
+            + '<td class="udpPeerLegacyCell"><span class="toggle-label">' + t('udp.legacy') + '</span> ' + legacySwitch + '</td>'
+            + '<td class="udpPeerEnabledCell"><span class="toggle-label">' + t('udp.active') + '</span> ' + enabledSwitch + '</td>'
+            + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
         tbody.appendChild(tr);
     });
 }
@@ -452,9 +453,9 @@ function addUdpPeer() {
     tr.className = 'udpPeerRow';
     tr.innerHTML = '<td><span class="udpPeerCall">–</span></td>'
         + '<td><input class="input-box udpPeerIP" value=""></td>'
-        + '<td class="udpPeerLegacyCell">' + udpPeerToggle(false) + '</td>'
-        + '<td class="udpPeerEnabledCell">' + udpPeerToggle(true) + '</td>'
-        + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()">' + t('btn.remove_peer') + '</button></td>';
+        + '<td class="udpPeerLegacyCell"><span class="toggle-label">' + t('udp.legacy') + '</span> ' + udpPeerToggle(false) + '</td>'
+        + '<td class="udpPeerEnabledCell"><span class="toggle-label">' + t('udp.active') + '</span> ' + udpPeerToggle(true) + '</td>'
+        + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
     tbody.appendChild(tr);
 }
 
@@ -493,7 +494,7 @@ function renderWifiNetworks(nets) {
         tr.className = 'wifiNetRow';
         tr.innerHTML = '<td><input class="input-box wifiNetSSID" value="' + (n.ssid || '') + '"></td>'
             + '<td><input class="input-box wifiNetPW" type="password" value="' + (n.password || '') + '"></td>'
-            + '<td class="wifiNetFav">' + wifiFavRadio(!!n.favorite) + '</td>'
+            + '<td class="wifiNetFav"><span class="toggle-label">' + t('net.favorite') + '</span> ' + wifiFavRadio(!!n.favorite) + '</td>'
             + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
         tbody.appendChild(tr);
     });
@@ -507,7 +508,7 @@ function addWifiNetwork() {
     var isFav = (tbody.querySelectorAll('.wifiNetRow').length === 0);
     tr.innerHTML = '<td><input class="input-box wifiNetSSID" value=""></td>'
         + '<td><input class="input-box wifiNetPW" type="password" value=""></td>'
-        + '<td class="wifiNetFav">' + wifiFavRadio(isFav) + '</td>'
+        + '<td class="wifiNetFav"><span class="toggle-label">' + t('net.favorite') + '</span> ' + wifiFavRadio(isFav) + '</td>'
         + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
     tbody.appendChild(tr);
     tr.querySelector('.wifiNetSSID').focus();
@@ -529,7 +530,7 @@ function addWifiNetworkFromScan() {
     var isFav = (tbody.querySelectorAll('.wifiNetRow').length === 0);
     tr.innerHTML = '<td><input class="input-box wifiNetSSID" value="' + select.value + '"></td>'
         + '<td><input class="input-box wifiNetPW" type="password" value=""></td>'
-        + '<td class="wifiNetFav">' + wifiFavRadio(isFav) + '</td>'
+        + '<td class="wifiNetFav"><span class="toggle-label">' + t('net.favorite') + '</span> ' + wifiFavRadio(isFav) + '</td>'
         + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()" title="' + t('btn.remove_peer') + '">&#128465;</button></td>';
     tbody.appendChild(tr);
     tr.querySelector('.wifiNetPW').focus();
@@ -642,6 +643,8 @@ function saveSettings() {
     // Felder nach dem Speichern leeren
     document.getElementById("settingsWebPassword").value = "";
     document.getElementById("settingsWebPasswordConfirm").value = "";
+
+    showToast(t('settings.saved'));
 }
 
 function showMessages(parseAll = false) {
@@ -660,21 +663,18 @@ function showMessages(parseAll = false) {
 
         //Nachricht aufbereiten
         if ((m.messageType == 0) || (m.messageType == 1)) { //nur TEXT & TRACE Nachrichten
-            //if (m.dstCall.length == 0) {m.dstCall = "all";}
-            msg += "<span";
-            if (m.tx == true) {
-                msg += " class='middle-tx'> ";
-            } else {
-                msg += ">";
-            }
+            var txClass = m.tx ? ' msg-tx' : '';
             const date = new Date(m.timestamp * 1000);
-            msg += date.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "") + " ";		
-            msg += m.srcCall;
-            if (m.dstCall)  {msg += " " + m.dstCall; }
-            if (m.dstGroup)  {msg += " " + m.dstGroup; }
-            if (m.messageType == 1) {msg += " [TRACE] ";}
-            if (m.text) {msg += ": " + m.text;}
-            msg += "</span>"
+            var timeStr = date.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "");
+            var prefix = "";
+            if (m.dstCall)  { prefix += m.dstCall + ": "; }
+            if (m.dstGroup) { prefix += m.dstGroup + ": "; }
+            if (m.messageType == 1) { prefix += "[TRACE] "; }
+            msg += "<div class='msg-bubble" + txClass + "'>";
+            msg += "<span class='msg-time'>" + timeStr + "</span>";
+            msg += "<span class='msg-call' onclick='insertCallsign(\"" + m.srcCall.replace(/"/g, '') + "\")'>" + m.srcCall + "</span>";
+            msg += "<span class='msg-text'>" + prefix + (m.text || '') + "</span>";
+            msg += "</div>";
         }
         
         //Auf verschiedene Kanäle aufteilen
@@ -698,7 +698,7 @@ function showMessages(parseAll = false) {
             //Trennung
             if (m.delimiter == true) {
                 found = true;
-                document.getElementById("channel" + i).innerHTML += "<span>^</span>";
+                document.getElementById("channel" + i).innerHTML += "<span></span>";
             }
 
             //Nachricht an Gruppe -> Channel 3...10

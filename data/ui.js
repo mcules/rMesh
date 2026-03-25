@@ -3,6 +3,12 @@ var _settingsSnapshot = null;
 
 const SETTINGS_PANELS = ['lora', 'setup', 'network'];
 
+// On mobile, use "block" so content flows top-to-bottom; on desktop, use "flex" for column layout
+function showPanel(el) {
+    if (typeof el === 'string') el = document.getElementById(el);
+    el.style.display = (window.innerWidth < 768) ? 'block' : 'flex';
+}
+
 function captureSettingsSnapshot() {
     _settingsSnapshot = {};
     SETTINGS_PANELS.forEach(panelId => {
@@ -87,18 +93,18 @@ function setUI(value) {
 
     switch (ui) {
         case "channel1":
-            document.getElementById("channel1").style.display = "flex";
+            showPanel("channel1");
             document.getElementById("channelButton1").classList.add('selected');
-            document.getElementById("monitor").style.display = "flex";
+            showPanel("monitor");
             document.getElementById("messageText1").style.display = "flex";
             document.getElementById("messageText1").focus();
             document.getElementById("dstCall").innerHTML = "all";
             activeChannel = 1;
             break;
         case "channel2":
-            document.getElementById("channel2").style.display = "flex";
+            showPanel("channel2");
             document.getElementById("channelButton2").classList.add('selected');
-            document.getElementById("monitor").style.display = "flex";
+            showPanel("monitor");
             document.getElementById("messageText2").style.display = "flex";
             document.getElementById("messageText2").focus();
             document.getElementById("dstCall").innerHTML = Cookie.get("channel2", "");
@@ -107,9 +113,9 @@ function setUI(value) {
         case "channel3": case "channel4": case "channel5": case "channel6":
         case "channel7": case "channel8": case "channel9": case "channel10":
             var chNum = parseInt(ui.replace("channel", ""));
-            document.getElementById("channel" + chNum).style.display = "flex";
+            showPanel("channel" + chNum);
             document.getElementById("channelButton" + chNum).classList.add('selected');
-            document.getElementById("monitor").style.display = "flex";
+            showPanel("monitor");
             document.getElementById("messageText" + chNum).style.display = "flex";
             if (!channelSammel[chNum]) {
                 document.getElementById("messageText" + chNum).focus();
@@ -122,19 +128,19 @@ function setUI(value) {
         case "monitor":
             document.getElementById("monitorButton").classList.add('selected');
             document.getElementById("monitor").classList.add('big');
-            document.getElementById("monitor").style.display = "flex";
+            showPanel("monitor");
             document.getElementById("messageText0").style.display = "flex";
             document.getElementById("dstCall").innerHTML = "";
             break;
         case "peer":
             document.getElementById("peerButton").classList.add('selected');
-            document.getElementById("peer").style.display = "flex";
+            showPanel("peer");
             document.getElementById("messageText0").style.display = "flex";
             document.getElementById("dstCall").innerHTML = "";
             break;
         case "routing":
             document.getElementById("routingButton").classList.add('selected');
-            document.getElementById("routing").style.display = "flex";
+            showPanel("routing");
             document.getElementById("messageText0").style.display = "flex";
             document.getElementById("dstCall").innerHTML = "";
             break;
@@ -439,6 +445,10 @@ function initUI() {
             });
         }
 
+        document.getElementById('messageText' + i).addEventListener('input', function() {
+            checkMsgLength(this);
+        });
+
         document.getElementById('messageText' + i).addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 const pos = this.selectionStart;
@@ -448,16 +458,8 @@ function initUI() {
                 if (endOfLine === -1) endOfLine = text.length;
                 const currentLineText = text.substring(startOfLine, endOfLine);
                 sendMessage(currentLineText, i,);
-                
-                if (pos < text.length) {
-                    e.preventDefault(); 
-                    const nextLineIndex = text.indexOf('\n', pos);
-                    if (nextLineIndex !== -1) {
-                        this.setSelectionRange(nextLineIndex + 1, nextLineIndex + 1);
-                    } else {
-                        this.setSelectionRange(text.length, text.length);
-                    }
-                }
+                e.preventDefault();
+                this.value = '';
             }
         });
     }   
