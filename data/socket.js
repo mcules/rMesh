@@ -58,12 +58,11 @@ function onMessage(event) {
 
     // ── Passwort gespeichert ──────────────────────────────────────────────────
     if (d.passwordSaved !== undefined) {
-        console.log("[PW] passwordSaved empfangen:", d.passwordSaved);
         if (d.passwordSaved) {
-            msgBox("Passwort gespeichert. Seite wird neu geladen...");
+            msgBox("Password saved. Reloading page...");
             setTimeout(() => location.reload(), 2000);
         } else {
-            msgBox("Passwort entfernt.");
+            msgBox("Password removed.");
         }
         return;
     }
@@ -126,7 +125,7 @@ function onMessage(event) {
     if (d.peerlist) {
         var peers = "";
         peers += "<table>";
-        peers += "<tr> <td>Port</td> <td>Call</td> <td>Last RX</td> <td>RSSI</td> <td>SNR</td> <td>Frq. Error</td> </tr>";
+        peers += "<tr> <td>" + t('peer.port') + "</td> <td>" + t('peer.call') + "</td> <td>" + t('peer.last_rx') + "</td> <td>" + t('peer.rssi') + "</td> <td>" + t('peer.snr') + "</td> <td>" + t('peer.frq_err') + "</td> </tr>";
         if (d.peerlist.peers) {
             d.peerlist.peers.forEach(function(p, index) {
 				if (p.port == 0) {port = "LoRa";} else {port = "Wifi";}
@@ -151,7 +150,7 @@ function onMessage(event) {
     if (d.routingList) {
         var routing = "";
         routing += "<table>";
-        routing += "<tr> <td>Call</td> <td>Node</td> <td>HopCount</td> <td>Last RX</td> </tr>";
+        routing += "<tr> <td>" + t('route.call') + "</td> <td>" + t('route.node') + "</td> <td>" + t('route.hops') + "</td> <td>" + t('route.last_rx') + "</td> </tr>";
         if (d.routingList.routes) {
             d.routingList.routes.forEach(function(r, index) {
                 const lastRX = new Date(r.timestamp * 1000);
@@ -170,74 +169,52 @@ function onMessage(event) {
     //Einstellungen
     if (d.settings) {
         settings = d.settings;
-        document.getElementById("settingsMycall").value = d.settings.mycall;
-        document.getElementById("settingsPosition").value = d.settings.position || "";
-        document.getElementById("settingsNTP").value = d.settings.ntp;
-        document.getElementById("settingsSSID").value = d.settings.wifiSSID;
-        document.getElementById("settingsPassword").value = d.settings.wifiPassword;
-        document.getElementById("settingsWiFiIP").value = d.settings.wifiIP[0] + "." + d.settings.wifiIP[1] + "." + d.settings.wifiIP[2] + "." + d.settings.wifiIP[3];
-        document.getElementById("settingsWifiNetMask").value = d.settings.wifiNetMask[0] + "." + d.settings.wifiNetMask[1] + "." + d.settings.wifiNetMask[2] + "." + d.settings.wifiNetMask[3];
-        document.getElementById("settingsWifiGateway").value = d.settings.wifiGateway[0] + "." + d.settings.wifiGateway[1] + "." + d.settings.wifiGateway[2] + "." + d.settings.wifiGateway[3];
-        document.getElementById("settingsWifiDNS").value = d.settings.wifiDNS[0] + "." + d.settings.wifiDNS[1] + "." + d.settings.wifiDNS[2] + "." + d.settings.wifiDNS[3];
-        //document.getElementById("settingsWifiBrodcast").value = d.settings.wifiBrodcast[0] + "." + d.settings.wifiBrodcast[1] + "." + d.settings.wifiBrodcast[2] + "." + d.settings.wifiBrodcast[3];
-        document.getElementById("settingsDHCP").checked = d.settings.dhcpActive; 
-        document.getElementById("settingsApMode").checked = d.settings.apMode; 
-        document.getElementById("settingsLoraFrequency").value = d.settings.loraFrequency;
-        document.getElementById("settingsLoraOutputPower").value = d.settings.loraOutputPower;
-        document.getElementById("settingsLoraBandwidth").value = d.settings.loraBandwidth;
-        document.getElementById("settingsLoraSyncWord").value = d.settings.loraSyncWord.toString(16).padStart(2, '0').toUpperCase();
-        document.getElementById("settingsLoraCodingRate").value = d.settings.loraCodingRate;
-        document.getElementById("settingsLoraSpreadingFactor").value = d.settings.loraSpreadingFactor;
-        document.getElementById("settingsLoraPreambleLength").value = d.settings.loraPreambleLength;
-        // Preset-Dropdown aus aktueller Frequenz ableiten
-        const freq = d.settings.loraFrequency;
-        const presetEl = document.getElementById("loraPreset");
-        if (presetEl) {
-            if (freq >= 430 && freq <= 440)            presetEl.value = "433";
-            else if (freq >= 869.4 && freq <= 869.65)  presetEl.value = "868";
-            else                                       presetEl.value = "";
-        }
+        function fmtIP(a) { return (a && a[0] !== undefined) ? a[0]+'.'+a[1]+'.'+a[2]+'.'+a[3] : '-'; }
+        fillSettingsForm(settings);
         document.getElementById("version").innerHTML = d.settings.name + " " + d.settings.version;
         document.getElementById("myCall").innerHTML = d.settings.mycall;
-        document.getElementById("settingsLoraRepeat").checked = d.settings.loraRepeat;
-        document.getElementById("settingsLoraEnabled").checked = d.settings.loraEnabled !== false;
-        document.getElementById("settingsUpdateChannel").value = d.settings.updateChannel || 0;
-        document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters"; 
+        document.getElementById("settingsLoraMaxMessageLength").innerHTML = d.settings.loraMaxMessageLength + " characters";
         settings.titel = settings.name + " - " + settings.mycall;
         settings.altTitel = "🚨 " + settings.name + " - " + settings.mycall + " 🚨"
+        document.getElementById("currentWiFiIP").textContent      = fmtIP(d.settings.currentIP);
+        document.getElementById("currentWifiNetMask").textContent  = fmtIP(d.settings.currentNetMask);
+        document.getElementById("currentWifiGateway").textContent  = fmtIP(d.settings.currentGateway);
+        document.getElementById("currentWifiDNS").textContent      = fmtIP(d.settings.currentDNS);
         //UDP Peers
         if (d.settings.udpPeers) {
             renderUdpPeers(d.settings.udpPeers);
         }
 
-        // Chip ID + Hardware im Setup anzeigen
-        var chipIdEl = document.getElementById("setupChipId");
-        if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
-        var hwEl = document.getElementById("setupHardware");
-        if (hwEl) hwEl.innerHTML = d.settings.hardware || "";
+        captureSettingsSnapshot();
 
-        // Akku-Einstellungen (gp.html)
+        // Chip ID + Hardware in About panel
+        var chipIdEl = document.getElementById("aboutChipId");
+        if (chipIdEl) chipIdEl.innerHTML = d.settings.chipId || "";
+        var hwEl = document.getElementById("aboutHardware");
+        if (hwEl) hwEl.innerHTML = d.settings.hardware || "";
+        var aboutVersionEl = document.getElementById("aboutVersion");
+        if (aboutVersionEl) aboutVersionEl.innerHTML = (d.settings.name || "") + " " + (d.settings.version || "");
+        var aboutChangelogEl = document.getElementById("aboutChangelog");
+        if (aboutChangelogEl) aboutChangelogEl.textContent = d.settings.changelog || "";
+
+        // Battery status row visibility
         var hasBat = d.settings.hasBattery === true;
         var batEnabled = d.settings.batteryEnabled !== false;
         var batGpRow = document.getElementById("batteryGpRow");
         if (batGpRow) batGpRow.style.display = (hasBat && batEnabled) ? "" : "none";
         var batSettingsSection = document.getElementById("batterySettingsSection");
         if (batSettingsSection) batSettingsSection.style.display = hasBat ? "" : "none";
-        var batEnabledEl = document.getElementById("settingsBatteryEnabled");
-        if (batEnabledEl) batEnabledEl.checked = batEnabled;
-        var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
-        if (batVoltEl) batVoltEl.value = d.settings.batteryFullVoltage || 4.2;
 
-        // Passwort-Status anzeigen
+        // Password status display
         var pwStatus = document.getElementById("settingsWebPasswordStatus");
         var pwRemoveRow = document.getElementById("settingsWebPasswordRemoveRow");
         if (pwStatus) {
             if (d.settings.webPasswordSet) {
-                pwStatus.textContent = "Passwort ist gesetzt";
+                pwStatus.textContent = typeof t === 'function' ? t('pw.set') : 'Password is set';
                 pwStatus.style.color = "#4ecca3";
                 if (pwRemoveRow) pwRemoveRow.style.display = "";
             } else {
-                pwStatus.textContent = "Kein Passwort gesetzt";
+                pwStatus.textContent = typeof t === 'function' ? t('pw.not_set') : 'No password set';
                 pwStatus.style.color = "";
                 if (pwRemoveRow) pwRemoveRow.style.display = "none";
             }
@@ -245,9 +222,8 @@ function onMessage(event) {
 
         if (init == false) {
             init = true;
-            //for (let i = 0; i <= 10; i++) {channels[i] = false;} 
+            //for (let i = 0; i <= 10; i++) {channels[i] = false;}
             //setUI(ui);
-            settingsVisibility();
             messages = [];
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
             fetch(baseURL + "messages.json?" + Math.random())
@@ -303,7 +279,7 @@ function onMessage(event) {
     if (d.update) {
         var el = document.getElementById("updateInfo");
         if (el) {
-            el.innerHTML = 'Update ' + d.update.version + ' verfügbar! <a href="' + d.update.url + '" target="_blank">www.rMesh.de</a>';
+            el.innerHTML = 'Update ' + d.update.version + ' available! <a href="' + d.update.url + '" target="_blank">www.rMesh.de</a>';
             el.style.display = '';
         }
         var row = document.getElementById("updateRow");
@@ -404,21 +380,36 @@ function onFrequencyChange() {
     }
 }
 
+function udpPeerToggle(checked) {
+    return '<label class="toggle-switch">'
+        + '<input type="checkbox"' + (checked ? ' checked' : '') + '>'
+        + '<span class="toggle-track"><span class="toggle-thumb"></span></span>'
+        + '</label>';
+}
+
 function renderUdpPeers(peers) {
     var list = document.getElementById('udpPeerList');
     if (!list) return;
     list.innerHTML = '<table class="udpPeerTable">'
-        + '<thead><tr><th>Call</th><th>IP</th><th>legacy</th><th>aktiv</th><th></th></tr></thead>'
+        + '<thead><tr>'
+        + '<th>' + t('peer.call') + '</th>'
+        + '<th>IP</th>'
+        + '<th>' + t('udp.legacy') + '</th>'
+        + '<th>' + t('udp.active') + '</th>'
+        + '<th></th>'
+        + '</tr></thead>'
         + '<tbody id="udpPeerBody"></tbody></table>';
     peers.forEach(function(p) {
         var tbody = document.getElementById('udpPeerBody');
         var tr = document.createElement('tr');
         tr.className = 'udpPeerRow';
+        var legacySwitch = udpPeerToggle(!!p.legacy);
+        var enabledSwitch = udpPeerToggle(p.enabled !== false);
         tr.innerHTML = '<td><span class="udpPeerCall">' + (p.call || '–') + '</span></td>'
             + '<td><input class="input-box udpPeerIP" value="' + p.ip.join('.') + '"></td>'
-            + '<td><input type="checkbox" class="udpPeerLegacy"' + (p.legacy ? ' checked' : '') + '></td>'
-            + '<td><input type="checkbox" class="udpPeerEnabled"' + (p.enabled !== false ? ' checked' : '') + '></td>'
-            + '<td><button class="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+            + '<td class="udpPeerLegacyCell">' + legacySwitch + '</td>'
+            + '<td class="udpPeerEnabledCell">' + enabledSwitch + '</td>'
+            + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()">' + t('btn.remove_peer') + '</button></td>';
         tbody.appendChild(tr);
     });
 }
@@ -428,11 +419,48 @@ function addUdpPeer() {
     if (!tbody) { renderUdpPeers([]); tbody = document.getElementById('udpPeerBody'); }
     var tr = document.createElement('tr');
     tr.className = 'udpPeerRow';
-    tr.innerHTML = '<td><input class="input-box udpPeerIP" value=""></td>'
-        + '<td><input type="checkbox" class="udpPeerLegacy"></td>'
-        + '<td><input type="checkbox" class="udpPeerEnabled" checked></td>'
-        + '<td><button class="button" onclick="this.closest(\'tr\').remove()">✕</button></td>';
+    tr.innerHTML = '<td><span class="udpPeerCall">–</span></td>'
+        + '<td><input class="input-box udpPeerIP" value=""></td>'
+        + '<td class="udpPeerLegacyCell">' + udpPeerToggle(false) + '</td>'
+        + '<td class="udpPeerEnabledCell">' + udpPeerToggle(true) + '</td>'
+        + '<td><button class="button button-danger" onclick="this.closest(\'tr\').remove()">' + t('btn.remove_peer') + '</button></td>';
     tbody.appendChild(tr);
+}
+
+function fillSettingsForm(s) {
+    document.getElementById("settingsMycall").value = s.mycall;
+    document.getElementById("settingsPosition").value = s.position || "";
+    document.getElementById("settingsNTP").value = s.ntp;
+    document.getElementById("settingsSSID").value = s.wifiSSID;
+    document.getElementById("settingsPassword").value = s.wifiPassword;
+    document.getElementById("settingsWiFiIP").value = s.wifiIP[0] + "." + s.wifiIP[1] + "." + s.wifiIP[2] + "." + s.wifiIP[3];
+    document.getElementById("settingsWifiNetMask").value = s.wifiNetMask[0] + "." + s.wifiNetMask[1] + "." + s.wifiNetMask[2] + "." + s.wifiNetMask[3];
+    document.getElementById("settingsWifiGateway").value = s.wifiGateway[0] + "." + s.wifiGateway[1] + "." + s.wifiGateway[2] + "." + s.wifiGateway[3];
+    document.getElementById("settingsWifiDNS").value = s.wifiDNS[0] + "." + s.wifiDNS[1] + "." + s.wifiDNS[2] + "." + s.wifiDNS[3];
+    document.getElementById("settingsDHCP").checked = s.dhcpActive;
+    document.getElementById("settingsApMode").checked = s.apMode;
+    document.getElementById("settingsLoraFrequency").value = s.loraFrequency;
+    document.getElementById("settingsLoraOutputPower").value = s.loraOutputPower;
+    document.getElementById("settingsLoraBandwidth").value = s.loraBandwidth;
+    document.getElementById("settingsLoraSyncWord").value = s.loraSyncWord.toString(16).padStart(2, '0').toUpperCase();
+    document.getElementById("settingsLoraCodingRate").value = s.loraCodingRate;
+    document.getElementById("settingsLoraSpreadingFactor").value = s.loraSpreadingFactor;
+    document.getElementById("settingsLoraPreambleLength").value = s.loraPreambleLength;
+    const presetEl = document.getElementById("loraPreset");
+    if (presetEl) {
+        const freq = s.loraFrequency;
+        if (freq >= 430 && freq <= 440)            presetEl.value = "433";
+        else if (freq >= 869.4 && freq <= 869.65)  presetEl.value = "868";
+        else                                       presetEl.value = "";
+    }
+    document.getElementById("settingsLoraRepeat").checked = s.loraRepeat;
+    document.getElementById("settingsLoraEnabled").checked = s.loraEnabled !== false;
+    document.getElementById("settingsUpdateChannel").value = s.updateChannel || 0;
+    const batEnabledEl = document.getElementById("settingsBatteryEnabled");
+    if (batEnabledEl) batEnabledEl.checked = s.batteryEnabled !== false;
+    const batVoltEl = document.getElementById("settingsBatteryFullVoltage");
+    if (batVoltEl) batVoltEl.value = s.batteryFullVoltage || 4.2;
+    settingsVisibility();
 }
 
 function saveSettings() {
@@ -440,7 +468,7 @@ function saveSettings() {
     var pw1 = document.getElementById("settingsWebPassword").value;
     var pw2 = document.getElementById("settingsWebPasswordConfirm").value;
     if (pw1 !== pw2) {
-        msgBox("Passwörter stimmen nicht überein!");
+        msgBox("Passwords do not match!");
         return;
     }
 
@@ -473,9 +501,11 @@ function saveSettings() {
     s["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";
-        s["udpPeers"].push({ "ip": val.split('.').map(Number), "legacy": row.querySelector('.udpPeerLegacy').checked, "enabled": row.querySelector('.udpPeerEnabled').checked });
+        s["udpPeers"].push({ "ip": val.split('.').map(Number), "legacy": row.querySelector('.udpPeerLegacyCell input').checked, "enabled": row.querySelector('.udpPeerEnabledCell input').checked });
     });
     sendWS(JSON.stringify({settings: s}));
+    captureSettingsSnapshot();
+    settingsDirty = false;
 
     // ── Passwort setzen (nur wenn Felder ausgefüllt) ──────────────────────────
     if (pw1 !== "") {
@@ -598,6 +628,8 @@ function initWebSocket() {
         baseURL = "http://192.168.33.60/"
     }
 
+    if (typeof setAntennaColor === 'function') setAntennaColor('#525252');
+
     //Websocket init
     websocket = new WebSocket(gateway);
     websocket.onopen = onOpen;
@@ -608,11 +640,13 @@ function initWebSocket() {
 function onOpen(event) {
     init = false;
     authRequired = false;
+    if (typeof setAntennaColor === 'function') setAntennaColor('#4ecca3');
     keepAlive();
 }
 
 function onClose(event) {
     init = false;
+    if (typeof setAntennaColor === 'function') setAntennaColor('#525252');
     clearTimeout(timeout);
     setTimeout(initWebSocket, 500);
 }

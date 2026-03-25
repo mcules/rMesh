@@ -1,4 +1,52 @@
+var settingsDirty = false;
+var _settingsSnapshot = null;
+
+const SETTINGS_PANELS = ['lora', 'setup', 'network'];
+
+function captureSettingsSnapshot() {
+    _settingsSnapshot = {};
+    SETTINGS_PANELS.forEach(panelId => {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        panel.querySelectorAll('input, select, textarea').forEach(el => {
+            if (!el.id) return;
+            _settingsSnapshot[el.id] = (el.type === 'checkbox') ? el.checked : el.value;
+        });
+    });
+}
+
+function restoreSettings() {
+    settingsDirty = false;
+
+    if (!settings) return;
+
+    fillSettingsForm(settings);
+
+    if (settings.udpPeers) {
+        renderUdpPeers(settings.udpPeers);
+    } else {
+        renderUdpPeers([]);
+    }
+
+    var pw1 = document.getElementById("settingsWebPassword");
+    var pw2 = document.getElementById("settingsWebPasswordConfirm");
+    var pwMatchRow = document.getElementById("settingsWebPasswordMatchRow");
+    var pwMatch = document.getElementById("settingsWebPasswordMatch");
+
+    if (pw1) pw1.value = "";
+    if (pw2) pw2.value = "";
+    if (pwMatchRow) pwMatchRow.style.display = "none";
+    if (pwMatch) pwMatch.textContent = "";
+
+    captureSettingsSnapshot();
+    settingsVisibility();
+}
+
 function setUI(value) {
+    if (SETTINGS_PANELS.includes(ui) && value !== ui && settingsDirty) {
+        if (!confirm(t('settings.unsaved_confirm'))) return;
+        restoreSettings();
+    }
     ui = value;
     Cookie.set("ui", ui);
     //Alles ausblenden
@@ -25,6 +73,7 @@ function setUI(value) {
     document.getElementById("loraButton").classList.remove('selected');
     document.getElementById("setupButton").classList.remove('selected');
     document.getElementById("networkButton").classList.remove('selected');
+    document.getElementById("aboutButton").classList.remove('selected');
     document.getElementById("monitor").classList.remove('big');
     document.getElementById("monitor").style.display = "none";
     document.getElementById("peer").style.display = "none";
@@ -32,6 +81,7 @@ function setUI(value) {
     document.getElementById("lora").style.display = "none";
     document.getElementById("setup").style.display = "none";
     document.getElementById("network").style.display = "none";
+    document.getElementById("about").style.display = "none";
     document.getElementById("dstCall").innerHTML = "";
     activeChannel = 0;
 
@@ -147,25 +197,35 @@ function setUI(value) {
             break;
         case "lora":
             document.getElementById("loraButton").classList.add('selected');
-            document.getElementById("lora").style.display = "flex";
+            document.getElementById("lora").style.display = "";
             document.getElementById("messageText0").style.display = "flex";
             document.getElementById("dstCall").innerHTML = "";
             break;
         case "setup":
             document.getElementById("setupButton").classList.add('selected');
-            document.getElementById("setup").style.display = "flex";
+            document.getElementById("setup").style.display = "";
             document.getElementById("messageText0").style.display = "flex";
             document.getElementById("dstCall").innerHTML = "";
             break;
         case "network":
             document.getElementById("networkButton").classList.add('selected');
-            document.getElementById("network").style.display = "flex";
+            document.getElementById("network").style.display = "";
+            document.getElementById("messageText0").style.display = "flex";
+            document.getElementById("dstCall").innerHTML = "";
+            break;
+        case "about":
+            document.getElementById("aboutButton").classList.add('selected');
+            document.getElementById("about").style.display = "";
             document.getElementById("messageText0").style.display = "flex";
             document.getElementById("dstCall").innerHTML = "";
             break;
     }
 
     document.getElementById('monitor').scrollTop = document.getElementById("monitor").scrollHeight;
+
+    // Update mobile UI if in mobile mode
+    if (typeof updateMobUI === 'function') updateMobUI();
+
     var globalUnread = false;
     for (let i = 1; i <= 10; i++) {
         document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight;
@@ -197,6 +257,9 @@ function settingsVisibility() {
         for (e of document.getElementsByClassName('DHCP_ENABLED')) {
             e.style.display = "none";
         }
+        for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
+            e.style.display = "none";
+        }
         for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
             e.style.display = "none";
         }				
@@ -208,9 +271,15 @@ function settingsVisibility() {
             for (e of document.getElementsByClassName('DHCP_ENABLED')) {
                 e.style.display = "none";
             }
+            for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
+                e.style.display = "";
+            }
         } else {
             for (e of document.getElementsByClassName('DHCP_ENABLED')) {
                 e.style.display = "";
+            }
+            for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
+                e.style.display = "none";
             }
         }
     }
@@ -365,7 +434,17 @@ function showChannelSettings(channelIdx) {
     });
 }
 
+function initSettingsDirtyTracking() {
+    SETTINGS_PANELS.forEach(panelId => {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        panel.addEventListener('input', () => { settingsDirty = true; });
+        panel.addEventListener('change', () => { settingsDirty = true; });
+    });
+}
+
 function initUI() {
+    initSettingsDirtyTracking();
     //Aktionen für Channel Buttons
     for (let i = 1; i <= 10; i++) {
         if (i > 2) {

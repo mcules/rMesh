@@ -1,48 +1,10 @@
 <!DOCTYPE html>
-<html lang="de">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>rMesh - Weiterleitung...</title>
-    
-    <script>
-        (function() {
-            // Funktion zur Erkennung von Mobilgeräten
-            function isMobile() {
-                const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-                
-                // 1. Prüfung über User Agent (RegEx für gängige Mobilgeräte)
-                const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
-                
-                // 2. Zusätzliche Prüfung über die Bildschirmbreite (optional, aber sicher)
-                const isSmallScreen = window.innerWidth <= 800;
-
-                return mobileRegex.test(userAgent) || isSmallScreen;
-            }
-
-            // Weiterleitung ausführen
-            if (isMobile()) {
-                window.location.replace("mobile.html");
-            } else {
-                window.location.replace("gp.html");
-            }
-        })();
-    </script>
-    
-    <style>
-        /* Falls JavaScript deaktiviert ist, zeigen wir Notfall-Links an */
-        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background: #1a1a1a; color: white; }
-        .fallback { text-align: center; }
-        a { color: #00d1b2; text-decoration: none; border: 1px solid #00d1b2; padding: 10px 20px; border-radius: 5px; }
-    </script>
+<meta http-equiv="refresh" content="0; url=gp.html">
+<meta charset="utf-8">
 </head>
 <body>
-    <noscript>
-        <div class="fallback">
-            <h2>rMesh Messenger</h2>
-            <p>Bitte wählen Sie Ihre Version:</p>
-            <a href="mobile.html">Mobile Version</a> | <a href="desktop.html">Desktop Version</a>
-        </div>
-    </noscript>
+<a href="gp.html">rMesh</a>
 </body>
 </html>

@@ -133,6 +133,24 @@ void sendSettings() {
     doc["settings"]["wifiBrodcast"][1] = settings.wifiBrodcast[1];
     doc["settings"]["wifiBrodcast"][2] = settings.wifiBrodcast[2];
     doc["settings"]["wifiBrodcast"][3] = settings.wifiBrodcast[3];
+    if (WiFi.status() == WL_CONNECTED) {
+        doc["settings"]["currentIP"][0] = WiFi.localIP()[0];
+        doc["settings"]["currentIP"][1] = WiFi.localIP()[1];
+        doc["settings"]["currentIP"][2] = WiFi.localIP()[2];
+        doc["settings"]["currentIP"][3] = WiFi.localIP()[3];
+        doc["settings"]["currentNetMask"][0] = WiFi.subnetMask()[0];
+        doc["settings"]["currentNetMask"][1] = WiFi.subnetMask()[1];
+        doc["settings"]["currentNetMask"][2] = WiFi.subnetMask()[2];
+        doc["settings"]["currentNetMask"][3] = WiFi.subnetMask()[3];
+        doc["settings"]["currentGateway"][0] = WiFi.gatewayIP()[0];
+        doc["settings"]["currentGateway"][1] = WiFi.gatewayIP()[1];
+        doc["settings"]["currentGateway"][2] = WiFi.gatewayIP()[2];
+        doc["settings"]["currentGateway"][3] = WiFi.gatewayIP()[3];
+        doc["settings"]["currentDNS"][0] = WiFi.dnsIP()[0];
+        doc["settings"]["currentDNS"][1] = WiFi.dnsIP()[1];
+        doc["settings"]["currentDNS"][2] = WiFi.dnsIP()[2];
+        doc["settings"]["currentDNS"][3] = WiFi.dnsIP()[3];
+    }
     doc["settings"]["loraFrequency"] = settings.loraFrequency;
     doc["settings"]["loraOutputPower"] = settings.loraOutputPower;
     doc["settings"]["loraBandwidth"] = settings.loraBandwidth;

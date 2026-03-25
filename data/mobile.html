@@ -38,8 +38,7 @@
         <table>
             <tr> <td>Accesspoint</td> <td><input type="checkbox" id="settingsApMode" onclick="settingsVisibility();"></td> </tr> 
             <tr class="AP_MODE_ENABLED"> 
-                <td>WiFi<br>Networks</nr> </td> 
-                <td> 
+                <td>WiFi<br>Networks</td> <td> 
                     <select id='settingsSSIDList'></select> 
                     <button id="settingsScanWifi">scan</button> 
                 </td>
@@ -153,15 +152,15 @@
             <tr> <td>New Password</td> <td><input type="password" id="settingsWebPassword" autocomplete="new-password"></td> </tr>
             <tr> <td>Confirm</td> <td><input type="password" id="settingsWebPasswordConfirm" autocomplete="new-password" oninput="checkPwMatch()"></td> </tr>
             <tr id="settingsWebPasswordMatchRow" style="display:none;"> <td></td> <td><span id="settingsWebPasswordMatch"></span></td> </tr>
-            <tr id="settingsWebPasswordRemoveRow" style="display:none"> <td></td> <td><button class="button" onclick="removeWebPassword()">remove password</button></td> </tr>
+            <tr id="settingsWebPasswordRemoveRow" style="display:none"> <td></td> <td><button class="button" onclick="removeWebPassword()">Passwort löschen</button></td> </tr>
             <tr id="batterySettingsHeader" style="display:none"> <td colspan="2">Akku</td> </tr>
             <tr id="batterySettingsEnabled" style="display:none"> <td>Akkustand anzeigen</td> <td><input type="checkbox" id="settingsBatteryEnabled"></td> </tr>
             <tr id="batterySettingsVoltage" style="display:none"> <td>Spannung bei 100%</td> <td><input id="settingsBatteryFullVoltage" type="number" step="0.05" min="3.5" max="4.4" style="width:5em"> V</td> </tr>
         </table>
         <button class="button" onclick="saveSettings();">save</button>
+        <button class="button" onclick="syncTime();">sync browser time</button>
         <button class="button" onclick="reboot();">reboot</button>
         <button class="button" onclick="shutdown();">shutdown</button>
-        <button class="button" onclick="syncTime();">sync browser time</button>
     </main>
 
     <main id="cPeers" class="content-section">

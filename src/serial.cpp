@@ -4,22 +4,15 @@
 #include <cstring>
 #include <nvs_flash.h>
 
-#include "frame.h"
 #include "serial.h"
 #include "config.h"
 #include "settings.h"
-#include "hal.h"
-#include "settings.h"
 #include "main.h"
 #include "wifiFunctions.h"
-#include "helperFunctions.h"
-#include "routing.h"
 #include "auth.h"
 #include "mbedtls/md.h"
 
-//String serialRxBuffer;
-
-char serialRxBuffer[200] = {0}; 
+char serialRxBuffer[200] = {0};
 
 
 void checkSerialRX() {
