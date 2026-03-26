@@ -253,6 +253,9 @@ void startWebServer() {
             if (json["settings"]["maxHopTelemetry"].is<JsonVariant>()) {
                 extSettings.maxHopTelemetry = json["settings"]["maxHopTelemetry"].as<uint8_t>();
             }
+            if (json["settings"]["minSnr"].is<JsonVariant>()) {
+                extSettings.minSnr = json["settings"]["minSnr"].as<int8_t>();
+            }
             if (json["settings"]["updateChannel"].is<JsonVariant>()) {
                 updateChannel = json["settings"]["updateChannel"].as<uint8_t>();
             }

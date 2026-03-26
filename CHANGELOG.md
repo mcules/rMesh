@@ -2,6 +2,11 @@
 
 ## [v1.0.31-dev]
 
+### Stabilität & Effizienz
+- FIX: Sichere malloc/new-Prüfungen – alle Heap-Allokationen in `helperFunctions.cpp`, `main.cpp` und `settings.cpp` werden auf `nullptr` geprüft; bei Fehlschlag wird sauber abgebrochen und ein `[OOM]`-Log geschrieben statt Absturz
+- FIX: Doppelte Nachrichten (Duplikate) werden jetzt sofort aus dem TX-Buffer entfernt, wenn die Deduplikation im Ring-Buffer einen bereits bekannten Frame erkennt – verhindert unnötige Sendewiederholungen
+- NEU: Konfigurierbarer minimaler SNR-Schwellwert für die Peer-Liste – LoRa-Peers unterhalb des eingestellten SNR-Werts werden automatisch als nicht verfügbar markiert; einstellbar in den LoRa-Einstellungen der WebUI (Aus, -20 bis +10 dB); Default: deaktiviert (-30 dB)
+
 ### OLED Status-Display
 - NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam – Display zeigt Callsign, Akkustand, WiFi-Modus, IP-Adresse, SSID und letzte empfangene Nachricht
 - NEU: Boot-Button-Steuerung – kurzer Druck schaltet Display ein/aus, langer Druck (≥2 s) wechselt zwischen AP- und Client-Modus mit anschließendem Reboot
@@ -21,6 +26,7 @@
 - CLEANUP: Obsolete Dateien entfernt
 
 ### WiFi & Netzwerk
+- NEU: mDNS-Support – Node ist per `<callsign>-rmesh.local` im lokalen Netzwerk erreichbar (inkl. HTTP Service-Discovery)
 - NEU: Erweiterte WiFi- und AP-Verwaltung mit neuen seriellen Befehlen
 - NEU: Verbesserte WiFi-Client/AP-Tabelle in der WebUI
 - NEU: WebSocket-Kommunikation überarbeitet

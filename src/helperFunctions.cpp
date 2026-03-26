@@ -90,6 +90,10 @@ void sendFrame(Frame &f) {
 
     //Message an Websocket senden & speichern
     char* jsonBuffer = (char*)malloc(2048);
+    if (jsonBuffer == nullptr) {
+        Serial.println("[OOM] sendFrame: malloc failed");
+        return;
+    }
     size_t len = f.messageJSON(jsonBuffer, 2048);
     ws.textAll(jsonBuffer, len);
     addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
@@ -211,6 +215,10 @@ void addJSONtoFileTask(void * pvParameters) {
 void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
     // Parameter für den Task vorbereiten
     FileWriteParams* p = new FileWriteParams();
+    if (p == nullptr) {
+        Serial.println("[OOM] addJSONtoFile: new FileWriteParams failed");
+        return;
+    }
     // 1. Inhalt kopieren
     p->content = (char*)malloc(length);
     if (p->content != nullptr) {
@@ -297,6 +305,10 @@ void trimFileTask(void * pvParameters) {
 
 void trimFile(const char* fileName, size_t maxLines) {
     FileWriteParams* p = new FileWriteParams();
+    if (p == nullptr) {
+        Serial.println("[OOM] trimFile: new FileWriteParams failed");
+        return;
+    }
     strncpy(p->fileName, fileName, sizeof(p->fileName) - 1);
     p->fileName[sizeof(p->fileName) - 1] = '\0'; // Null-Terminierung erzwingen
     p->maxLines = (uint16_t)maxLines;

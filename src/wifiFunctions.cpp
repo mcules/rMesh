@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <WiFi.h>
+#include <ESPmDNS.h>
 #include <ArduinoJson.h>
 #include <HTTPClient.h>
 #include <HTTPUpdate.h>
@@ -403,8 +404,14 @@ void wifiInit() {
         WiFi.setAutoReconnect(wifiNetworks.size() <= 1);
     }
     WiFi.setSleep(false);
-    WiFi.setHostname(settings.mycall);
+    // Build mDNS hostname: <callsign>-rmesh (resolves as <callsign>-rmesh.local)
+    String mdnsName = String(settings.mycall) + "-rmesh";
+    mdnsName.toLowerCase();
+    WiFi.setHostname(mdnsName.c_str());
     WiFi.setTxPower(WIFI_POWER_19_5dBm);
     WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
+    if (MDNS.begin(mdnsName.c_str())) {
+        MDNS.addService("http", "tcp", 80);
+    }
 }
 

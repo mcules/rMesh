@@ -569,6 +569,8 @@ function fillSettingsForm(s) {
     }
     document.getElementById("settingsLoraRepeat").checked = s.loraRepeat;
     document.getElementById("settingsLoraEnabled").checked = s.loraEnabled !== false;
+    var minSnrEl = document.getElementById("settingsMinSnr");
+    if (minSnrEl) minSnrEl.value = (s.minSnr !== undefined) ? s.minSnr : -30;
     document.getElementById("settingsUpdateChannel").value = s.updateChannel || 0;
     const batEnabledEl = document.getElementById("settingsBatteryEnabled");
     if (batEnabledEl) batEnabledEl.checked = s.batteryEnabled !== false;
@@ -647,6 +649,8 @@ function saveSettings() {
     s["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     s["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
     s["loraEnabled"] = document.getElementById("settingsLoraEnabled").checked;
+    var minSnrEl = document.getElementById("settingsMinSnr");
+    if (minSnrEl) s["minSnr"] = parseInt(minSnrEl.value);
     s["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
     var batEnabledEl = document.getElementById("settingsBatteryEnabled");
     if (batEnabledEl) s["batteryEnabled"] = batEnabledEl.checked;

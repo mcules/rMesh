@@ -61,6 +61,18 @@ void checkPeerList() {
         }
     }
 
+    // Filter LoRa peers below minimum SNR threshold
+    if (extSettings.minSnr > -30) {
+        for (auto& peer : peerList) {
+            if (peer.available && peer.port == 0 && peer.snr < extSettings.minSnr) {
+                peer.available = false;
+                update = true;
+                Serial.printf("[Peer] %s (Port %d) below min SNR (%.1f < %d dB)\n",
+                    peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
+            }
+        }
+    }
+
     // Prefer WiFi (port 1) over LoRa (port 0); if same port, keep better SNR
     for (size_t i = 0; i < peerList.size(); i++) {
         if (!peerList[i].available) continue;
@@ -168,12 +180,18 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
     });
 
     if (it != peerList.end()) {
-        if (it->available != available) {
-            it->available = available;
+        // Reject availability for LoRa peers below minimum SNR threshold
+        bool effectiveAvailable = available;
+        if (available && it->port == 0 && extSettings.minSnr > -30 && it->snr < extSettings.minSnr) {
+            effectiveAvailable = false;
+        }
+
+        if (it->available != effectiveAvailable) {
+            it->available = effectiveAvailable;
             update = true;
         }
 
-        if (available) {
+        if (effectiveAvailable) {
             it->timestamp = time(NULL);
         }
     }

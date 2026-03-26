@@ -272,6 +272,18 @@ void processRxFrame(Frame &f) {
             // Update routing: the sender is reachable via nodeCall
             addRoutingList(f.srcCall, f.nodeCall, f.hopCount);
 
+            // Duplicate detected: remove any remaining relay copies from TX buffer
+            if (found) {
+                txBuffer.erase(
+                    std::remove_if(txBuffer.begin(), txBuffer.end(),
+                        [&](const Frame& txB) {
+                            return (strcmp(txB.srcCall, f.srcCall) == 0) && (txB.id == f.id)
+                                && (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
+                        }),
+                    txBuffer.end()
+                );
+            }
+
             if ((found == false) && (f.messageLength > 0)) {
                 // ── New, unseen message ──────────────────────────────────────
 
@@ -283,6 +295,10 @@ void processRxFrame(Frame &f) {
 
                 // Serialize to JSON, broadcast via WebSocket, and append to flash
                 char* jsonBuffer = (char*)malloc(4096);
+                if (jsonBuffer == nullptr) {
+                    Serial.println("[OOM] processRxFrame: malloc failed");
+                    break;
+                }
                 size_t len = f.messageJSON(jsonBuffer, 4096);
                 ws.textAll(jsonBuffer, len);
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
@@ -673,10 +689,14 @@ void loop() {
         if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
         #endif
         char* jsonBuffer = (char*)malloc(1024);
-        size_t len = serializeJson(doc, jsonBuffer, 1024);
-        ws.textAll(jsonBuffer, len);
-        free(jsonBuffer);
-        jsonBuffer = nullptr;
+        if (jsonBuffer != nullptr) {
+            size_t len = serializeJson(doc, jsonBuffer, 1024);
+            ws.textAll(jsonBuffer, len);
+            free(jsonBuffer);
+            jsonBuffer = nullptr;
+        } else {
+            Serial.println("[OOM] loop status: malloc failed");
+        }
         // Expire stale peers once per second
         checkPeerList();
     }

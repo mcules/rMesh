@@ -82,6 +82,7 @@ void showSettings() {
     Serial.printf("maxHopMessage: %d\n", extSettings.maxHopMessage);
     Serial.printf("maxHopPosition: %d\n", extSettings.maxHopPosition);
     Serial.printf("maxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
+    Serial.printf("minSnr: %d dB\n", extSettings.minSnr);
     Serial.println();
     Serial.println("WiFi Status:");
     switch(WiFi.status()) {
@@ -209,6 +210,7 @@ void sendSettings() {
     doc["settings"]["maxHopMessage"] = extSettings.maxHopMessage;
     doc["settings"]["maxHopPosition"] = extSettings.maxHopPosition;
     doc["settings"]["maxHopTelemetry"] = extSettings.maxHopTelemetry;
+    doc["settings"]["minSnr"] = extSettings.minSnr;
     doc["settings"]["updateChannel"]      = updateChannel;
     doc["settings"]["loraEnabled"]        = loraEnabled;
     #ifdef HAS_BATTERY_ADC
@@ -222,6 +224,10 @@ void sendSettings() {
     doc["settings"]["oledDisplayGroup"]   = oledDisplayGroup;
     size_t bufSize = 4096 + wifiNetworks.size() * 160;
     char* jsonBuffer = (char*)malloc(bufSize);
+    if (jsonBuffer == nullptr) {
+        Serial.println("[OOM] sendSettings: malloc failed");
+        return;
+    }
     size_t len = serializeJson(doc, jsonBuffer, bufSize);
     wsBroadcast(jsonBuffer, len);
     free(jsonBuffer);
@@ -259,34 +265,47 @@ void loadSettings() {
     if (extSettingsLen != sizeof(extSettings)) {
         // Old format: 3 maxHop bytes + 5×16 IP strings + 5 legacy flags = 88 bytes
         const size_t OLD_EXT_SIZE = 3 + 5 * 16 + 5;
+        // Previous format: 3 maxHop bytes only (before minSnr was added)
+        const size_t PREV_EXT_SIZE = 3;
         size_t existingPeers = prefs.getBytesLength("udpPeers");
         if (extSettingsLen == OLD_EXT_SIZE && existingPeers == 0) {
             uint8_t* oldBuf = new uint8_t[OLD_EXT_SIZE];
-            prefs.getBytes("extSettings", oldBuf, OLD_EXT_SIZE);
-            extSettings.maxHopMessage   = oldBuf[0];
-            extSettings.maxHopPosition  = oldBuf[1];
-            extSettings.maxHopTelemetry = oldBuf[2];
-            for (int i = 0; i < 5; i++) {
-                const char* ip = (const char*)(oldBuf + 3 + i * 16);
-                if (ip[0] != '\0' && strcmp(ip, "0.0.0.0") != 0) {
-                    IPAddress addr;
-                    if (addr.fromString(ip)) {
-                        bool legacy = oldBuf[3 + 5 * 16 + i] != 0;
-                        udpPeers.push_back(addr);
-                        udpPeerLegacy.push_back(legacy);
-                        udpPeerEnabled.push_back(true);
-                        udpPeerCall.push_back("");
+            if (oldBuf != nullptr) {
+                prefs.getBytes("extSettings", oldBuf, OLD_EXT_SIZE);
+                extSettings.maxHopMessage   = oldBuf[0];
+                extSettings.maxHopPosition  = oldBuf[1];
+                extSettings.maxHopTelemetry = oldBuf[2];
+                for (int i = 0; i < 5; i++) {
+                    const char* ip = (const char*)(oldBuf + 3 + i * 16);
+                    if (ip[0] != '\0' && strcmp(ip, "0.0.0.0") != 0) {
+                        IPAddress addr;
+                        if (addr.fromString(ip)) {
+                            bool legacy = oldBuf[3 + 5 * 16 + i] != 0;
+                            udpPeers.push_back(addr);
+                            udpPeerLegacy.push_back(legacy);
+                            udpPeerEnabled.push_back(true);
+                            udpPeerCall.push_back("");
+                        }
                     }
                 }
+                delete[] oldBuf;
+                if (!udpPeers.empty()) {
+                    saveUdpPeers();
+                }
             }
-            delete[] oldBuf;
-            if (!udpPeers.empty()) {
-                saveUdpPeers();
-            }
+        } else if (extSettingsLen == PREV_EXT_SIZE) {
+            // Migrate from 3-byte format: preserve maxHop values, add default minSnr
+            uint8_t tmp[PREV_EXT_SIZE];
+            prefs.getBytes("extSettings", tmp, PREV_EXT_SIZE);
+            extSettings.maxHopMessage   = tmp[0];
+            extSettings.maxHopPosition  = tmp[1];
+            extSettings.maxHopTelemetry = tmp[2];
+            extSettings.minSnr          = -30;
         } else {
             extSettings.maxHopMessage = 15;
             extSettings.maxHopPosition = 1;
             extSettings.maxHopTelemetry = 3;
+            extSettings.minSnr = -30;
         }
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }
@@ -302,18 +321,20 @@ void loadSettings() {
         const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1; // 129 bytes
         if (wifiNetLen >= 1) {
             uint8_t* buf = new uint8_t[wifiNetLen];
-            prefs.getBytes("wifiNetworks", buf, wifiNetLen);
-            uint8_t count = buf[0];
-            for (uint8_t i = 0; i < count && 1 + (size_t)i * WNET_STRIDE + WNET_STRIDE <= wifiNetLen; i++) {
-                WifiNetwork net;
-                const uint8_t* entry = buf + 1 + i * WNET_STRIDE;
-                memset(&net, 0, sizeof(net));
-                strlcpy(net.ssid,     (const char*)(entry),                              WIFI_NETWORK_SSID_LEN);
-                strlcpy(net.password, (const char*)(entry + WIFI_NETWORK_SSID_LEN),      WIFI_NETWORK_PW_LEN);
-                net.favorite = entry[WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN] != 0;
-                wifiNetworks.push_back(net);
+            if (buf != nullptr) {
+                prefs.getBytes("wifiNetworks", buf, wifiNetLen);
+                uint8_t count = buf[0];
+                for (uint8_t i = 0; i < count && 1 + (size_t)i * WNET_STRIDE + WNET_STRIDE <= wifiNetLen; i++) {
+                    WifiNetwork net;
+                    const uint8_t* entry = buf + 1 + i * WNET_STRIDE;
+                    memset(&net, 0, sizeof(net));
+                    strlcpy(net.ssid,     (const char*)(entry),                              WIFI_NETWORK_SSID_LEN);
+                    strlcpy(net.password, (const char*)(entry + WIFI_NETWORK_SSID_LEN),      WIFI_NETWORK_PW_LEN);
+                    net.favorite = entry[WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN] != 0;
+                    wifiNetworks.push_back(net);
+                }
+                delete[] buf;
             }
-            delete[] buf;
         }
     }
 
@@ -325,18 +346,20 @@ void loadSettings() {
     size_t peersLen = prefs.getBytesLength("udpPeers");
     if (peersLen >= 1) {
         uint8_t* buf = new uint8_t[peersLen];
-        prefs.getBytes("udpPeers", buf, peersLen);
-        uint8_t peerCount = buf[0];
-        // Old format: 5 bytes per peer (without enabled), new format: 6 bytes per peer
-        bool newFormat = (peersLen == 1 + (size_t)peerCount * 6);
-        size_t stride = newFormat ? 6 : 5;
-        for (uint8_t i = 0; i < peerCount && 1 + (size_t)i * stride + 4 < peersLen; i++) {
-            udpPeers.push_back(IPAddress(buf[1+i*stride], buf[2+i*stride], buf[3+i*stride], buf[4+i*stride]));
-            udpPeerLegacy.push_back(buf[5+i*stride] != 0);
-            udpPeerEnabled.push_back(newFormat ? buf[6+i*stride] != 0 : true);
-            udpPeerCall.push_back("");
+        if (buf != nullptr) {
+            prefs.getBytes("udpPeers", buf, peersLen);
+            uint8_t peerCount = buf[0];
+            // Old format: 5 bytes per peer (without enabled), new format: 6 bytes per peer
+            bool newFormat = (peersLen == 1 + (size_t)peerCount * 6);
+            size_t stride = newFormat ? 6 : 5;
+            for (uint8_t i = 0; i < peerCount && 1 + (size_t)i * stride + 4 < peersLen; i++) {
+                udpPeers.push_back(IPAddress(buf[1+i*stride], buf[2+i*stride], buf[3+i*stride], buf[4+i*stride]));
+                udpPeerLegacy.push_back(buf[5+i*stride] != 0);
+                udpPeerEnabled.push_back(newFormat ? buf[6+i*stride] != 0 : true);
+                udpPeerCall.push_back("");
+            }
+            delete[] buf;
         }
-        delete[] buf;
     }
 
     // Load defaults
@@ -397,6 +420,10 @@ void saveWifiNetworks() {
     const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1;
     size_t bufLen = 1 + (size_t)count * WNET_STRIDE;
     uint8_t* buf = new uint8_t[bufLen];
+    if (buf == nullptr) {
+        Serial.println("[OOM] saveWifiNetworks: allocation failed");
+        return;
+    }
     memset(buf, 0, bufLen);
     buf[0] = count;
     for (uint8_t i = 0; i < count; i++) {
@@ -416,6 +443,10 @@ void saveUdpPeers() {
     uint8_t count = (uint8_t)udpPeers.size();
     size_t bufLen = 1 + (size_t)count * 6;
     uint8_t* buf = new uint8_t[bufLen];
+    if (buf == nullptr) {
+        Serial.println("[OOM] saveUdpPeers: allocation failed");
+        return;
+    }
     buf[0] = count;
     for (uint8_t i = 0; i < count; i++) {
         buf[1+i*6] = udpPeers[i][0];
