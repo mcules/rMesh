@@ -13,6 +13,7 @@
 - FIX: TX-Buffer Cleanup löschte versehentlich wartende Frames – One-Shot-Frames (ACKs, retry=1) entfernen beim Aufräumen nicht mehr andere Frames zum selben Peer; behebt fehlende Trace-Echos und potenziell verlorene Nachrichten
 
 ### Stabilität & Effizienz
+- FIX: WiFi/UDP-Nachrichten an fremde Callsigns wurden an alle Nodes angezeigt – private Nachrichten mit `dstCall` ungleich dem eigenen Call werden jetzt nur noch weitergeleitet (Relay), aber nicht mehr in der WebUI angezeigt oder gespeichert (#9)
 - FIX: Guru Meditation Error (StoreProhibited) bei DNS-Fehler behoben – `http.begin()`-Rückgabewert wird jetzt in Topology-Reporting und Update-Check geprüft; WiFi-Status-Guard in `checkForUpdates()` verhindert Aufrufe ohne Verbindung; OTA-Log-Timeout auf 5 s begrenzt
 - FIX: Sichere malloc/new-Prüfungen – alle Heap-Allokationen in `helperFunctions.cpp`, `main.cpp` und `settings.cpp` werden auf `nullptr` geprüft; bei Fehlschlag wird sauber abgebrochen und ein `[OOM]`-Log geschrieben statt Absturz
 - FIX: Doppelte Nachrichten (Duplikate) werden jetzt sofort aus dem TX-Buffer entfernt, wenn die Deduplikation im Ring-Buffer einen bereits bekannten Frame erkennt – verhindert unnötige Sendewiederholungen

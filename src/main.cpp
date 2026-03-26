@@ -338,14 +338,19 @@ void processRxFrame(Frame &f) {
                 );
             }
 
-            if ((found == false) && (f.messageLength > 0)) {
-                // ── New, unseen message ──────────────────────────────────────
+            // Check if this message is addressed to someone else (private message not for us)
+            bool forOther = (strlen(f.dstCall) > 0) && (strcmp(f.dstCall, settings.mycall) != 0);
 
-                // Store (srcCall, id) in the ring-buffer to suppress future duplicates
+            // Store (srcCall, id) in the ring-buffer to suppress future duplicates
+            if ((found == false) && (f.messageLength > 0)) {
                 strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
                 messages[messagesHead].id = f.id;
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
+            }
+
+            if ((found == false) && (f.messageLength > 0) && (!forOther)) {
+                // ── New, unseen message addressed to us, a group, or broadcast ──
 
                 // Serialize to JSON, broadcast via WebSocket, and append to flash
                 char* jsonBuffer = (char*)malloc(4096);
