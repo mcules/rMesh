@@ -888,15 +888,24 @@
       // Update mobile channel dropdown
       var sel = document.getElementById('mobChannelSelect');
       if (sel) {
-        // Update option labels from cookies
+        // Update option labels to match desktop button labels
         for (var i = 1; i <= 10; i++) {
           var opt = sel.querySelector('option[value="channel' + i + '"]');
           if (opt) {
             if (i === 1) {
               opt.textContent = '1: all';
+            } else if (i === 2) {
+              opt.textContent = '2: ' + (settings ? settings.mycall : 'DM');
             } else {
-              var name = Cookie.get('channel' + i);
-              opt.textContent = i + ': ' + (name || '........');
+              var label;
+              if (typeof channelSammel !== 'undefined' && channelSammel[i]) {
+                label = i + ': ' + (typeof sammelNames !== 'undefined' && sammelNames[i] ? sammelNames[i] : 'Collection');
+              } else {
+                var name = Cookie.get('channel' + i);
+                label = i + ': ' + (name || '........');
+                if (typeof channelMuted !== 'undefined' && channelMuted[i]) label += ' \uD83D\uDD15';
+              }
+              opt.textContent = label;
             }
           }
         }
