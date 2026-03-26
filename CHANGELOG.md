@@ -36,6 +36,10 @@
 
 ### OLED Status-Display
 - NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam – Display zeigt Callsign, Akkustand, WiFi-Modus, IP-Adresse, SSID und letzte empfangene Nachricht
+- NEU: Jedes Board hat eigene Display-HAL-Dateien – `display_LILYGO_T-Beam.cpp`, `display_LILYGO_T3_LoRa32_V1_6_1.cpp`, `display_HELTEC_WiFi_LoRa_32_V3.cpp` statt einer gemeinsamen Datei; vereinfacht Board-spezifische Anpassungen
+- FIX: T-Beam Display-Treiber auf ThingPulse SSD1306Wire-Library umgestellt – behebt falsche Proportionen und Pixel-Artefakte die mit U8g2 auftraten; `flipScreenVertically()` korrigiert die Bildausrichtung
+- FIX: T-Beam OLED-Reset-Pin entfernt – GPIO 16 ist am T-Beam nicht mit dem OLED verbunden (kein Hardware-Reset vorhanden)
+- FIX: T-Beam User-Button von GPIO 0 (Boot) auf GPIO 38 (User-Button) umgestellt – Display-Toggle und WiFi-Umschaltung funktionieren jetzt über den mittleren Taster
 - NEU: Boot-Button-Steuerung – kurzer Druck schaltet Display ein/aus, langer Druck (≥2 s) wechselt zwischen AP- und Client-Modus mit anschließendem Reboot
 - NEU: Display-Einstellung persistent – Zustand überlebt Neustart; Synchronisation zwischen Hardware-Button und WebUI-Toggle in beide Richtungen
 - NEU: Nachrichten-Gruppe für Display konfigurierbar – Dropdown in den Settings mit allen eingerichteten Gruppen (all, direct, Gruppen 3–10); letzte Nachricht aus gewählter Gruppe wird auf dem Display angezeigt
