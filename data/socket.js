@@ -15,6 +15,11 @@ var channelSammel  = new Array(11).fill(false);
 var sammelGroups   = {};
 var sammelNames    = {};
 
+function updateMinSnrLabel(v) {
+    var label = document.getElementById("settingsMinSnrValue");
+    if (label) label.textContent = (v <= -20) ? t('lora.snr_off') : v + " dB";
+}
+
 function loadChannelFlags() {
     for (let i = 1; i <= 10; i++) {
         channelMuted[i] = Cookie.get("chMute" + i) === "1";
@@ -570,7 +575,12 @@ function fillSettingsForm(s) {
     document.getElementById("settingsLoraRepeat").checked = s.loraRepeat;
     document.getElementById("settingsLoraEnabled").checked = s.loraEnabled !== false;
     var minSnrEl = document.getElementById("settingsMinSnr");
-    if (minSnrEl) minSnrEl.value = (s.minSnr !== undefined) ? s.minSnr : -30;
+    if (minSnrEl) {
+        var v = (s.minSnr !== undefined) ? s.minSnr : -20;
+        if (v < -20) v = -20;
+        minSnrEl.value = v;
+        updateMinSnrLabel(v);
+    }
     document.getElementById("settingsUpdateChannel").value = s.updateChannel || 0;
     const batEnabledEl = document.getElementById("settingsBatteryEnabled");
     if (batEnabledEl) batEnabledEl.checked = s.batteryEnabled !== false;

@@ -305,7 +305,7 @@ void loadSettings() {
             extSettings.maxHopMessage = 15;
             extSettings.maxHopPosition = 1;
             extSettings.maxHopTelemetry = 3;
-            extSettings.minSnr = -30;
+            extSettings.minSnr = -20;
         }
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }

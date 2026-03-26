@@ -27,7 +27,7 @@ void reportTopology() {
     WiFiClientSecure client;
     client.setInsecure();
     HTTPClient http;
-    http.begin(client, "https://www.rMesh.de/report.php");
+    if (!http.begin(client, "https://www.rMesh.de/report.php")) return;
     http.addHeader("Content-Type", "application/json");
 
     // JSON aufbauen

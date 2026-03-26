@@ -3,8 +3,13 @@
 ## [v1.0.31-dev]
 
 ### Stabilität & Effizienz
+- FIX: Guru Meditation Error (StoreProhibited) bei DNS-Fehler behoben – `http.begin()`-Rückgabewert wird jetzt in Topology-Reporting und Update-Check geprüft; WiFi-Status-Guard in `checkForUpdates()` verhindert Aufrufe ohne Verbindung; OTA-Log-Timeout auf 5 s begrenzt
 - FIX: Sichere malloc/new-Prüfungen – alle Heap-Allokationen in `helperFunctions.cpp`, `main.cpp` und `settings.cpp` werden auf `nullptr` geprüft; bei Fehlschlag wird sauber abgebrochen und ein `[OOM]`-Log geschrieben statt Absturz
 - FIX: Doppelte Nachrichten (Duplikate) werden jetzt sofort aus dem TX-Buffer entfernt, wenn die Deduplikation im Ring-Buffer einen bereits bekannten Frame erkennt – verhindert unnötige Sendewiederholungen
+- FIX: TX-Buffer-Verstopfung bei unerreichbarem Peer behoben – wenn alle Retries für einen Peer aufgebraucht sind, werden jetzt alle weiteren Frames an diesen viaCall aus dem txBuffer entfernt (nicht nur der aktuelle Frame)
+- NEU: Flux Guard – nach jeder LoRa-Sendung wird eine Pause von 1× ACK-TOA eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können; verbessert die effektive Reichweite
+- CHANGE: ACK-Timing auf 20× ACK-TOA erhöht (vorher 15×) – größeres Zeitfenster reduziert Kollisionen bei vielen Peers
+- CHANGE: Retry-Timing auf 20× ACK-TOA + 0–5× max. Frame-TOA angepasst (vorher 10× ACK + 0–6× Frame) – besser abgestimmt auf reale Mesh-Topologien
 - NEU: Konfigurierbarer minimaler SNR-Schwellwert für die Peer-Liste – LoRa-Peers unterhalb des eingestellten SNR-Werts werden automatisch als nicht verfügbar markiert; einstellbar in den LoRa-Einstellungen der WebUI (Aus, -20 bis +10 dB); Default: deaktiviert (-30 dB)
 
 ### OLED Status-Display

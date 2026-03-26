@@ -80,6 +80,11 @@ uint32_t rebootTimer = 0xFFFFFFFF;
 /** Retry counter for the frame currently being transmitted from txBuffer. */
 uint8_t currentRetry = 0;
 
+/** Flux guard: earliest millis() at which the next LoRa TX is allowed.
+ *  A short pause after each TX lets remote receivers settle back into RX,
+ *  improving effective range. */
+uint32_t loraFluxGuard = 0;
+
 /** Deferred flags set by the web UI and consumed in loop(). */
 bool pendingManualUpdate = false;
 bool pendingShutdown     = false;
@@ -641,12 +646,19 @@ void loop() {
         if (txBuffer.size() == 0) {currentRetry = 0;}
         for (int i = 0; i < txBuffer.size(); i++) {
             if ((millis() > txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
+                // Flux guard: enforce minimum pause between LoRa transmissions
+                // so remote receivers can settle back into RX mode (improves range)
+                if (txBuffer[i].port == 0 && millis() < loraFluxGuard) break;
+
                 // Transmit — discard silently if LoRa is disabled on this device
                 if (txBuffer[i].port == 0 && !loraEnabled) {
                     txBuffer[i].retry = 0;
                 } else {
                     switch (txBuffer[i].port){
-                        case 0: transmitFrame(txBuffer[i]); break;
+                        case 0:
+                            transmitFrame(txBuffer[i]);
+                            loraFluxGuard = millis() + getTOA(10 + 2 * MAX_CALLSIGN_LENGTH);
+                            break;
                         case 1: sendUDP(txBuffer[i]); break;
                     }
                 }
@@ -658,12 +670,25 @@ void loop() {
                     case 0: txBuffer[i].transmitMillis = millis() + calculateRetryTime(); break;
                     case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
                 }
-                // All retries exhausted: remove the frame and mark the peer unavailable
+                // All retries exhausted: remove the frame, mark peer unavailable,
+                // and purge all remaining frames to the same viaCall to prevent
+                // txBuffer congestion from an unreachable peer.
                 if (txBuffer[i].retry == 0) {
+                    char deadVia[MAX_CALLSIGN_LENGTH + 1];
+                    strncpy(deadVia, txBuffer[i].viaCall, sizeof(deadVia));
+                    deadVia[sizeof(deadVia) - 1] = '\0';
+                    uint8_t deadPort = txBuffer[i].port;
                     if (txBuffer[i].initRetry > 1) {
-                        availablePeerList(txBuffer[i].viaCall, false, txBuffer[i].port);
+                        availablePeerList(deadVia, false, deadPort);
                     }
-                    txBuffer.erase(txBuffer.begin() + i);
+                    txBuffer.erase(
+                        std::remove_if(txBuffer.begin(), txBuffer.end(),
+                            [&](const Frame& txB) {
+                                return (strcmp(txB.viaCall, deadVia) == 0) && (txB.port == deadPort);
+                            }),
+                        txBuffer.end()
+                    );
+                    i = -1; // restart iteration since indices shifted
                 }
                 break;
             }

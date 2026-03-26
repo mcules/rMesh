@@ -337,15 +337,15 @@ uint32_t getTOA(uint8_t payloadBytes) {
 }
 
 uint32_t calculateAckTime() {
-    uint32_t time = getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); //Zeit für 1 ACK-Frame
-    time = time * 15;   //15 ACK Frames
+    uint32_t time = getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); // Time for 1 ACK frame
+    time = time * 20;   // 20 ACK frames
     time = random(0, time);
     return time;
 }
 
 uint32_t calculateRetryTime() {
-    uint32_t time = 10 * getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); //Maximale Zeit für 10 ACK Frames
-    time = time + random(0, 6 * getTOA(255));  // 0...6 Message Frames
+    uint32_t time = 20 * getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); // Wait for up to 20 ACK frames
+    time = time + random(0, 5 * getTOA(255));  // 0...5 max-length message frames
     return time;
 }
 

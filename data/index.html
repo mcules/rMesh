@@ -168,16 +168,8 @@
           <tr>
             <td data-i18n="lora.min_snr">Min. SNR (dB):</td>
             <td>
-              <select id="settingsMinSnr" class="input-box">
-                <option value="-30" data-i18n="lora.snr_off">Aus (deaktiviert)</option>
-                <option value="-20">-20 dB</option>
-                <option value="-15">-15 dB</option>
-                <option value="-10">-10 dB</option>
-                <option value="-5">-5 dB</option>
-                <option value="0">0 dB</option>
-                <option value="5">5 dB</option>
-                <option value="10">10 dB</option>
-              </select>
+              <input type="range" id="settingsMinSnr" class="input-box" min="-20" max="10" step="1" value="-20" oninput="updateMinSnrLabel(parseInt(this.value))">
+              <span id="settingsMinSnrValue">-20 dB</span>
             </td>
           </tr>
         </table>

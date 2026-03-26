@@ -62,7 +62,7 @@ void checkPeerList() {
     }
 
     // Filter LoRa peers below minimum SNR threshold
-    if (extSettings.minSnr > -30) {
+    if (extSettings.minSnr > -20) {
         for (auto& peer : peerList) {
             if (peer.available && peer.port == 0 && peer.snr < extSettings.minSnr) {
                 peer.available = false;
@@ -182,7 +182,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
     if (it != peerList.end()) {
         // Reject availability for LoRa peers below minimum SNR threshold
         bool effectiveAvailable = available;
-        if (available && it->port == 0 && extSettings.minSnr > -30 && it->snr < extSettings.minSnr) {
+        if (available && it->port == 0 && extSettings.minSnr > -20 && it->snr < extSettings.minSnr) {
             effectiveAvailable = false;
         }
 
