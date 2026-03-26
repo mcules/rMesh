@@ -1255,7 +1255,7 @@ static void doSaveSetup() {
     uiMode = UI_CHAT; needRedraw = true;
 }
 static void doReboot() {
-    rebootTimer = 0;
+    rebootTimer = millis(); rebootRequested = true;
     uiMode = UI_CHAT; needRedraw = true;
 }
 static void doUpdate() {

@@ -71,6 +71,14 @@ void setClientAuth(uint32_t clientId, bool auth) {
             return;
         }
     }
+    // All slots full: evict the first unauthenticated session, or slot 0 as fallback
+    int evict = 0;
+    for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
+        if (!authSessions[i].authenticated) { evict = i; break; }
+    }
+    authSessions[evict].clientId      = clientId;
+    authSessions[evict].authenticated = auth;
+    memset(authSessions[evict].nonce, 0, sizeof(authSessions[evict].nonce));
 }
 
 // ── Session entfernen (bei Disconnect) ───────────────────────────────────────
@@ -100,6 +108,9 @@ bool verifyAuthResponse(uint32_t clientId, const String& response) {
         }
     }
     if (nonce[0] == '\0') return false;
+
+    // Validate hash length before accessing individual characters
+    if (webPasswordHash.length() < 64) return false;
 
     // gespeicherten Hash (Hex) → Bytes (= HMAC-Schlüssel)
     uint8_t keyBytes[32];

@@ -27,13 +27,13 @@
 #include "wifiFunctions.h"
 #include "webFunctions.h"
 #include "serial.h"
-#include "webFunctions.h"
 #include "helperFunctions.h"
 #include "peer.h"
 #include "ack.h"
 #include "udp.h"
 #include "routing.h"
 #include "reporting.h"
+#include "dutycycle.h"
 #include "time.h"
 
 #ifdef LILYGO_T_LORA_PAGER
@@ -68,17 +68,32 @@ SemaphoreHandle_t fsMutex = NULL;
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 
+/**
+ * Overflow-safe timer check: returns true when the deadline has been reached.
+ * Works correctly across the millis() 32-bit wrap (~49 days) for intervals
+ * up to ~24.8 days.
+ */
+static inline bool timerExpired(uint32_t deadline) {
+    return (int32_t)(millis() - deadline) >= 0;
+}
+
 /** First ANNOUNCE is sent 5 s after boot to give WiFi time to connect. */
 uint32_t announceTimer = 5000;
 
 /** Deadline for the next 1-second WebSocket status push. */
 uint32_t statusTimer = 0;
 
-/** millis() value at which ESP.restart() is called; 0xFFFFFFFF = disabled. */
-uint32_t rebootTimer = 0xFFFFFFFF;
+/** millis() value at which ESP.restart() is called; 0 = disabled. */
+uint32_t rebootTimer = 0;
+bool rebootRequested = false;
 
 /** Retry counter for the frame currently being transmitted from txBuffer. */
 uint8_t currentRetry = 0;
+
+/** Flux guard: earliest millis() at which the next LoRa TX is allowed.
+ *  A short pause after each TX lets remote receivers settle back into RX,
+ *  improving effective range. */
+uint32_t loraFluxGuard = 0;
 
 /** Deferred flags set by the web UI and consumed in loop(). */
 bool pendingManualUpdate = false;
@@ -340,21 +355,28 @@ void processRxFrame(Frame &f) {
 
                 // TRACE echo: if we are the destination, append our callsign + time and reply
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
-                        char message[512];
-                        size_t messageLength = f.messageLength;
-                        memcpy(message, f.message, f.messageLength);
-                        memcpy(&message[messageLength], " -> ECHO ", 9);
-                        messageLength += 9;
-                        memcpy(&message[messageLength], settings.mycall, strlen(settings.mycall));
-                        messageLength += strlen(settings.mycall);
-                        memcpy(&message[messageLength], " ", 1);
-                        messageLength += 1;
-                        char text[128];
-                        getFormattedTime("%H:%M:%S", text, sizeof(text));
-                        memcpy(&message[messageLength], text, strlen(text));
-                        messageLength += strlen(text);
-                        if (messageLength > 255) {messageLength = 255;}
-                        sendMessage(f.srcCall, message, Frame::MessageTypes::TRACE_MESSAGE);
+                        char traceMsg[261] = {0};
+                        size_t traceLen = f.messageLength;
+                        if (traceLen > 255) traceLen = 255;
+                        memcpy(traceMsg, f.message, traceLen);
+                        const char* echoTag = " -> ECHO ";
+                        size_t callLen = strlen(settings.mycall);
+                        char timeStr[16];
+                        getFormattedTime("%H:%M:%S", timeStr, sizeof(timeStr));
+                        size_t timeLen = strlen(timeStr);
+                        size_t needed = 9 + callLen + 1 + timeLen;
+                        if (traceLen + needed <= 260) {
+                            memcpy(&traceMsg[traceLen], echoTag, 9);
+                            traceLen += 9;
+                            memcpy(&traceMsg[traceLen], settings.mycall, callLen);
+                            traceLen += callLen;
+                            traceMsg[traceLen++] = ' ';
+                            memcpy(&traceMsg[traceLen], timeStr, timeLen);
+                            traceLen += timeLen;
+                        }
+                        if (traceLen > 255) traceLen = 255;
+                        traceMsg[traceLen] = '\0';
+                        sendMessage(f.srcCall, traceMsg, Frame::MessageTypes::TRACE_MESSAGE);
                 }
 
                 // Remote COMMAND: execute instructions sent directly to this node
@@ -364,7 +386,7 @@ void processRxFrame(Frame &f) {
                             sendMessage(f.srcCall, NAME " " VERSION " " PIO_ENV_NAME);
                             break;
                         case 0xfe: // Reboot: schedule restart in 2.5 s
-                            rebootTimer = millis() + 2500;
+                            rebootTimer = millis() + 2500; rebootRequested = true;
                             break;
                     }
                 }
@@ -403,6 +425,25 @@ void processRxFrame(Frame &f) {
                         }
                     }
 
+                    // TRACE: append our callsign + timestamp to the path (once, before port loop)
+                    if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
+                        size_t callLen = strlen(settings.mycall);
+                        char timeStr[16];
+                        getFormattedTime("%H:%M:%S", timeStr, sizeof(timeStr));
+                        size_t timeLen = strlen(timeStr);
+                        size_t needed = 4 + callLen + 1 + timeLen;
+                        if (tf.messageLength + needed <= sizeof(tf.message)) {
+                            memcpy(&tf.message[tf.messageLength], " -> ", 4);
+                            tf.messageLength += 4;
+                            memcpy(&tf.message[tf.messageLength], settings.mycall, callLen);
+                            tf.messageLength += callLen;
+                            tf.message[tf.messageLength++] = ' ';
+                            memcpy(&tf.message[tf.messageLength], timeStr, timeLen);
+                            tf.messageLength += timeLen;
+                        }
+                        if (tf.messageLength > 255) tf.messageLength = 255;
+                    }
+
                     // Iterate ports: WiFi first (port 1), then LoRa (port 0)
                     for (int _port = 1; _port >= 0; _port--) {
                         tf.port = (uint8_t)_port;
@@ -411,21 +452,6 @@ void processRxFrame(Frame &f) {
                         switch (tf.port){
                             case 0: tf.transmitMillis = millis() + calculateRetryTime(); break;
                             case 1: tf.transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
-                        }
-
-                        // TRACE: append our callsign + timestamp to the path
-                        if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
-                            memcpy(&tf.message[tf.messageLength], " -> ", 4);
-                            tf.messageLength += 4;
-                            memcpy(&tf.message[tf.messageLength], settings.mycall, strlen(settings.mycall));
-                            tf.messageLength += strlen(settings.mycall);
-                            memcpy(&tf.message[tf.messageLength], " ", 1);
-                            tf.messageLength += 1;
-                            char text[128];
-                            getFormattedTime("%H:%M:%S", text, sizeof(text));
-                            memcpy(&tf.message[tf.messageLength], text, strlen(text));
-                            tf.messageLength += strlen(text);
-                            if (tf.messageLength > 255) {tf.messageLength = 255;}
                         }
 
                         // Enqueue a relay copy for every eligible peer on this port
@@ -494,8 +520,6 @@ void setup() {
     setCpuFrequencyMhz(240);
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
-    esp_log_level_set("NetworkUdp", ESP_LOG_ERROR);
-    esp_log_level_set("vfs", ESP_LOG_WARN);
     esp_log_level_set("vfs", ESP_LOG_NONE);
 
     // Pre-allocate vector capacity to avoid heap fragmentation at runtime
@@ -589,7 +613,7 @@ void loop() {
     #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
     {
         static uint32_t oledRefreshTimer = 0;
-        if (oledEnabled && millis() > oledRefreshTimer) {
+        if (oledEnabled && timerExpired(oledRefreshTimer)) {
             oledRefreshTimer = millis() + 5000;
             updateStatusDisplay();
         }
@@ -598,7 +622,7 @@ void loop() {
 
     // ── 4. ANNOUNCE beacon ────────────────────────────────────────────────────
     // Enqueue an ANNOUNCE_FRAME on both WiFi (port 1) and LoRa (port 0)
-    if (millis() > announceTimer) {
+    if (timerExpired(announceTimer)) {
         announceTimer = millis() + ANNOUNCE_TIME;
         Frame f;
         f.frameType = Frame::FrameTypes::ANNOUNCE_FRAME;
@@ -640,13 +664,31 @@ void loop() {
         // Iterate the buffer and send any frame whose deadline has passed
         if (txBuffer.size() == 0) {currentRetry = 0;}
         for (int i = 0; i < txBuffer.size(); i++) {
-            if ((millis() > txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
+            if (timerExpired(txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
+                // Flux guard: enforce minimum pause between LoRa transmissions
+                // so remote receivers can settle back into RX mode (improves range)
+                if (txBuffer[i].port == 0 && !timerExpired(loraFluxGuard)) break;
+
                 // Transmit — discard silently if LoRa is disabled on this device
                 if (txBuffer[i].port == 0 && !loraEnabled) {
                     txBuffer[i].retry = 0;
                 } else {
                     switch (txBuffer[i].port){
-                        case 0: transmitFrame(txBuffer[i]); break;
+                        case 0: {
+                            // Duty cycle enforcement for public SRD band (10% in 60s)
+                            uint32_t toa = getTOA(txBuffer[i].messageLength + 10 + 2 * MAX_CALLSIGN_LENGTH);
+                            if (isPublicBand(settings.loraFrequency) && !dutyCycleAllowed(toa)) {
+                                // Postpone frame instead of dropping it
+                                txBuffer[i].transmitMillis = millis() + 5000;
+                                break;
+                            }
+                            transmitFrame(txBuffer[i]);
+                            if (isPublicBand(settings.loraFrequency)) {
+                                dutyCycleTrackTx(toa);
+                            }
+                            loraFluxGuard = millis() + getTOA(10 + 2 * MAX_CALLSIGN_LENGTH);
+                            break;
+                        }
                         case 1: sendUDP(txBuffer[i]); break;
                     }
                 }
@@ -658,12 +700,25 @@ void loop() {
                     case 0: txBuffer[i].transmitMillis = millis() + calculateRetryTime(); break;
                     case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
                 }
-                // All retries exhausted: remove the frame and mark the peer unavailable
+                // All retries exhausted: remove the frame, mark peer unavailable,
+                // and purge all remaining frames to the same viaCall to prevent
+                // txBuffer congestion from an unreachable peer.
                 if (txBuffer[i].retry == 0) {
+                    char deadVia[MAX_CALLSIGN_LENGTH + 1];
+                    strncpy(deadVia, txBuffer[i].viaCall, sizeof(deadVia));
+                    deadVia[sizeof(deadVia) - 1] = '\0';
+                    uint8_t deadPort = txBuffer[i].port;
                     if (txBuffer[i].initRetry > 1) {
-                        availablePeerList(txBuffer[i].viaCall, false, txBuffer[i].port);
+                        availablePeerList(deadVia, false, deadPort);
                     }
-                    txBuffer.erase(txBuffer.begin() + i);
+                    txBuffer.erase(
+                        std::remove_if(txBuffer.begin(), txBuffer.end(),
+                            [&](const Frame& txB) {
+                                return (strcmp(txB.viaCall, deadVia) == 0) && (txB.port == deadPort);
+                            }),
+                        txBuffer.end()
+                    );
+                    i = -1; // restart iteration since indices shifted
                 }
                 break;
             }
@@ -676,7 +731,7 @@ void loop() {
     if (checkUDP(f))     { processRxFrame(f); }   // UDP
 
     // ── 7. WebSocket status broadcast (1 s interval) ──────────────────────────
-    if (millis() > statusTimer) {
+    if (timerExpired(statusTimer)) {
         statusTimer = millis() + 1000;
         JsonDocument doc;
         doc["status"]["time"]         = time(NULL);
@@ -702,11 +757,11 @@ void loop() {
     }
 
     // ── 8. Reboot / shutdown ──────────────────────────────────────────────────
-    if (millis() > rebootTimer)  { ESP.restart(); }
+    if (rebootRequested && timerExpired(rebootTimer))  { ESP.restart(); }
     if (pendingShutdown)         { esp_deep_sleep_start(); } // no wakeup = max power saving
 
     // ── 9. OTA update checks ──────────────────────────────────────────────────
-    if (millis() > updateCheckTimer) {
+    if (timerExpired(updateCheckTimer)) {
         updateCheckTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
         checkForUpdates();
     }
@@ -721,13 +776,13 @@ void loop() {
     }
 
     // ── 10. messages.json housekeeping ────────────────────────────────────────
-    if (millis() > messagesDeleteTimer) {
+    if (timerExpired(messagesDeleteTimer)) {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
         trimFile("/messages.json", MAX_STORED_MESSAGES);
     }
 
     // ── 11. Topology reporting ────────────────────────────────────────────────
-    if (millis() > reportingTimer) {
+    if (timerExpired(reportingTimer)) {
         reportingTimer = millis() + 60 * 60 * 1000; // repeat every 1 h
         reportTopology();
     }

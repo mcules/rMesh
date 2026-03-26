@@ -39,18 +39,23 @@ bool checkUDP(Frame &f) {
             if (udpPeers[i] == senderIP) { peerIdx = (int)i; break; }
         }
 
+        // Limit UDP peer list to prevent unbounded growth
+        static const size_t MAX_UDP_PEERS = 50;
+
         if (f.frameType == Frame::FrameTypes::ANNOUNCE_FRAME && peerIdx < 0) {
             // Neuen Peer aus Broadcast-Announce anlegen
-            udpPeers.push_back(senderIP);
-            udpPeerLegacy.push_back(!hasSyncword);
-            udpPeerEnabled.push_back(true);
-            udpPeerCall.push_back(strlen(f.nodeCall) > 0 ? String(f.nodeCall) : "");
-            saveUdpPeers();
-            Serial.printf("UDP Peer von Announce eingetragen: %d.%d.%d.%d (%s)\n",
-                senderIP[0], senderIP[1], senderIP[2], senderIP[3], f.nodeCall);
+            if (udpPeers.size() < MAX_UDP_PEERS) {
+                udpPeers.push_back(senderIP);
+                udpPeerLegacy.push_back(!hasSyncword);
+                udpPeerEnabled.push_back(true);
+                udpPeerCall.push_back(strlen(f.nodeCall) > 0 ? String(f.nodeCall) : "");
+                saveUdpPeers();
+                Serial.printf("UDP Peer von Announce eingetragen: %d.%d.%d.%d (%s)\n",
+                    senderIP[0], senderIP[1], senderIP[2], senderIP[3], f.nodeCall);
+            }
         } else if (!hasSyncword) {
             // Legacy-Node (kein SyncWord-Präfix)
-            if (peerIdx < 0) {
+            if (peerIdx < 0 && udpPeers.size() < MAX_UDP_PEERS) {
                 udpPeers.push_back(senderIP);
                 udpPeerLegacy.push_back(true);
                 udpPeerEnabled.push_back(true);

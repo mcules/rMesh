@@ -110,7 +110,7 @@ void sendMessage(const char* dst, const char* text, uint8_t messageType) {
     strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
     safeUtf8Copy((char*)f.dstCall, (uint8_t*)dst, MAX_CALLSIGN_LENGTH);
     safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
-    f.messageLength = strlen(text);
+    f.messageLength = strlen((char*)f.message);
     sendFrame(f);
 }
 
@@ -123,7 +123,7 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
     strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
     safeUtf8Copy((char*)f.dstGroup, (uint8_t*)dst, MAX_CALLSIGN_LENGTH);
     safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
-    f.messageLength = strlen(text);
+    f.messageLength = strlen((char*)f.message);
     sendFrame(f);
 }
 
@@ -223,8 +223,11 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
     p->content = (char*)malloc(length);
     if (p->content != nullptr) {
         memcpy(p->content, buffer, length);
+        p->length = length;
+    } else {
+        Serial.println("[OOM] addJSONtoFile: malloc content failed");
+        p->length = 0;
     }
-    p->length = length;
     // 2. Dateinamen kopieren (DAS FEHLTE)
     strncpy(p->fileName, file, sizeof(p->fileName) - 1);
     p->fileName[sizeof(p->fileName) - 1] = '\0'; // Sicherstellen der Null-Terminierung
@@ -267,15 +270,15 @@ void trimFileTask(void * pvParameters) {
                     xSemaphoreGive(fsMutex);
                     delete p;
                     vTaskDelete(NULL);
-                    return; 
+                    return;
                 }
 
                 size_t currentLine = 0;
-                
+
                 while (srcFile.available()) {
                     // Zeile lesen
                     int len = srcFile.readBytesUntil('\n', lineBuffer, 4096);
-                    
+
                     // Nur behalten, wenn wir über dem Skip-Limit sind
                     if (currentLine >= linesToSkip) {
                         dstFile.write((const uint8_t*)lineBuffer, len);
@@ -283,16 +286,20 @@ void trimFileTask(void * pvParameters) {
                     }
                     currentLine++;
                 }
-                
+
                 srcFile.close();
                 dstFile.close();
                 free(lineBuffer);
-                lineBuffer = nullptr; 
+                lineBuffer = nullptr;
 
                 // Alte Datei ersetzen
                 LittleFS.remove(p->fileName);
                 LittleFS.rename("/temp_trim.json", p->fileName);
-                
+
+            } else {
+                // Close whichever file was successfully opened
+                if (srcFile) srcFile.close();
+                if (dstFile) dstFile.close();
             }
         }
         xSemaphoreGive(fsMutex);
@@ -322,7 +329,7 @@ void trimFile(const char* fileName, size_t maxLines) {
 
 
 
-uint32_t getTOA(uint8_t payloadBytes) {
+uint32_t getTOA(uint16_t payloadBytes) {
     uint8_t SF  = settings.loraSpreadingFactor; 
     uint32_t BW = settings.loraBandwidth * 1000; 
     uint8_t CR = (settings.loraCodingRate > 4) ? (settings.loraCodingRate - 4) : settings.loraCodingRate;
@@ -337,15 +344,15 @@ uint32_t getTOA(uint8_t payloadBytes) {
 }
 
 uint32_t calculateAckTime() {
-    uint32_t time = getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); //Zeit für 1 ACK-Frame
-    time = time * 15;   //15 ACK Frames
+    uint32_t time = getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); // Time for 1 ACK frame
+    time = time * 20;   // 20 ACK frames
     time = random(0, time);
     return time;
 }
 
 uint32_t calculateRetryTime() {
-    uint32_t time = 10 * getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); //Maximale Zeit für 10 ACK Frames
-    time = time + random(0, 6 * getTOA(255));  // 0...6 Message Frames
+    uint32_t time = 20 * getTOA(10 + 2 * MAX_CALLSIGN_LENGTH); // Wait for up to 20 ACK frames
+    time = time + random(0, 5 * getTOA(255));  // 0...5 max-length message frames
     return time;
 }
 

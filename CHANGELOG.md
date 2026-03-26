@@ -3,9 +3,25 @@
 ## [v1.0.31-dev]
 
 ### Stabilität & Effizienz
+- FIX: Guru Meditation Error (StoreProhibited) bei DNS-Fehler behoben – `http.begin()`-Rückgabewert wird jetzt in Topology-Reporting und Update-Check geprüft; WiFi-Status-Guard in `checkForUpdates()` verhindert Aufrufe ohne Verbindung; OTA-Log-Timeout auf 5 s begrenzt
 - FIX: Sichere malloc/new-Prüfungen – alle Heap-Allokationen in `helperFunctions.cpp`, `main.cpp` und `settings.cpp` werden auf `nullptr` geprüft; bei Fehlschlag wird sauber abgebrochen und ein `[OOM]`-Log geschrieben statt Absturz
 - FIX: Doppelte Nachrichten (Duplikate) werden jetzt sofort aus dem TX-Buffer entfernt, wenn die Deduplikation im Ring-Buffer einen bereits bekannten Frame erkennt – verhindert unnötige Sendewiederholungen
+- FIX: TX-Buffer-Verstopfung bei unerreichbarem Peer behoben – wenn alle Retries für einen Peer aufgebraucht sind, werden jetzt alle weiteren Frames an diesen viaCall aus dem txBuffer entfernt (nicht nur der aktuelle Frame)
+- FIX: Overflow-sichere Timer – alle `millis()`-Vergleiche nutzen jetzt `timerExpired()` mit signed-Arithmetik; verhindert Timer-Ausfälle nach ~49 Tagen Uptime
+- FIX: Reboot-Timer Race Condition behoben – neues `rebootRequested`-Flag verhindert unbeabsichtigten Sofort-Reboot bei `millis()`-Overflow
+- FIX: Buffer-Overflow in `Frame::exportBinary()` – Bounds-Checking vor jedem Header-Write verhindert Schreibzugriffe über den Puffer hinaus
+- FIX: TRACE-Echo Buffer-Overflow – Bounds-Prüfung beim Zusammenbauen der TRACE-Nachricht; TRACE-Pfad wird nur einmal angehängt statt pro Port-Iteration
+- FIX: `messageLength` in `sendMessage()`/`sendGroup()` wird jetzt nach `safeUtf8Copy()` gemessen – vorher konnte die Länge größer als der tatsächlich kopierte Inhalt sein
+- FIX: Auth-Session Eviction – wenn alle Slots voll sind, wird der erste unauthentifizierte Slot verdrängt statt den neuen Client stillschweigend abzuweisen; Hash-Längen-Validierung in `verifyAuthResponse()`
+- FIX: File-Handle-Leak in `trimFileTask` – Dateien werden jetzt auch im Fehlerfall korrekt geschlossen
+- FIX: `getTOA()` Parametertyp von `uint8_t` auf `uint16_t` erweitert – verhindert stille Abschneidung bei Frames mit Payload + Header > 255 Bytes
+- NEU: Flux Guard – nach jeder LoRa-Sendung wird eine Pause von 1× ACK-TOA eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können; verbessert die effektive Reichweite
+- NEU: Duty-Cycle-Enforcement für das öffentliche SRD-Band (869,4–869,65 MHz) – rollendes 60-s-Fenster mit max. 10 % Sendezeit; Frames werden bei erschöpftem Budget um 5 s verschoben statt verworfen
+- NEU: Kapazitätslimits für Peer-Liste, Routing-Tabelle und UDP-Peer-Liste – verhindert unkontrolliertes Wachstum bei vielen Nodes im Mesh
+- CHANGE: ACK-Timing auf 20× ACK-TOA erhöht (vorher 15×) – größeres Zeitfenster reduziert Kollisionen bei vielen Peers
+- CHANGE: Retry-Timing auf 20× ACK-TOA + 0–5× max. Frame-TOA angepasst (vorher 10× ACK + 0–6× Frame) – besser abgestimmt auf reale Mesh-Topologien
 - NEU: Konfigurierbarer minimaler SNR-Schwellwert für die Peer-Liste – LoRa-Peers unterhalb des eingestellten SNR-Werts werden automatisch als nicht verfügbar markiert; einstellbar in den LoRa-Einstellungen der WebUI (Aus, -20 bis +10 dB); Default: deaktiviert (-30 dB)
+- CLEANUP: Doppelte `#include`- und `esp_log_level_set`-Einträge entfernt; doppelte `measureJson()`/`strlen()`-Aufrufe vermieden
 
 ### OLED Status-Display
 - NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam – Display zeigt Callsign, Akkustand, WiFi-Modus, IP-Adresse, SSID und letzte empfangene Nachricht

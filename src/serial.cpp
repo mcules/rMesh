@@ -86,7 +86,7 @@ void checkSerialRX() {
                 //Reboot
                 if (strncmp(serialRxBuffer, "reb", 3) == 0) {
                     Serial.println("Reboot...");
-                    rebootTimer = 0;
+                    rebootTimer = millis(); rebootRequested = true;
                 }
 
                 //OTA Update
@@ -358,7 +358,7 @@ void checkSerialRX() {
                     std::memset(settings.mycall, 0xff, sizeof(settings.mycall));
                     nvs_flash_erase(); // Löscht die gesamte NVS-Partition
                     nvs_flash_init();  // Initialisiert sie neu
-                    rebootTimer = 0;
+                    rebootTimer = millis(); rebootRequested = true;
                 }
 
                 // Frequenz-Preset

@@ -46,13 +46,14 @@ void sendRoutingList() {
         route["hopCount"] = routingList[i].hopCount;
     }
     
-    char* jsonBuffer = (char*)malloc(measureJson(doc) + 1);
+    size_t jsonLen = measureJson(doc) + 1;
+    char* jsonBuffer = (char*)malloc(jsonLen);
     if (jsonBuffer != nullptr) {
-        size_t len = serializeJson(doc, jsonBuffer, measureJson(doc) + 1);
+        size_t len = serializeJson(doc, jsonBuffer, jsonLen);
         wsBroadcast(jsonBuffer, len);
         free(jsonBuffer);
     } else {
-        Serial.println(F("Fehler: Kein RAM für Buffer"));
+        Serial.println(F("[OOM] sendRoutingList: malloc failed"));
     }
 }
 
@@ -74,7 +75,11 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
     bool isNew = (it == routingList.end());
 
     if (isNew) {
-        // Fall A: Ziel unbekannt -> Neu anlegen
+        // Fall A: Ziel unbekannt -> Neu anlegen (enforce capacity limit)
+        if (routingList.size() >= ROUTING_BUFFER_SIZE) {
+            Serial.printf("[Routing] Table full (%d), ignoring route to %s\n", ROUTING_BUFFER_SIZE, srcCall);
+            return;
+        }
         Route r;
         strncpy(r.srcCall, srcCall, MAX_CALLSIGN_LENGTH);
         r.srcCall[MAX_CALLSIGN_LENGTH] = '\0';

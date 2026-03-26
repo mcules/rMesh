@@ -25,6 +25,8 @@ struct MSG {
 
 /** Millisecond timestamp (millis()) at which the device will call ESP.restart(). */
 extern uint32_t rebootTimer;
+/** Set to true to arm the reboot timer. */
+extern bool rebootRequested;
 
 /** Set to true by the web UI to trigger a manual OTA update check in the main loop. */
 extern bool pendingManualUpdate;

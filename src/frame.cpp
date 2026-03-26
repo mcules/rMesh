@@ -8,43 +8,54 @@
 size_t Frame::exportBinary(uint8_t* data, size_t length) {
     //Binär-Daten erzeugen
     size_t position = 0;
+    if (length < 1) return 0;
     //Frame-Typ + Hop-Count
     data[position] = (frameType & 0x0F) | ((hopCount & 0x0F) << 4);
     position ++;
     //Absender hinzufügen
-    if (strlen(srcCall) > 0) {
-        data[position] = Frame::HeaderTypes::SRC_CALL_HEADER << 4 | (0x0F & strlen(srcCall));  
+    size_t sLen = strlen(srcCall);
+    if (sLen > 0) {
+        if (position + 1 + sLen > length) return position;
+        data[position] = Frame::HeaderTypes::SRC_CALL_HEADER << 4 | (0x0F & sLen);
         position ++;
-        memcpy(&data[position], srcCall, strlen(srcCall)); //Payload
-        position += strlen(srcCall);
+        memcpy(&data[position], srcCall, sLen);
+        position += sLen;
     }
     //Node hinzufügen
-    if (strlen(nodeCall) > 0) {
-        data[position] = Frame::HeaderTypes::NODE_CALL_HEADER << 4 | (0x0F & strlen(nodeCall));  
+    size_t nLen = strlen(nodeCall);
+    if (nLen > 0) {
+        if (position + 1 + nLen > length) return position;
+        data[position] = Frame::HeaderTypes::NODE_CALL_HEADER << 4 | (0x0F & nLen);
         position ++;
-        memcpy(&data[position], nodeCall, strlen(nodeCall)); //Payload
-        position += strlen(nodeCall);
+        memcpy(&data[position], nodeCall, nLen);
+        position += nLen;
     }
     //VIA-Call hinzufügen
-    if (strlen(viaCall) > 0) {
-        data[position] = Frame::HeaderTypes::VIA_CALL_HEADER << 4 | (0x0F & strlen(viaCall));  
+    size_t vLen = strlen(viaCall);
+    if (vLen > 0) {
+        if (position + 1 + vLen > length) return position;
+        data[position] = Frame::HeaderTypes::VIA_CALL_HEADER << 4 | (0x0F & vLen);
         position ++;
-        memcpy(&data[position], viaCall, strlen(viaCall)); //Payload
-        position += strlen(viaCall);
+        memcpy(&data[position], viaCall, vLen);
+        position += vLen;
     }
     //Destination hinzufügen
-    if (strlen(dstGroup) > 0) {
-        data[position] = Frame::HeaderTypes::DST_GROUP_HEADER << 4 | (0x0F & strlen(dstGroup));  
+    size_t gLen = strlen(dstGroup);
+    if (gLen > 0) {
+        if (position + 1 + gLen > length) return position;
+        data[position] = Frame::HeaderTypes::DST_GROUP_HEADER << 4 | (0x0F & gLen);
         position ++;
-        memcpy(&data[position], dstGroup, strlen(dstGroup)); //Payload
-        position += strlen(dstGroup);
+        memcpy(&data[position], dstGroup, gLen);
+        position += gLen;
     }
     //Destination Call hinzufügen
-    if (strlen(dstCall) > 0) {
-        data[position] = Frame::HeaderTypes::DST_CALL_HEADER << 4 | (0x0F & strlen(dstCall));  
+    size_t dLen = strlen(dstCall);
+    if (dLen > 0) {
+        if (position + 1 + dLen > length) return position;
+        data[position] = Frame::HeaderTypes::DST_CALL_HEADER << 4 | (0x0F & dLen);
         position ++;
-        memcpy(&data[position], dstCall, strlen(dstCall)); //Payload
-        position += strlen(dstCall);
+        memcpy(&data[position], dstCall, dLen);
+        position += dLen;
     }
     //Message hinzu (muss immer ganz hinten sein, weil keine Längenangabe)
     switch (frameType) {

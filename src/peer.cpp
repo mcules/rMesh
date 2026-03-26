@@ -62,7 +62,7 @@ void checkPeerList() {
     }
 
     // Filter LoRa peers below minimum SNR threshold
-    if (extSettings.minSnr > -30) {
+    if (extSettings.minSnr > -20) {
         for (auto& peer : peerList) {
             if (peer.available && peer.port == 0 && peer.snr < extSettings.minSnr) {
                 peer.available = false;
@@ -152,13 +152,14 @@ void sendPeerList() {
         }
     }
     
-    char* jsonBuffer = (char*)malloc(measureJson(doc) + 1);
+    size_t jsonLen = measureJson(doc) + 1;
+    char* jsonBuffer = (char*)malloc(jsonLen);
     if (jsonBuffer != nullptr) {
-        size_t len = serializeJson(doc, jsonBuffer, measureJson(doc) + 1);
+        size_t len = serializeJson(doc, jsonBuffer, jsonLen);
         wsBroadcast(jsonBuffer, len);
         free(jsonBuffer);
     } else {
-        Serial.println(F("Fehler: Kein RAM für Buffer"));
+        Serial.println(F("[OOM] sendPeerList: malloc failed"));
     }
 }
 
@@ -182,7 +183,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
     if (it != peerList.end()) {
         // Reject availability for LoRa peers below minimum SNR threshold
         bool effectiveAvailable = available;
-        if (available && it->port == 0 && extSettings.minSnr > -30 && it->snr < extSettings.minSnr) {
+        if (available && it->port == 0 && extSettings.minSnr > -20 && it->snr < extSettings.minSnr) {
             effectiveAvailable = false;
         }
 
@@ -242,7 +243,11 @@ void addPeerList(Frame &f) {
         it->frqError = f.frqError;
         it->port = f.port;
     } else {
-        // Add new peer
+        // Add new peer (enforce capacity limit)
+        if (peerList.size() >= PEER_LIST_SIZE) {
+            Serial.printf("[Peer] List full (%d), ignoring new peer %s\n", PEER_LIST_SIZE, f.nodeCall);
+            return;
+        }
         Peer p;
         memcpy(p.nodeCall, f.nodeCall, sizeof(p.nodeCall));
         p.nodeCall[sizeof(p.nodeCall) - 1] = '\0';

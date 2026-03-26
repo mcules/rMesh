@@ -33,6 +33,7 @@ static void sendOtaLog(const char* event, const char* versionFrom, const char* v
     HTTPClient logHttp;
     if (!logHttp.begin(logClient, "https://www.rMesh.de/ota_log.php")) return;
     logHttp.addHeader("Content-Type", "application/json");
+    logHttp.setTimeout(5000);
     JsonDocument doc;
     doc["call"]         = settings.mycall;
     doc["device"]       = PIO_ENV_NAME;
@@ -54,6 +55,7 @@ static void sendUpdateStatus(const char* msg) {
 }
 
 void checkForUpdates(bool force, uint8_t forceChannel) {
+    if (WiFi.status() != WL_CONNECTED) return;
     if (strcmp(VERSION, "unknown") == 0) {
         sendUpdateStatus("Kein Update: Dev-Build (unknown).");
         return;
@@ -89,7 +91,10 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     latestUrl += VERSION;
     latestUrl += "&channel=";
     latestUrl += (activeChannel == 1) ? "dev" : "release";
-    http.begin(client, latestUrl);
+    if (!http.begin(client, latestUrl)) {
+        sendUpdateStatus("Update-Server nicht erreichbar.");
+        return;
+    }
     if (http.GET() != 200) {
         http.end();
         sendUpdateStatus("Update-Server nicht erreichbar.");
@@ -213,7 +218,7 @@ void showWiFiStatus() {
             longPressHandled = true;
             settings.apMode = !settings.apMode;
             saveSettings();
-            rebootTimer = 0;
+            rebootTimer = millis(); rebootRequested = true;
             delay(500);
         }
     }
@@ -241,7 +246,7 @@ void showWiFiStatus() {
         if (apModeKey == 1) {
             settings.apMode = !settings.apMode;
             saveSettings();
-            rebootTimer = 0;
+            rebootTimer = millis(); rebootRequested = true;
             delay(500);
         }
     }

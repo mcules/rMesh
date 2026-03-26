@@ -332,7 +332,7 @@ void startWebServer() {
 
         if (json["deleteMessages"].is<JsonVariant>()) {
             LittleFS.remove("/messages.json");
-            rebootTimer = millis() + 1000;
+            rebootTimer = millis() + 1000; rebootRequested = true;
         }
 
         if (json["trace"].is<JsonVariant>()) {
@@ -368,7 +368,7 @@ void startWebServer() {
 
         if (json["reboot"].is<JsonVariant>()) {
             Serial.println("Reboot");
-            rebootTimer = 0;
+            rebootTimer = millis(); rebootRequested = true;
         }
 
         if (json["shutdown"].is<JsonVariant>()) {
@@ -448,7 +448,7 @@ void startWebServer() {
                          } else {
                              char buf[] = "{\"updateStatus\":\"Upload successful – rebooting...\"}";
                              wsBroadcast(buf, strlen(buf));
-                             rebootTimer = millis() + 2000;
+                             rebootTimer = millis() + 2000; rebootRequested = true;
                          }
                      } else {
                          char buf[128];
