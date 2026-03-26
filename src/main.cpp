@@ -18,6 +18,7 @@
 #include <vector>
 #include <nvs_flash.h>
 #include <freertos/semphr.h>
+#include <ArduinoJson.h>
 
 #include "config.h"
 #include "hal.h"
@@ -139,6 +140,32 @@ void processRxFrame(Frame &f) {
     // Log to monitor
     f.monitorJSON();
 
+    // Debug output for test framework
+    if (serialDebug) {
+        JsonDocument dbg;
+        dbg["event"] = "rx";
+        dbg["frameType"] = f.frameType;
+        if (strlen(f.srcCall) > 0) dbg["srcCall"] = f.srcCall;
+        if (strlen(f.nodeCall) > 0) dbg["nodeCall"] = f.nodeCall;
+        if (strlen(f.dstCall) > 0) dbg["dstCall"] = f.dstCall;
+        if (strlen(f.dstGroup) > 0) dbg["dstGroup"] = f.dstGroup;
+        if (strlen(f.viaCall) > 0) dbg["viaCall"] = f.viaCall;
+        dbg["id"] = f.id;
+        dbg["hopCount"] = f.hopCount;
+        dbg["messageType"] = f.messageType;
+        if (f.messageLength > 0 && (f.messageType == Frame::MessageTypes::TEXT_MESSAGE || f.messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
+            char text[261] = {0};
+            memcpy(text, f.message, f.messageLength);
+            dbg["text"] = text;
+        }
+        dbg["rssi"] = f.rssi;
+        dbg["snr"] = f.snr;
+        dbg["port"] = f.port;
+        Serial.print("DBG:");
+        serializeJson(dbg, Serial);
+        Serial.println();
+    }
+
     // Update peer list with signal quality data from this frame
     addPeerList(f);
 
@@ -204,6 +231,18 @@ void processRxFrame(Frame &f) {
 
             // Persist the ACK so repeat logic and foreign-ACK forwarding work correctly
             addACK(f.srcCall, f.nodeCall, f.id);
+
+            // Debug output for test framework
+            if (serialDebug) {
+                JsonDocument dbgAck;
+                dbgAck["event"] = "ack";
+                dbgAck["srcCall"] = f.srcCall;
+                dbgAck["nodeCall"] = f.nodeCall;
+                dbgAck["id"] = f.id;
+                Serial.print("DBG:");
+                serializeJson(dbgAck, Serial);
+                Serial.println();
+            }
             break;
 
         // ── MESSAGE_FRAME ─────────────────────────────────────────────────────
@@ -576,6 +615,18 @@ void setup() {
     startWebServer();
 
     Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);
+
+    // Always emit ready event for test framework detection
+    {
+        JsonDocument dbgReady;
+        dbgReady["event"] = "ready";
+        dbgReady["call"] = settings.mycall;
+        dbgReady["version"] = VERSION;
+        dbgReady["board"] = PIO_ENV_NAME;
+        Serial.print("DBG:");
+        serializeJson(dbgReady, Serial);
+        Serial.println();
+    }
 }
 
 
@@ -691,6 +742,24 @@ void loop() {
                         }
                         case 1: sendUDP(txBuffer[i]); break;
                     }
+
+                    // Debug output for test framework
+                    if (serialDebug) {
+                        JsonDocument dbgTx;
+                        dbgTx["event"] = "tx";
+                        dbgTx["frameType"] = txBuffer[i].frameType;
+                        if (strlen(txBuffer[i].srcCall) > 0) dbgTx["srcCall"] = txBuffer[i].srcCall;
+                        if (strlen(txBuffer[i].nodeCall) > 0) dbgTx["nodeCall"] = txBuffer[i].nodeCall;
+                        if (strlen(txBuffer[i].dstCall) > 0) dbgTx["dstCall"] = txBuffer[i].dstCall;
+                        if (strlen(txBuffer[i].viaCall) > 0) dbgTx["viaCall"] = txBuffer[i].viaCall;
+                        dbgTx["id"] = txBuffer[i].id;
+                        dbgTx["hopCount"] = txBuffer[i].hopCount;
+                        dbgTx["port"] = txBuffer[i].port;
+                        dbgTx["retry"] = txBuffer[i].retry;
+                        Serial.print("DBG:");
+                        serializeJson(dbgTx, Serial);
+                        Serial.println();
+                    }
                 }
                 // Decrement retry counter and track progress for the status update
                 if (txBuffer[i].retry > 0) {txBuffer[i].retry --;}
@@ -700,24 +769,29 @@ void loop() {
                     case 0: txBuffer[i].transmitMillis = millis() + calculateRetryTime(); break;
                     case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
                 }
-                // All retries exhausted: remove the frame, mark peer unavailable,
-                // and purge all remaining frames to the same viaCall to prevent
-                // txBuffer congestion from an unreachable peer.
+                // All retries exhausted: remove the frame.
+                // For multi-retry frames (initRetry > 1): the peer is unreachable,
+                // so mark it unavailable and purge ALL pending frames to that peer
+                // to prevent txBuffer congestion.
+                // For one-shot frames (initRetry <= 1, e.g. ACKs): only remove
+                // the single frame, do NOT purge other frames to the same peer.
                 if (txBuffer[i].retry == 0) {
-                    char deadVia[MAX_CALLSIGN_LENGTH + 1];
-                    strncpy(deadVia, txBuffer[i].viaCall, sizeof(deadVia));
-                    deadVia[sizeof(deadVia) - 1] = '\0';
-                    uint8_t deadPort = txBuffer[i].port;
                     if (txBuffer[i].initRetry > 1) {
+                        char deadVia[MAX_CALLSIGN_LENGTH + 1];
+                        strncpy(deadVia, txBuffer[i].viaCall, sizeof(deadVia));
+                        deadVia[sizeof(deadVia) - 1] = '\0';
+                        uint8_t deadPort = txBuffer[i].port;
                         availablePeerList(deadVia, false, deadPort);
+                        txBuffer.erase(
+                            std::remove_if(txBuffer.begin(), txBuffer.end(),
+                                [&](const Frame& txB) {
+                                    return (strcmp(txB.viaCall, deadVia) == 0) && (txB.port == deadPort);
+                                }),
+                            txBuffer.end()
+                        );
+                    } else {
+                        txBuffer.erase(txBuffer.begin() + i);
                     }
-                    txBuffer.erase(
-                        std::remove_if(txBuffer.begin(), txBuffer.end(),
-                            [&](const Frame& txB) {
-                                return (strcmp(txB.viaCall, deadVia) == 0) && (txB.port == deadPort);
-                            }),
-                        txBuffer.end()
-                    );
                     i = -1; // restart iteration since indices shifted
                 }
                 break;

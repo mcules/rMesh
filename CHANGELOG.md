@@ -2,6 +2,16 @@
 
 ## [v1.0.31-dev]
 
+### Test Framework
+- NEU: Automatisierte Hardware-in-the-Loop Test Suite (`test/`) mit pytest + pyserial – flasht Firmware, konfiguriert Nodes und testet Funktionalität und Kommunikation
+- NEU: Node-Konfiguration via YAML-Datei (`nodes.yaml`) – Board-Typ, COM-Port, Callsign, Frequenz-Preset, optional WiFi; beliebig viele Nodes
+- NEU: Serial Debug-Modus (`dbg 1/0`) – strukturierte JSON-Events über Serial für RX, TX, ACK, Peer-Änderungen und Boot-Ready
+- NEU: Serial-Befehle für Tests – `msg`, `xgrp`, `xtrace`, `announce`, `peers`, `routes`, `acks`, `xtxbuf`
+- NEU: Automatischer Build, Flash, Board-Verifikation und Reboot vor den Tests; `--no-flash` zum Überspringen
+- NEU: Peer Discovery vor Teststart – gegenseitige Announces stellen sicher, dass Nodes sich kennen
+- NEU: Tests für Einzel-Node (Boot, Settings, LoRa-Parameter), Messaging (Direct, Group, Trace, ACK), Peer Discovery und Routing
+- FIX: TX-Buffer Cleanup löschte versehentlich wartende Frames – One-Shot-Frames (ACKs, retry=1) entfernen beim Aufräumen nicht mehr andere Frames zum selben Peer; behebt fehlende Trace-Echos und potenziell verlorene Nachrichten
+
 ### Stabilität & Effizienz
 - FIX: Guru Meditation Error (StoreProhibited) bei DNS-Fehler behoben – `http.begin()`-Rückgabewert wird jetzt in Topology-Reporting und Update-Check geprüft; WiFi-Status-Guard in `checkForUpdates()` verhindert Aufrufe ohne Verbindung; OTA-Log-Timeout auf 5 s begrenzt
 - FIX: Sichere malloc/new-Prüfungen – alle Heap-Allokationen in `helperFunctions.cpp`, `main.cpp` und `settings.cpp` werden auf `nullptr` geprüft; bei Fehlschlag wird sauber abgebrochen und ein `[OOM]`-Log geschrieben statt Absturz

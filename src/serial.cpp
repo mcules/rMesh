@@ -3,6 +3,7 @@
 #include <WiFi.h>
 #include <cstring>
 #include <nvs_flash.h>
+#include <ArduinoJson.h>
 
 #include "serial.h"
 #include "config.h"
@@ -10,8 +11,13 @@
 #include "main.h"
 #include "wifiFunctions.h"
 #include "auth.h"
+#include "helperFunctions.h"
+#include "peer.h"
+#include "routing.h"
+#include "ack.h"
 #include "mbedtls/md.h"
 
+bool serialDebug = false;
 char serialRxBuffer[200] = {0};
 
 
@@ -647,6 +653,140 @@ void checkSerialRX() {
                             Serial.println("Befehle: udp | udp add <IP> [legacy] | udp del <N> | udp <N> <IP> | udp <N> legacy | udp <N> enabled | udp clear");
                         }
                     }
+                }
+
+                // Debug mode toggle
+                // "dbg 1" = enable, "dbg 0" = disable
+                // NOTE: must NOT use "debug" — conflicts with "de" (factory defaults)
+                if (strncmp(serialRxBuffer, "dbg", 3) == 0 && (serialRxBuffer[3] == ' ' || serialRxBuffer[3] == '\0')) {
+                    if (strlen(parameter) > 0) {
+                        serialDebug = (parameter[0] == '1' || parameter[0] == 'e' || parameter[0] == 't');
+                    }
+                    Serial.printf("Debug: %s\n", serialDebug ? "on" : "off");
+                }
+
+                // Send direct message: "msg <CALL> <TEXT>"
+                if (strncmp(serialRxBuffer, "msg", 3) == 0 && serialRxBuffer[3] == ' ') {
+                    char* sp = strchr(parameter, ' ');
+                    if (sp != nullptr) {
+                        *sp = '\0';
+                        char dst[MAX_CALLSIGN_LENGTH + 1] = {0};
+                        strncpy(dst, parameter, MAX_CALLSIGN_LENGTH);
+                        for (size_t ci = 0; dst[ci]; ci++) dst[ci] = toupper(dst[ci]);
+                        sendMessage(dst, sp + 1);
+                        Serial.printf("Message sent to %s\n", dst);
+                    } else {
+                        Serial.println("Usage: msg <CALL> <TEXT>");
+                    }
+                }
+
+                // Send group message: "xgrp <GROUP> <TEXT>"
+                // NOTE: must NOT use "grp" — conflicts with "g" (gateway)
+                if (strncmp(serialRxBuffer, "xgrp", 4) == 0 && serialRxBuffer[4] == ' ') {
+                    char* sp = strchr(parameter, ' ');
+                    if (sp != nullptr) {
+                        *sp = '\0';
+                        char dst[MAX_CALLSIGN_LENGTH + 1] = {0};
+                        strncpy(dst, parameter, MAX_CALLSIGN_LENGTH);
+                        for (size_t ci = 0; dst[ci]; ci++) dst[ci] = toupper(dst[ci]);
+                        sendGroup(dst, sp + 1);
+                        Serial.printf("Group message sent to %s\n", dst);
+                    } else {
+                        Serial.println("Usage: xgrp <GROUP> <TEXT>");
+                    }
+                }
+
+                // Send trace: "xtrace <CALL>"
+                // NOTE: must NOT use "trace" — conflicts with "t" (time set)
+                if (strncmp(serialRxBuffer, "xtrace", 6) == 0 && serialRxBuffer[6] == ' ') {
+                    if (strlen(parameter) > 0) {
+                        char dst[MAX_CALLSIGN_LENGTH + 1] = {0};
+                        strncpy(dst, parameter, MAX_CALLSIGN_LENGTH);
+                        for (size_t ci = 0; dst[ci]; ci++) dst[ci] = toupper(dst[ci]);
+                        char timeStr[16];
+                        getFormattedTime("%H:%M:%S", timeStr, sizeof(timeStr));
+                        sendMessage(dst, timeStr, Frame::MessageTypes::TRACE_MESSAGE);
+                        Serial.printf("Trace sent to %s\n", dst);
+                    } else {
+                        Serial.println("Usage: xtrace <CALL>");
+                    }
+                }
+
+                // Trigger manual announce
+                if (strncmp(serialRxBuffer, "announce", 8) == 0) {
+                    announceTimer = 0;
+                    Serial.println("Announce triggered.");
+                }
+
+                // Query: peer list as JSON
+                if (strncmp(serialRxBuffer, "peers", 5) == 0 && (serialRxBuffer[5] == '\0' || serialRxBuffer[5] == ' ')) {
+                    JsonDocument doc;
+                    doc["query"] = "peers";
+                    JsonArray arr = doc["data"].to<JsonArray>();
+                    for (size_t i = 0; i < peerList.size(); i++) {
+                        JsonObject p = arr.add<JsonObject>();
+                        p["call"] = peerList[i].nodeCall;
+                        p["rssi"] = peerList[i].rssi;
+                        p["snr"] = peerList[i].snr;
+                        p["available"] = peerList[i].available;
+                        p["port"] = peerList[i].port;
+                    }
+                    Serial.print("DBG:");
+                    serializeJson(doc, Serial);
+                    Serial.println();
+                }
+
+                // Query: routing table as JSON
+                if (strncmp(serialRxBuffer, "routes", 6) == 0 && (serialRxBuffer[6] == '\0' || serialRxBuffer[6] == ' ')) {
+                    JsonDocument doc;
+                    doc["query"] = "routes";
+                    JsonArray arr = doc["data"].to<JsonArray>();
+                    for (size_t i = 0; i < routingList.size(); i++) {
+                        JsonObject r = arr.add<JsonObject>();
+                        r["dst"] = routingList[i].srcCall;
+                        r["via"] = routingList[i].viaCall;
+                        r["hops"] = routingList[i].hopCount;
+                    }
+                    Serial.print("DBG:");
+                    serializeJson(doc, Serial);
+                    Serial.println();
+                }
+
+                // Query: ACK list as JSON
+                if (strncmp(serialRxBuffer, "acks", 4) == 0 && (serialRxBuffer[4] == '\0' || serialRxBuffer[4] == ' ')) {
+                    JsonDocument doc;
+                    doc["query"] = "acks";
+                    JsonArray arr = doc["data"].to<JsonArray>();
+                    for (int i = 0; i < MAX_STORED_ACK; i++) {
+                        if (acks[i].id != 0) {
+                            JsonObject a = arr.add<JsonObject>();
+                            a["srcCall"] = acks[i].srcCall;
+                            a["nodeCall"] = acks[i].nodeCall;
+                            a["id"] = acks[i].id;
+                        }
+                    }
+                    Serial.print("DBG:");
+                    serializeJson(doc, Serial);
+                    Serial.println();
+                }
+
+                // Query: TX buffer status as JSON
+                // NOTE: must NOT use "txbuf" — conflicts with "t" (time set)
+                if (strncmp(serialRxBuffer, "xtxbuf", 6) == 0 && (serialRxBuffer[6] == '\0' || serialRxBuffer[6] == ' ')) {
+                    JsonDocument doc;
+                    doc["query"] = "txbuf";
+                    doc["count"] = txBuffer.size();
+                    JsonArray arr = doc["data"].to<JsonArray>();
+                    for (size_t i = 0; i < txBuffer.size(); i++) {
+                        JsonObject t = arr.add<JsonObject>();
+                        t["frameType"] = txBuffer[i].frameType;
+                        t["viaCall"] = txBuffer[i].viaCall;
+                        t["id"] = txBuffer[i].id;
+                        t["retry"] = txBuffer[i].retry;
+                    }
+                    Serial.print("DBG:");
+                    serializeJson(doc, Serial);
+                    Serial.println();
                 }
 
             }

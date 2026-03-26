@@ -5,6 +5,7 @@
 #include "ack.h"
 #include "helperFunctions.h"
 
+// Exposed via ack.h for debug query access
 ACK acks[MAX_STORED_ACK];
 uint16_t ackHead = 0;
 

@@ -19,6 +19,7 @@
 #include "helperFunctions.h"
 #include "config.h"
 #include "settings.h"
+#include "serial.h"
 
 /** Runtime peer table; extern-declared in peer.h. */
 std::vector<Peer> peerList;
@@ -53,7 +54,8 @@ void checkPeerList() {
     // Remove peers after full timeout
     for (auto it = peerList.begin(); it != peerList.end();) {
         if ((now - it->timestamp) > PEER_TIMEOUT) {
-            Serial.printf("[Peer] %s (Port %d) removed due to timeout\n", it->nodeCall, it->port);
+            Serial.printf("[Peer] %s (Port %d) removed due to timeout (now=%ld, ts=%ld, diff=%ld)\n",
+                it->nodeCall, it->port, (long)now, (long)it->timestamp, (long)(now - it->timestamp));
             it = peerList.erase(it);
             update = true;
         } else {
@@ -197,6 +199,18 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
         }
     }
 
+    if (update && serialDebug) {
+        JsonDocument dbgPeer;
+        dbgPeer["event"] = "peer";
+        dbgPeer["action"] = "available";
+        dbgPeer["call"] = call;
+        dbgPeer["available"] = (it != peerList.end()) ? it->available : false;
+        dbgPeer["port"] = port;
+        Serial.print("DBG:");
+        serializeJson(dbgPeer, Serial);
+        Serial.println();
+    }
+
     if (update) {
         sendPeerList();
         markTopologyChanged();
@@ -223,10 +237,13 @@ void addPeerList(Frame &f) {
     }
 
     if (strcmp(f.nodeCall, settings.mycall) == 0) {
+        if (serialDebug) Serial.printf("[Peer] Ignoring own call: %s\n", f.nodeCall);
         return;
     }
 
     time_t now = time(NULL);
+    if (serialDebug) Serial.printf("[Peer] addPeerList: %s port=%d time=%ld listSize=%d\n",
+        f.nodeCall, f.port, (long)now, (int)peerList.size());
 
     // Search for an existing peer with same callsign and port
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) {
@@ -234,6 +251,7 @@ void addPeerList(Frame &f) {
     });
 
     bool isNew = (it == peerList.end());
+    if (serialDebug) Serial.printf("[Peer] isNew=%d\n", isNew);
 
     if (!isNew) {
         // Update existing peer, but keep current availability state
@@ -260,6 +278,19 @@ void addPeerList(Frame &f) {
         peerList.push_back(p);
 
         Serial.printf("[Reporting] New peer: %s (Port %d)\n", f.nodeCall, f.port);
+
+        if (serialDebug) {
+            JsonDocument dbgPeer;
+            dbgPeer["event"] = "peer";
+            dbgPeer["action"] = "add";
+            dbgPeer["call"] = f.nodeCall;
+            dbgPeer["port"] = f.port;
+            dbgPeer["rssi"] = f.rssi;
+            dbgPeer["snr"] = f.snr;
+            Serial.print("DBG:");
+            serializeJson(dbgPeer, Serial);
+            Serial.println();
+        }
     }
 
     // Sort by SNR descending
