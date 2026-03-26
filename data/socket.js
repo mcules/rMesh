@@ -577,7 +577,7 @@ function fillSettingsForm(s) {
     var minSnrEl = document.getElementById("settingsMinSnr");
     if (minSnrEl) {
         var v = (s.minSnr !== undefined) ? s.minSnr : -20;
-        if (v < -20) v = -20;
+        if (v < -30) v = -30;
         minSnrEl.value = v;
         updateMinSnrLabel(v);
     }

@@ -43,7 +43,7 @@ struct ExtSettings {
     uint8_t maxHopMessage = 15;
     uint8_t maxHopPosition = 1;
     uint8_t maxHopTelemetry = 3;
-    int8_t minSnr = -20;           // Minimum SNR (dB) for peer availability; -20 = disabled
+    int8_t minSnr = -30;           // Minimum SNR (dB) for peer availability; -30 = disabled
 };
 
 // Dynamic UDP peer list (unlimited, stored separately in NVS)
