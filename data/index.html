@@ -572,6 +572,17 @@
       </div>
     </div>
     <div class="settings-section">
+      <div class="section-header">CPU</div>
+      <div class="section-body">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <span style="color:#aaa;font-size:0.85rem;" data-i18n="about.cpu_freq">CPU-Frequenz:</span>
+          <span id="aboutCpuFreq" style="font-weight:bold;">–</span>
+        </div>
+        <canvas id="cpuFreqChart" width="480" height="120" style="width:100%;max-width:480px;height:120px;background:#1a1a2e;border-radius:4px;"></canvas>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <div class="section-header" data-i18n="about.changelog">Changelog</div>
       <div class="section-body">
         <pre id="aboutChangelog" style="white-space:pre-wrap; font-family:inherit; color:#aaa; margin:0;"></pre>

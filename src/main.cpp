@@ -709,9 +709,11 @@ void loop() {
 
     // ── 5. TX-buffer draining ─────────────────────────────────────────────────
     // Only transmit when no LoRa TX/RX is already in progress
-    // Boost CPU to 240 MHz during TX processing for reliable SPI timing
+    // Boost CPU to 240 MHz during TX processing, hold for 2 s cooldown
+    static uint32_t cpuBoostUntil = 0;
     if ((txFlag == false) && (rxFlag == false) && txBuffer.size() > 0) {
         setCpuFrequencyMhz(240);
+        cpuBoostUntil = millis() + 1000;
     }
     if ((txFlag == false) && (rxFlag == false)) {
 
@@ -825,8 +827,8 @@ void loop() {
         }
     }
 
-    // Drop CPU back to 80 MHz when TX buffer is empty
-    if (txBuffer.size() == 0 && getCpuFrequencyMhz() > 80) {
+    // Drop CPU back to 80 MHz after cooldown
+    if (getCpuFrequencyMhz() > 80 && timerExpired(cpuBoostUntil)) {
         setCpuFrequencyMhz(80);
     }
 
@@ -846,6 +848,7 @@ void loop() {
         doc["status"]["retry"]        = currentRetry;
         doc["status"]["heap"]         = ESP.getFreeHeap();
         doc["status"]["uptime"]       = millis() / 1000;
+        doc["status"]["cpuFreq"]      = getCpuFrequencyMhz();
         #ifdef HAS_BATTERY_ADC
         if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
         #endif

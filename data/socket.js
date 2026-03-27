@@ -30,6 +30,70 @@ function updateDispBrightnessLabel(v) {
     if (label) label.textContent = v;
 }
 
+// CPU frequency graph (rolling 120 samples = ~2 min at 1 Hz status)
+var cpuFreqHistory = [];
+var CPU_FREQ_MAX_SAMPLES = 120;
+
+function pushCpuFreq(mhz) {
+    cpuFreqHistory.push(mhz);
+    if (cpuFreqHistory.length > CPU_FREQ_MAX_SAMPLES) cpuFreqHistory.shift();
+    var el = document.getElementById("aboutCpuFreq");
+    if (el) el.textContent = mhz + " MHz";
+    drawCpuFreqChart();
+}
+
+function drawCpuFreqChart() {
+    var canvas = document.getElementById("cpuFreqChart");
+    if (!canvas || !canvas.getContext) return;
+    var ctx = canvas.getContext("2d");
+    var w = canvas.width, h = canvas.height;
+    var pad = 24, graphH = h - pad - 4;
+
+    ctx.clearRect(0, 0, w, h);
+
+    // Y-axis labels and grid
+    var steps = [80, 160, 240];
+    ctx.font = "10px monospace";
+    ctx.textAlign = "right";
+    for (var s = 0; s < steps.length; s++) {
+        var y = pad + graphH - (steps[s] / 240) * graphH;
+        ctx.strokeStyle = "rgba(255,255,255,0.08)";
+        ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(w - 2, y); ctx.stroke();
+        ctx.fillStyle = "#666";
+        ctx.fillText(steps[s], pad - 3, y + 3);
+    }
+
+    if (cpuFreqHistory.length < 2) return;
+
+    var n = cpuFreqHistory.length;
+    var stepX = (w - pad - 2) / (CPU_FREQ_MAX_SAMPLES - 1);
+    var offsetX = (CPU_FREQ_MAX_SAMPLES - n) * stepX;
+
+    // Filled area
+    ctx.beginPath();
+    ctx.moveTo(pad + offsetX, pad + graphH);
+    for (var i = 0; i < n; i++) {
+        var x = pad + offsetX + i * stepX;
+        var y = pad + graphH - (cpuFreqHistory[i] / 240) * graphH;
+        ctx.lineTo(x, y);
+    }
+    ctx.lineTo(pad + offsetX + (n - 1) * stepX, pad + graphH);
+    ctx.closePath();
+    ctx.fillStyle = "rgba(56, 189, 248, 0.15)";
+    ctx.fill();
+
+    // Line
+    ctx.beginPath();
+    for (var i = 0; i < n; i++) {
+        var x = pad + offsetX + i * stepX;
+        var y = pad + graphH - (cpuFreqHistory[i] / 240) * graphH;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+}
+
 function loadChannelFlags() {
     for (let i = 1; i <= 10; i++) {
         channelMuted[i] = Cookie.get("chMute" + i) === "1";
@@ -341,6 +405,9 @@ function onMessage(event) {
             parts.push(h + "h " + m + "m " + s + "s");
             var upEl = document.getElementById("aboutUptime");
             if (upEl) upEl.innerHTML = parts.join(" ");
+        }
+        if (d.status.cpuFreq != null) {
+            pushCpuFreq(d.status.cpuFreq);
         }
         if (d.status.battery != null) {
             var bv = d.status.battery;
