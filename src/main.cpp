@@ -584,9 +584,12 @@ void setup() {
     // Load user settings from NVS
     loadSettings();
 
-    // Mount LittleFS (do not format on failure — preserve user data)
+    // Mount LittleFS (auto-format on first boot if unformatted)
     if (!LittleFS.begin(false)) {
-        Serial.println("An error has occurred while mounting LittleFS");
+        Serial.println("[FS] Mount failed — formatting...");
+        if (!LittleFS.begin(true)) {
+            Serial.println("[FS] Format failed!");
+        }
     }
     fsMutex = xSemaphoreCreateMutex();
 

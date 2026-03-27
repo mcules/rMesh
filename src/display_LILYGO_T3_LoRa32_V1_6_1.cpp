@@ -16,7 +16,7 @@
 #define OLED_RST  16
 #define OLED_I2C_ADDR 0x3C
 
-static U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, OLED_RST, OLED_SCL, OLED_SDA);
+static U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, U8X8_PIN_NONE, OLED_SCL, OLED_SDA);
 
 static bool displayDetected = false;
 
@@ -26,12 +26,10 @@ static char lastMsgText[128] = {0};
 // ── Public API ──────────────────────────────────────────────────────────────
 
 bool initStatusDisplay() {
-    // Reset OLED
-    pinMode(OLED_RST, OUTPUT);
-    digitalWrite(OLED_RST, LOW);
-    delay(20);
-    digitalWrite(OLED_RST, HIGH);
-    delay(20);
+    // No hardware reset — the T3 V1.6.1 uses an ESP32-PICO-D4 where
+    // GPIO 16 is not available as a general-purpose pin (crashes on
+    // pinMode).  The display reset is handled by U8g2 internally when
+    // the reset pin is set to U8X8_PIN_NONE (power-on reset suffices).
 
     // Probe I2C
     Wire.begin(OLED_SDA, OLED_SCL);
@@ -42,6 +40,7 @@ bool initStatusDisplay() {
         return false;
     }
 
+    delay(10); // feed watchdog before potentially long init
     u8g2.begin();
     displayDetected = true;
     Serial.println("[OLED] SSD1306 detected (T3 LoRa32 V1.6.1)");

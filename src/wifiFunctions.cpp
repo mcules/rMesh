@@ -205,14 +205,26 @@ void showWiFiStatus() {
 #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
     // Long press (>=2s): toggle AP/Client mode + reboot
     // Short press (<2s): toggle status display on/off
+    //
+    // Initialise buttonPressed to the current button state so that a
+    // permanently LOW GPIO 0 (e.g. serial DTR holding it down) does not
+    // register as a fresh press.  Only a HIGH→LOW transition counts.
+    static bool firstCall = true;
     static bool buttonPressed = false;
     static uint32_t buttonPressTime = 0;
     static bool longPressHandled = false;
+    if (firstCall) {
+        firstCall = false;
+        buttonPressed = getKeyApMode();   // seed with current state
+        longPressHandled = buttonPressed; // suppress stale long-press
+        buttonPressTime = millis();
+        return;                           // skip first evaluation
+    }
 
     bool currentButton = getKeyApMode();
 
     if (currentButton && !buttonPressed) {
-        // Button just pressed
+        // Button just pressed (HIGH→LOW transition)
         buttonPressed = true;
         buttonPressTime = millis();
         longPressHandled = false;
