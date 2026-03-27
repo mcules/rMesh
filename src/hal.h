@@ -10,6 +10,8 @@
     #include "hal_HELTEC_Wireless_Stick_Lite_V3.h"
 #elif defined(HELTEC_WIFI_LORA_32_V4)
     #include "hal_HELTEC_WiFi_LoRa_32_V4.h"
+#elif defined(HELTEC_HT_TRACKER_V1_2)
+    #include "hal_HELTEC_HT-Tracker_V1_2.h"
 #elif defined(HELTEC_WIFI_LORA_32_V3)
     #include "hal_HELTEC_WiFi_LoRa_32_V3.h"
 #elif defined(LILYGO_T_LORA_PAGER)

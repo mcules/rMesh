@@ -51,6 +51,9 @@
 #ifdef HELTEC_WIFI_LORA_32_V3
 #include "display_HELTEC_WiFi_LoRa_32_V3.h"
 #endif
+#ifdef HELTEC_HT_TRACKER_V1_2
+#include "display_HELTEC_HT-Tracker_V1_2.h"
+#endif
 #ifdef LILYGO_T3_LORA32_V1_6_1
 #include "display_LILYGO_T3_LoRa32_V1_6_1.h"
 #endif
@@ -399,7 +402,7 @@ void processRxFrame(Frame &f) {
                 #endif
 
                 // Show last message on SSD1306 status display
-                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
                 if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
                     char textBuf[261] = {0};
                     memcpy(textBuf, f.message, f.messageLength);
@@ -621,7 +624,7 @@ void setup() {
     initHal();
 
     // Initialise SSD1306 status display (if present)
-    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
     initStatusDisplay();
     #endif
 
@@ -683,7 +686,7 @@ void loop() {
     #ifdef SEEED_SENSECAP_INDICATOR
     displayUpdateLoop();
     #endif
-    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM)
+    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
     {
         static uint32_t oledRefreshTimer = 0;
         if (oledEnabled && timerExpired(oledRefreshTimer)) {
