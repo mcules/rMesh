@@ -321,6 +321,17 @@ function onMessage(event) {
         document.getElementById("txBuffer").innerHTML = d.status.txBufferCount;
         document.getElementById("retry").innerHTML = d.status.retry;
         document.getElementById("heap").innerHTML = d.status.heap;
+        if (d.status.uptime != null) {
+            var s = d.status.uptime;
+            var d2 = Math.floor(s / 86400); s %= 86400;
+            var h = Math.floor(s / 3600); s %= 3600;
+            var m = Math.floor(s / 60); s %= 60;
+            var parts = [];
+            if (d2 > 0) parts.push(d2 + "d");
+            parts.push(h + "h " + m + "m " + s + "s");
+            var upEl = document.getElementById("aboutUptime");
+            if (upEl) upEl.innerHTML = parts.join(" ");
+        }
         if (d.status.battery != null) {
             var bv = d.status.battery;
             var fullV = (settings && settings.batteryFullVoltage) || 4.2;

@@ -110,7 +110,17 @@ inline uint8_t syncWordForFrequency(float f) {
 #define PEER_LIST_SIZE 20
 
 /** Capacity of the routing table (number of callsign entries). */
-#define ROUTING_BUFFER_SIZE 100
+#define ROUTING_BUFFER_SIZE 1000
+
+/**
+ * Grace period (s) for flash-restored peers before they are marked unavailable.
+ * After a reboot, loaded peers start as available but are given only this much
+ * time (instead of the full PEER_INACTIVE_TIMEOUT) to prove they are still alive.
+ */
+#define PEER_INITIAL_TIMEOUT 120
+
+/** Interval (ms) between periodic flash saves of dirty routes/peers. */
+#define PERSIST_INTERVAL (5 * 60 * 1000)
 
 /** UDP port used for all rMesh network communication. */
 #define UDP_PORT 3333

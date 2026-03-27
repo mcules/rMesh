@@ -35,6 +35,7 @@
 #include "routing.h"
 #include "reporting.h"
 #include "dutycycle.h"
+#include "persistence.h"
 #include "time.h"
 
 #ifdef LILYGO_T_LORA_PAGER
@@ -89,6 +90,9 @@ uint32_t announceTimer = 5000;
 
 /** Deadline for the next 1-second WebSocket status push. */
 uint32_t statusTimer = 0;
+
+/** Deadline for the next periodic flash save of dirty routes/peers. */
+static uint32_t persistTimer = PERSIST_INTERVAL;
 
 /** millis() value at which ESP.restart() is called; 0 = disabled. */
 uint32_t rebootTimer = 0;
@@ -606,6 +610,10 @@ void setup() {
         file.close();
     }
 
+    // Restore persisted peers and routes from flash
+    loadPeers();
+    loadRoutes();
+
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
 
@@ -825,6 +833,7 @@ void loop() {
         doc["status"]["txBufferCount"]= txBuffer.size();
         doc["status"]["retry"]        = currentRetry;
         doc["status"]["heap"]         = ESP.getFreeHeap();
+        doc["status"]["uptime"]       = millis() / 1000;
         #ifdef HAS_BATTERY_ADC
         if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
         #endif
@@ -839,6 +848,13 @@ void loop() {
         }
         // Expire stale peers once per second
         checkPeerList();
+    }
+
+    // ── 7b. Periodic flash persistence of routes/peers ─────────────────────
+    if (timerExpired(persistTimer)) {
+        persistTimer = millis() + PERSIST_INTERVAL;
+        if (routesDirty) saveRoutes();
+        if (peersDirty)  savePeers();
     }
 
     // ── 8. Reboot / shutdown ──────────────────────────────────────────────────

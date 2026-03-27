@@ -8,6 +8,7 @@
 #include "helperFunctions.h"
 #include "config.h"
 #include "settings.h"
+#include "persistence.h"
 
 //Routing Liste
 std::vector<Route> routingList;
@@ -88,10 +89,15 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
         r.timestamp = time(NULL);
         r.hopCount = hopCount;
         routingList.push_back(r);
+        routesDirty = true;
         Serial.printf("[Reporting] Neue Route: %s via %s (%d Hops)\n", srcCall, viaCall, hopCount);
     } else {
         // Fall B: Ziel existiert -> Kürzester Weg gewinnt
         if (hopCount < it->hopCount || strcmp(it->viaCall, viaCall) == 0) {
+            // Mark dirty if via-call or hop count actually changed
+            if (strcmp(it->viaCall, viaCall) != 0 || it->hopCount != hopCount) {
+                routesDirty = true;
+            }
             strncpy(it->viaCall, viaCall, MAX_CALLSIGN_LENGTH);
             it->viaCall[MAX_CALLSIGN_LENGTH] = '\0';
             it->timestamp = time(NULL);

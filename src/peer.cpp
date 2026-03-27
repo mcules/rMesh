@@ -20,6 +20,7 @@
 #include "config.h"
 #include "settings.h"
 #include "serial.h"
+#include "persistence.h"
 
 /** Runtime peer table; extern-declared in peer.h. */
 std::vector<Peer> peerList;
@@ -58,6 +59,7 @@ void checkPeerList() {
                 it->nodeCall, it->port, (long)now, (long)it->timestamp, (long)(now - it->timestamp));
             it = peerList.erase(it);
             update = true;
+            peersDirty = true;
         } else {
             ++it;
         }
@@ -276,6 +278,7 @@ void addPeerList(Frame &f) {
         p.port = f.port;
         p.available = false;
         peerList.push_back(p);
+        peersDirty = true;
 
         Serial.printf("[Reporting] New peer: %s (Port %d)\n", f.nodeCall, f.port);
 

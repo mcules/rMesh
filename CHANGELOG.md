@@ -2,6 +2,14 @@
 
 ## [v1.0.31-dev]
 
+### Flash-Persistenz
+- NEU: Routing-Tabelle wird im Flash gespeichert (`/routes.bin`) – nach Reboot sofort routingfähig ohne Route-Discovery; Kapazität von 100 auf 1000 Routen erhöht
+- NEU: Peer-Liste wird im Flash gespeichert (`/peers.bin`) – bekannte Peers sind nach Reboot sofort verfügbar mit 2-Minuten Grace-Timeout
+- NEU: Intelligente Speicher-Trigger – Flash-Write nur bei strukturellen Änderungen (neuer Peer/Route, Hop-Wechsel, Peer-Removal), nicht bei RSSI/SNR-Updates; periodischer 5-Minuten-Save-Timer für Dirty-Flags
+
+### Web UI
+- NEU: Uptime-Anzeige im About-Panel – zeigt die Laufzeit seit letztem Reboot (Tage, Stunden, Minuten, Sekunden), wird sekündlich aktualisiert
+
 ### Test Framework
 - NEU: Automatisierte Hardware-in-the-Loop Test Suite (`test/`) mit pytest + pyserial – flasht Firmware, konfiguriert Nodes und testet Funktionalität und Kommunikation
 - NEU: Node-Konfiguration via YAML-Datei (`nodes.yaml`) – Board-Typ, COM-Port, Callsign, Frequenz-Preset, optional WiFi; beliebig viele Nodes
