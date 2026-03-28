@@ -675,8 +675,8 @@ void setup() {
 
     Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);
 
-    // Always emit ready event for test framework detection
-    {
+    // Emit ready event for test framework (only when debug enabled)
+    if (serialDebug) {
         JsonDocument dbgReady;
         dbgReady["event"] = "ready";
         dbgReady["call"] = settings.mycall;
