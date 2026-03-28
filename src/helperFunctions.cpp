@@ -1,5 +1,11 @@
 #include <Arduino.h>
+#ifdef NRF52_PLATFORM
+#include "platform_nrf52.h"
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
+#else
 #include <LittleFS.h>
+#endif
 
 #include "settings.h"
 #include "helperFunctions.h"
@@ -72,7 +78,12 @@ void sendFrame(Frame &f) {
         }
 
         //Wenn keine Peers, Frame ohne Ziel und Retry senden (WiFi nur wenn Peers konfiguriert sind)
-        if (availableNodeCount == 0 && !(port == 1 && udpPeers.empty())) {
+        #ifdef HAS_WIFI
+        bool skipUdpBroadcast = (port == 1 && udpPeers.empty());
+        #else
+        bool skipUdpBroadcast = (port == 1);
+        #endif
+        if (availableNodeCount == 0 && !skipUdpBroadcast) {
             f.viaCall[0] = 0;
             f.retry = 1;
             f.initRetry = 1;
@@ -95,7 +106,9 @@ void sendFrame(Frame &f) {
         return;
     }
     size_t len = f.messageJSON(jsonBuffer, 2048);
+    #ifdef HAS_WIFI
     ws.textAll(jsonBuffer, len);
+    #endif
     addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
     free(jsonBuffer);
     jsonBuffer = nullptr;

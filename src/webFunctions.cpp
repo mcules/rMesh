@@ -1,3 +1,4 @@
+#ifdef HAS_WIFI
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <LittleFS.h>
@@ -505,3 +506,4 @@ void startWebServer() {
 
     webServer.begin();
 }
+#endif // HAS_WIFI

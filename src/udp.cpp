@@ -1,3 +1,4 @@
+#ifdef HAS_WIFI
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
@@ -129,3 +130,5 @@ void sendUDP(Frame &f) {
         f.monitorJSON();
     }
 }
+
+#endif // HAS_WIFI

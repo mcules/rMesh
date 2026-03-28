@@ -1,5 +1,11 @@
 #include <Arduino.h>
+#ifdef NRF52_PLATFORM
+#include "platform_nrf52.h"
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
+#else
 #include <LittleFS.h>
+#endif
 #include <ArduinoJson.h>
 
 #include "ack.h"

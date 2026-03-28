@@ -1,4 +1,7 @@
 #include "auth.h"
+
+#ifdef HAS_WIFI
+
 #include <Preferences.h>
 #include "mbedtls/md.h"
 #include <esp_random.h>
@@ -136,3 +139,8 @@ bool verifyAuthResponse(uint32_t clientId, const String& response) {
 
     return response.equalsIgnoreCase(String(expected));
 }
+
+#else
+// ── Stubs for non-WiFi builds ────────────────────────────────────────────────
+String webPasswordHash = "";
+#endif

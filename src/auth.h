@@ -1,6 +1,8 @@
 #pragma once
 #include <Arduino.h>
 
+#ifdef HAS_WIFI
+
 #define MAX_AUTH_SESSIONS 6
 
 struct AuthSession {
@@ -19,3 +21,13 @@ bool   isAuthenticated(uint32_t clientId);
 void   setClientAuth(uint32_t clientId, bool auth);
 void   removeClientAuth(uint32_t clientId);
 bool   verifyAuthResponse(uint32_t clientId, const String& response);
+
+#else
+// ── Stubs for non-WiFi builds ────────────────────────────────────────────────
+
+extern String webPasswordHash;
+
+inline void loadPasswordHash() {}
+inline void savePasswordHash(const String&) {}
+
+#endif

@@ -1,8 +1,13 @@
 #pragma once
 
 #include <Arduino.h>
-#include <Preferences.h>
 #include <vector>
+
+#ifdef NRF52_PLATFORM
+#include "platform_nrf52.h"
+#else
+#include <Preferences.h>
+#endif
 
 // WiFi network entry for the multi-network list
 #define WIFI_NETWORK_SSID_LEN 64
@@ -23,10 +28,12 @@ struct Settings {
   char mycall[17];
   char position[24];   // lat/lon "48.1234,11.5678" oder Maidenhead-Locator "JN48mw"
   char ntpServer[64];
+#ifdef HAS_WIFI
   IPAddress wifiIP;
   IPAddress wifiNetMask;
   IPAddress wifiGateway;
   IPAddress wifiDNS;
+#endif
   float loraFrequency;
   int8_t loraOutputPower;
   float loraBandwidth;
@@ -35,7 +42,9 @@ struct Settings {
   uint8_t loraSpreadingFactor;
   int16_t loraPreambleLength;
   bool loraRepeat;
+#ifdef HAS_WIFI
   IPAddress wifiBrodcast = IPAddress(255, 255, 255, 255);
+#endif
   uint8_t loraMaxMessageLength;
 };
 
@@ -46,6 +55,7 @@ struct ExtSettings {
     int8_t minSnr = -30;           // Minimum SNR (dB) for peer availability; -30 = disabled
 };
 
+#ifdef HAS_WIFI
 // Dynamic UDP peer list (unlimited, stored separately in NVS)
 // NVS key "udpPeers": [count:1][ip:4][legacy:1][enabled:1] per entry
 extern std::vector<IPAddress> udpPeers;
@@ -60,11 +70,14 @@ extern std::vector<WifiNetwork> wifiNetworks;
 // AP (Access Point) settings stored as individual NVS keys
 extern String apName;      // AP SSID, default "rMesh"
 extern String apPassword;  // AP password, empty = open network
+#endif
 
 void loadSettings();
 void saveSettings();
+#ifdef HAS_WIFI
 void saveUdpPeers();      // Save peers only + notify WebUI (no initHal)
 void saveWifiNetworks();  // Save WiFi network list + AP settings + notify WebUI (no initHal)
+#endif
 void showSettings();
 void sendSettings();
 
@@ -88,4 +101,3 @@ void saveOledSettings();                // Persist oledEnabled + oledDisplayGrou
 extern char groupNames[MAX_CHANNELS + 1][MAX_GROUP_NAME_LEN];  // index 1-10
 void saveGroupNames();
 void loadGroupNames();
-

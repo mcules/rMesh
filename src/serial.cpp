@@ -1,21 +1,31 @@
 #include <Arduino.h>
-#include <LittleFS.h>
-#include <WiFi.h>
 #include <cstring>
-#include <nvs_flash.h>
 #include <ArduinoJson.h>
+
+#ifdef NRF52_PLATFORM
+#include "platform_nrf52.h"
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
+#else
+#include <LittleFS.h>
+#include <nvs_flash.h>
+#endif
+
+#ifdef HAS_WIFI
+#include <WiFi.h>
+#include "wifiFunctions.h"
+#include "auth.h"
+#include "mbedtls/md.h"
+#endif
 
 #include "serial.h"
 #include "config.h"
 #include "settings.h"
 #include "main.h"
-#include "wifiFunctions.h"
-#include "auth.h"
 #include "helperFunctions.h"
 #include "peer.h"
 #include "routing.h"
 #include "ack.h"
-#include "mbedtls/md.h"
 
 bool serialDebug = false;
 char serialRxBuffer[200] = {0};
@@ -95,6 +105,7 @@ void checkSerialRX() {
                     rebootTimer = millis(); rebootRequested = true;
                 }
 
+                #ifdef HAS_WIFI
                 //OTA Update
                 if (strncmp(serialRxBuffer, "upd", 3) == 0) {
                     Serial.println("OTA Update gestartet...");
@@ -357,13 +368,19 @@ void checkSerialRX() {
                         wifiInit();
                     }
                     Serial.printf("DHCP: %s\n", settings.dhcpActive ? "true" : "false");
-                } 
+                }
+                #endif // HAS_WIFI
 
                 //Defaults
                 if (strncmp(serialRxBuffer, "de", 2) == 0) {
                     std::memset(settings.mycall, 0xff, sizeof(settings.mycall));
-                    nvs_flash_erase(); // Löscht die gesamte NVS-Partition
-                    nvs_flash_init();  // Initialisiert sie neu
+                    #ifdef NRF52_PLATFORM
+                    nvs_flash_erase_nrf52();
+                    nvs_flash_init_nrf52();
+                    #else
+                    nvs_flash_erase();
+                    nvs_flash_init();
+                    #endif
                     rebootTimer = millis(); rebootRequested = true;
                 }
 
@@ -528,6 +545,7 @@ void checkSerialRX() {
                     Serial.printf("MaxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
                 }
 
+                #ifdef HAS_WIFI
                 // WebUI-Passwort
                 // "webpw <passwort>" → Passwort setzen (wird als SHA256 gespeichert)
                 // "webpw -"          → Passwort loeschen
@@ -654,6 +672,7 @@ void checkSerialRX() {
                         }
                     }
                 }
+                #endif // HAS_WIFI (webpw + udp)
 
                 // Debug mode toggle
                 // "dbg 1" = enable, "dbg 0" = disable
