@@ -1077,6 +1077,7 @@
 
     document.getElementById("settingsDeleteMessages").addEventListener("click", function() {
       sendWS(JSON.stringify({deleteMessages: true}));
+      try { localStorage.removeItem(MSG_CACHE_KEY); } catch(e) {}
     });
 
     document.getElementById("settingsApMode").addEventListener("change", function() {

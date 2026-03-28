@@ -5,6 +5,60 @@ var baseURL = "";
 var gateway = "";
 var init = false;
 
+// --- Message Cache (localStorage) ---
+var MSG_CACHE_KEY = "rmesh_messages";
+var MSG_CACHE_SAVE_INTERVAL = 60000; // save every 60s
+var _msgCacheDirty = false;
+
+function loadCachedMessages() {
+    try {
+        var raw = localStorage.getItem(MSG_CACHE_KEY);
+        if (!raw) return [];
+        return JSON.parse(raw);
+    } catch(e) { return []; }
+}
+
+function isCacheableMessage(m) {
+    // only cache TEXT (0) and TRACE (1) — skip COMMAND (15), delimiters, etc.
+    return !m.delimiter && (m.messageType === 0 || m.messageType === 1);
+}
+
+function saveCachedMessages() {
+    try {
+        var toSave = messages.filter(isCacheableMessage);
+        if (toSave.length > 1000) toSave = toSave.slice(toSave.length - 1000);
+        localStorage.setItem(MSG_CACHE_KEY, JSON.stringify(toSave));
+        _msgCacheDirty = false;
+    } catch(e) { /* localStorage full or unavailable */ }
+}
+
+function mergeWithCache(deviceMessages) {
+    // merge cached messages that are newer than what the device returned
+    var cached = loadCachedMessages();
+    if (cached.length === 0) return deviceMessages;
+
+    // build a set of known message IDs from device for fast lookup
+    var knownIds = {};
+    deviceMessages.forEach(function(m) { if (m.id) knownIds[m.srcCall + "_" + m.id] = true; });
+
+    // find cached messages not present in device response
+    var extra = cached.filter(function(m) {
+        return m.id && !knownIds[m.srcCall + "_" + m.id];
+    });
+
+    if (extra.length === 0) return deviceMessages;
+
+    // append missing messages and sort by timestamp
+    var merged = deviceMessages.concat(extra);
+    merged.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+    return merged;
+}
+
+// periodic save
+setInterval(function() {
+    if (_msgCacheDirty) saveCachedMessages();
+}, MSG_CACHE_SAVE_INTERVAL);
+
 // Mute and collection group per channel (stored as cookies)
 // channelMuted[i]  = true → no sound/badge for channel i
 // channelSammel[i] = true → channel i is a collection group (receive-only)
@@ -221,6 +275,7 @@ function onMessage(event) {
     if (d.message) {
         d.message.parsed = false;
         messages.push(d.message);
+        _msgCacheDirty = true;
         showMessages();
     }
 
@@ -351,32 +406,47 @@ function onMessage(event) {
 
         if (init == false) {
             init = true;
-            //for (let i = 0; i <= 10; i++) {channels[i] = false;}
-            //setUI(ui);
-            messages = [];
             //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
             fetch(baseURL + "messages.json?" + Math.random())
                 .then(function(response) {
-                    if (!response.ok) return "";
+                    if (!response.ok) throw new Error("HTTP " + response.status);
                     return response.text();
                 })
                 .then(function(text) {
-                    if (!text) { showMessages(true); for (let i=0;i<=10;i++){channels[i]=false;} setUI(ui); return; }
-                    var lines = text.split(/\r?\n/);
-                    lines.forEach(function(line) {
-                        if (line.trim().length === 0) return;
-                        var m = JSON.parse(line);
-                        m.message.parsed = false;
-                        messages.push(m.message);
-                    });
+                    var loaded = [];
+                    if (text) {
+                        var lines = text.split(/\r?\n/);
+                        lines.forEach(function(line) {
+                            if (line.trim().length === 0) return;
+                            try {
+                                var m = JSON.parse(line);
+                                m.message.parsed = false;
+                                loaded.push(m.message);
+                            } catch(e) { /* skip malformed line */ }
+                        });
+                    }
+                    messages = mergeWithCache(loaded);
+                    saveCachedMessages();
 
                     //"Trennzeichen" zwischen gespeicherten und neuen Nachrichten
-                    const result = {"delimiter": true};
-                    messages.push(result);
+                    messages.push({"delimiter": true});
                     showMessages(true);
 
                     //Alles als gelesen markieren
-                    for (let i = 0; i <= 10; i++) {channels[i] = false;} 
+                    for (let i = 0; i <= 10; i++) {channels[i] = false;}
+                    setUI(ui);
+                })
+                .catch(function(err) {
+                    // Fetch failed – use cached messages as fallback
+                    console.warn("messages.json fetch failed, using cache:", err);
+                    var cached = loadCachedMessages();
+                    if (cached.length > 0) {
+                        cached.forEach(function(m) { m.parsed = false; });
+                        messages = cached;
+                    }
+                    messages.push({"delimiter": true});
+                    showMessages(true);
+                    for (let i = 0; i <= 10; i++) {channels[i] = false;}
                     setUI(ui);
                 });
         }
@@ -952,6 +1022,8 @@ function onClose(event) {
     init = false;
     if (typeof setAntennaColor === 'function') setAntennaColor('#525252');
     clearTimeout(timeout);
+    // save cache before reconnect so messages survive reload
+    if (_msgCacheDirty) saveCachedMessages();
     setTimeout(initWebSocket, 500);
 }
 
@@ -966,6 +1038,11 @@ function keepAlive() {
     }
     timeout = setTimeout(keepAlive, 1000);
 }
+
+// save message cache when leaving page
+window.addEventListener("beforeunload", function() {
+    if (_msgCacheDirty) saveCachedMessages();
+});
 
 // ── Pure JS SHA-256 / HMAC-SHA256 (kein SubtleCrypto nötig, funktioniert über HTTP) ──
 function _sha256bytes(input) {
