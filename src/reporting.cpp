@@ -1,3 +1,4 @@
+#ifdef HAS_WIFI
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -97,3 +98,5 @@ void markTopologyChanged() {
     // Debounce: frühestens 30s nach der letzten Änderung reporten
     changeDebounceTimer = millis() + 30000;
 }
+
+#endif // HAS_WIFI

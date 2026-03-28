@@ -12,6 +12,14 @@
 #include "config.h"
 #include "frame.h"
 
+#ifdef NRF52_PLATFORM
+#include <FreeRTOS.h>
+#include <semphr.h>
+#include <task.h>
+#else
+#include <freertos/semphr.h>
+#endif
+
 /**
  * @brief Lightweight record used in the in-RAM message deduplication ring-buffer.
  *

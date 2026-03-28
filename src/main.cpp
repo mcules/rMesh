@@ -13,12 +13,18 @@
  */
 
 #include <Arduino.h>
+#include <vector>
+#include <ArduinoJson.h>
+
+#ifdef NRF52_PLATFORM
+#include "platform_nrf52.h"
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
+#else
 #include <LittleFS.h>
 #include <esp_task_wdt.h>
-#include <vector>
 #include <nvs_flash.h>
-#include <freertos/semphr.h>
-#include <ArduinoJson.h>
+#endif
 
 #include "config.h"
 #include "hal.h"
@@ -59,6 +65,9 @@
 #endif
 #ifdef LILYGO_T_BEAM
 #include "display_LILYGO_T-Beam.h"
+#endif
+#ifdef LILYGO_T_ECHO
+#include "display_LILYGO_T-Echo.h"
 #endif
 
 
@@ -184,7 +193,6 @@ void processRxFrame(Frame &f) {
 
     Frame tf;       // Reply frame built during processing
     bool found = false;
-    File file;
     switch (f.frameType) {
 
         // ── ANNOUNCE_FRAME ────────────────────────────────────────────────────
@@ -372,7 +380,9 @@ void processRxFrame(Frame &f) {
                     break;
                 }
                 size_t len = f.messageJSON(jsonBuffer, 4096);
+                #ifdef HAS_WIFI
                 ws.textAll(jsonBuffer, len);
+                #endif
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
                 #ifdef LILYGO_T_LORA_PAGER
                 // Archive to SD card without size limit when a card is inserted
@@ -401,8 +411,8 @@ void processRxFrame(Frame &f) {
                 displayMonitorFrame(f);
                 #endif
 
-                // Show last message on SSD1306 status display
-                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
+                // Show last message on status display (SSD1306 or E-Paper)
+                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO)
                 if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
                     char textBuf[261] = {0};
                     memcpy(textBuf, f.message, f.messageLength);
@@ -557,7 +567,9 @@ void processRxFrame(Frame &f) {
 void setup() {
     // Initialise UART debug output
     Serial.begin(115200);
+    #ifndef NRF52_PLATFORM
     Serial.setDebugOutput(true);
+    #endif
 
     #if defined(LILYGO_T_LORA_PAGER)
     // USB-CDC needs ~1 s to enumerate; early output would be lost
@@ -569,32 +581,50 @@ void setup() {
     #elif defined(SEEED_SENSECAP_INDICATOR)
     // UART0 via CH340 bridge — ready immediately, no wait needed
     delay(100);
+    #elif defined(NRF52_PLATFORM)
+    // USB-CDC on nRF52840 — wait up to 3s for host to connect
+    {
+        // Early LED feedback: blink to show firmware is alive
+        pinMode(PIN_LED_GREEN, OUTPUT);
+        digitalWrite(PIN_LED_GREEN, HIGH);
+        uint32_t usbWait = millis();
+        while (!Serial && (millis() - usbWait < 3000)) {
+            delay(100);
+        }
+        digitalWrite(PIN_LED_GREEN, LOW);
+    }
     #else
     while (!Serial) {}
     #endif
 
+    #ifndef NRF52_PLATFORM
     // Lock CPU to 240 MHz (recommended for reliable SPI timing)
     setCpuFrequencyMhz(240);
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
     esp_log_level_set("vfs", ESP_LOG_NONE);
+    #endif
 
     // Pre-allocate vector capacity to avoid heap fragmentation at runtime
     peerList.reserve(PEER_LIST_SIZE);
     txBuffer.reserve(TX_BUFFER_SIZE);
     routingList.reserve(ROUTING_BUFFER_SIZE);
 
-    // Load user settings from NVS
-    loadSettings();
-
-    // Mount LittleFS (auto-format on first boot if unformatted)
+    // Mount filesystem (nRF52 Preferences uses InternalFS, so mount first)
+    #ifdef NRF52_PLATFORM
+    InternalFS.begin();
+    #else
     if (!LittleFS.begin(false)) {
         Serial.println("[FS] Mount failed — formatting...");
         if (!LittleFS.begin(true)) {
             Serial.println("[FS] Format failed!");
         }
     }
+    #endif
     fsMutex = xSemaphoreCreateMutex();
+
+    // Load user settings from NVS / InternalFS
+    loadSettings();
 
     // Pre-populate the in-RAM deduplication ring-buffer from messages.json
     File file = LittleFS.open("/messages.json", "r");
@@ -623,18 +653,22 @@ void setup() {
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
 
-    // Initialise SSD1306 status display (if present)
-    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
+    // Initialise status display (if present)
+    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO)
     initStatusDisplay();
     #endif
 
+    #ifdef HAS_WIFI
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
+    #endif
 
     // Set system time to epoch 0 and configure NTP + timezone
     struct timeval tv = { .tv_sec = 0, .tv_usec = 0 };
     settimeofday(&tv, NULL);
+    #ifdef HAS_WIFI
     configTzTime(TZ_INFO, settings.ntpServer);
+    #endif
 
     // Start the async web server and WebSocket endpoint
     startWebServer();
@@ -695,6 +729,9 @@ void loop() {
         }
     }
     #endif
+    #ifdef LILYGO_T_ECHO
+    displayUpdateLoop();
+    #endif
 
     // ── 4. ANNOUNCE beacon ────────────────────────────────────────────────────
     // Enqueue an ANNOUNCE_FRAME on both WiFi (port 1) and LoRa (port 0)
@@ -703,8 +740,10 @@ void loop() {
         Frame f;
         f.frameType = Frame::FrameTypes::ANNOUNCE_FRAME;
         f.transmitMillis = 0;
+        #ifdef HAS_WIFI
         f.port = 1;
         txBuffer.push_back(f);
+        #endif
         f.port = 0;
         txBuffer.push_back(f);
         sendPeerList();
@@ -827,11 +866,14 @@ void loop() {
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
     if (checkReceive(f)) { processRxFrame(f); }   // LoRa
+    #ifdef HAS_WIFI
     if (checkUDP(f))     { processRxFrame(f); }   // UDP
+    #endif
 
-    // ── 7. WebSocket status broadcast (1 s interval) ──────────────────────────
+    // ── 7. Status broadcast (1 s interval) ────────────────────────────────────
     if (timerExpired(statusTimer)) {
         statusTimer = millis() + 1000;
+        #ifdef HAS_WIFI
         JsonDocument doc;
         doc["status"]["time"]         = time(NULL);
         doc["status"]["tx"]           = txFlag;
@@ -852,6 +894,7 @@ void loop() {
         } else {
             Serial.println("[OOM] loop status: malloc failed");
         }
+        #endif
         // Expire stale peers once per second
         checkPeerList();
     }
@@ -864,9 +907,15 @@ void loop() {
     }
 
     // ── 8. Reboot / shutdown ──────────────────────────────────────────────────
+    #ifdef NRF52_PLATFORM
+    if (rebootRequested && timerExpired(rebootTimer))  { platformRestart(); }
+    if (pendingShutdown)         { platformDeepSleep(); }
+    #else
     if (rebootRequested && timerExpired(rebootTimer))  { ESP.restart(); }
-    if (pendingShutdown)         { esp_deep_sleep_start(); } // no wakeup = max power saving
+    if (pendingShutdown)         { esp_deep_sleep_start(); }
+    #endif
 
+    #ifdef HAS_WIFI
     // ── 9. OTA update checks ──────────────────────────────────────────────────
     if (timerExpired(updateCheckTimer)) {
         updateCheckTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
@@ -881,6 +930,7 @@ void loop() {
         pendingForceUpdate = false;
         checkForUpdates(true, pendingForceChannel);
     }
+    #endif
 
     // ── 10. messages.json housekeeping ────────────────────────────────────────
     if (timerExpired(messagesDeleteTimer)) {
@@ -888,10 +938,12 @@ void loop() {
         trimFile("/messages.json", MAX_STORED_MESSAGES);
     }
 
+    #ifdef HAS_WIFI
     // ── 11. Topology reporting ────────────────────────────────────────────────
     if (timerExpired(reportingTimer)) {
         reportingTimer = millis() + 60 * 60 * 1000; // repeat every 1 h
         reportTopology();
     }
     reportTopologyIfChanged(); // change-driven report with 30 s debounce
+    #endif
 }

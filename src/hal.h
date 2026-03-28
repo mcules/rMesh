@@ -24,6 +24,8 @@
     #include "hal_ESP32_E22_V1.h"
 #elif defined(SEEED_XIAO_ESP32S3_WIO_SX1262)
     #include "hal_SEEED_XIAO_ESP32S3_Wio_SX1262.h"
+#elif defined(LILYGO_T_ECHO)
+    #include "hal_LILYGO_T-Echo.h"
 #else
     #error "No HAL defined for this board!"
 #endif

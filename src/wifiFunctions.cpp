@@ -1,3 +1,4 @@
+#ifdef HAS_WIFI
 #include <Arduino.h>
 #include <WiFi.h>
 #include <ESPmDNS.h>
@@ -441,3 +442,5 @@ void wifiInit() {
     }
 }
 
+
+#endif // HAS_WIFI

@@ -1,8 +1,11 @@
+#include <Arduino.h>
+#include <ArduinoJson.h>
+
+#ifdef HAS_WIFI
 #include <EEPROM.h>
 #include <nvs_flash.h>
-#include <ArduinoJson.h>
 #include <WiFi.h>
-#include <Preferences.h>
+#endif
 
 #include "settings.h"
 #include "config.h"
@@ -14,6 +17,8 @@ Settings settings;
 ExtSettings extSettings;
 uint8_t updateChannel = 0;
 bool loraEnabled = true;
+
+#ifdef HAS_WIFI
 std::vector<IPAddress> udpPeers;
 std::vector<bool> udpPeerLegacy;
 std::vector<bool> udpPeerEnabled;
@@ -22,6 +27,7 @@ std::vector<String> udpPeerCall;
 std::vector<WifiNetwork> wifiNetworks;
 String apName = "rMesh";
 String apPassword = "";
+#endif
 
 Preferences prefs;
 bool loraReady = false;
@@ -29,6 +35,8 @@ bool batteryEnabled = true;
 float batteryFullVoltage = 4.2f;
 bool oledEnabled = false;
 char oledDisplayGroup[17] = {0};
+
+// webPasswordHash is defined in auth.cpp for both WiFi and non-WiFi builds
 
 char groupNames[MAX_CHANNELS + 1][MAX_GROUP_NAME_LEN] = {0};  // index 1-10
 
@@ -51,9 +59,9 @@ void loadGroupNames() {
 }
 
 void showSettings() {
-    // Print settings as debug output
     Serial.println();
     Serial.println("Settings:");
+#ifdef HAS_WIFI
     Serial.printf("AP Mode: %s\n", settings.apMode ? "true" : "false");
     Serial.printf("AP Name: %s\n", apName.c_str());
     Serial.printf("AP Password set: %s\n", apPassword.isEmpty() ? "false" : "true");
@@ -73,7 +81,6 @@ void showSettings() {
         Serial.printf("Netmask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
         Serial.printf("DNS: %d.%d.%d.%d\n", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
         Serial.printf("Gateway: %d.%d.%d.%d\n", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
-        //Serial.printf("Broadcast: %d.%d.%d.%d\n", settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
     }
     Serial.printf("NTP Server: %s\n", settings.ntpServer);
     if (udpPeers.empty()) {
@@ -86,6 +93,7 @@ void showSettings() {
                 (bool)udpPeerEnabled[i] ? "" : " [disabled]");
         }
     }
+#endif
     Serial.println();
     Serial.printf("myCall: %s\n", settings.mycall);
     Serial.printf("position: %s\n", settings.position);
@@ -104,17 +112,12 @@ void showSettings() {
     Serial.printf("maxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
     Serial.printf("minSnr: %d dB\n", extSettings.minSnr);
     Serial.println();
+#ifdef HAS_WIFI
     Serial.println("WiFi Status:");
     switch(WiFi.status()) {
-    case 0:
-        Serial.println("WL_IDLE_STATUS");
-        break;
-    case 1:
-        Serial.println("WL_NO_SSID_AVAIL");
-        break;
-    case 2:
-        Serial.println("WL_SCAN_COMPLETED");
-        break;
+    case 0: Serial.println("WL_IDLE_STATUS"); break;
+    case 1: Serial.println("WL_NO_SSID_AVAIL"); break;
+    case 2: Serial.println("WL_SCAN_COMPLETED"); break;
     case 3:
         Serial.println("WL_CONNECTED");
         Serial.printf("IP: %d.%d.%d.%d\n", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
@@ -122,25 +125,20 @@ void showSettings() {
         Serial.printf("Gateway: %d.%d.%d.%d\n", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
         Serial.printf("DNS: %d.%d.%d.%d\n", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
         break;
-    case 4:
-        Serial.println("WL_CONNECT_FAILED");
-        break;
-    case 5:
-        Serial.println("WL_CONNECTION_LOST");
-        break;
-    case 6:
-        Serial.println("WL_DISCONNECTED");
-        break;
-    case 255:
-        Serial.println("WL_NO_SHIELD");
-        break;
-    default:
-        Serial.println("WL_AP_MODE");
+    case 4: Serial.println("WL_CONNECT_FAILED"); break;
+    case 5: Serial.println("WL_CONNECTION_LOST"); break;
+    case 6: Serial.println("WL_DISCONNECTED"); break;
+    case 255: Serial.println("WL_NO_SHIELD"); break;
+    default: Serial.println("WL_AP_MODE");
     }
+#else
+    Serial.println("WiFi: not available (nRF52)");
+#endif
     Serial.println();
 }
 
 void sendSettings() {
+#ifdef HAS_WIFI
     // Send settings via WebSocket
     JsonDocument doc;
     doc["settings"]["mycall"] = settings.mycall;
@@ -255,13 +253,18 @@ void sendSettings() {
     wsBroadcast(jsonBuffer, len);
     free(jsonBuffer);
     jsonBuffer = nullptr;
+#else
+    // On non-WiFi boards, settings are only shown via serial
+    (void)0;
+#endif
 }
 
 void loadSettings() {
-    // Read settings from EEPROM
     Serial.println("Loading settings...");
     prefs.begin("custom_settings", false);
+#ifdef HAS_WIFI
     loadPasswordHash();
+#endif
     prefs.getBytes("config", &settings, sizeof(settings));
     uint8_t defaultChannel = (strstr(VERSION, "-dev") != nullptr) ? 1 : 0;
     updateChannel      = prefs.getUChar("updateChannel", defaultChannel);
@@ -278,18 +281,19 @@ void loadSettings() {
     size_t storedLen = prefs.getBytesLength("config");
     size_t extSettingsLen = prefs.getBytesLength("extSettings");
 
+#ifdef HAS_WIFI
     // Fix IP addresses
     settings.wifiIP       = IPAddress(settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
     settings.wifiNetMask  = IPAddress(settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
     settings.wifiGateway  = IPAddress(settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
     settings.wifiDNS      = IPAddress(settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
     settings.wifiBrodcast = IPAddress(settings.wifiBrodcast[0], settings.wifiBrodcast[1], settings.wifiBrodcast[2], settings.wifiBrodcast[3]);
+#endif
 
     // Load defaults for extended settings / migrate old UDP peer data
     if (extSettingsLen != sizeof(extSettings)) {
-        // Old format: 3 maxHop bytes + 5×16 IP strings + 5 legacy flags = 88 bytes
+#ifdef HAS_WIFI
         const size_t OLD_EXT_SIZE = 3 + 5 * 16 + 5;
-        // Previous format: 3 maxHop bytes only (before minSnr was added)
         const size_t PREV_EXT_SIZE = 3;
         size_t existingPeers = prefs.getBytesLength("udpPeers");
         if (extSettingsLen == OLD_EXT_SIZE && existingPeers == 0) {
@@ -318,14 +322,15 @@ void loadSettings() {
                 }
             }
         } else if (extSettingsLen == PREV_EXT_SIZE) {
-            // Migrate from 3-byte format: preserve maxHop values, add default minSnr
             uint8_t tmp[PREV_EXT_SIZE];
             prefs.getBytes("extSettings", tmp, PREV_EXT_SIZE);
             extSettings.maxHopMessage   = tmp[0];
             extSettings.maxHopPosition  = tmp[1];
             extSettings.maxHopTelemetry = tmp[2];
             extSettings.minSnr          = -30;
-        } else {
+        } else
+#endif
+        {
             extSettings.maxHopMessage = 15;
             extSettings.maxHopPosition = 1;
             extSettings.maxHopTelemetry = 3;
@@ -334,6 +339,7 @@ void loadSettings() {
         prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     }
 
+#ifdef HAS_WIFI
     // Load AP settings
     apName     = prefs.getString("apName",     "rMesh");
     apPassword = prefs.getString("apPassword", "");
@@ -342,7 +348,7 @@ void loadSettings() {
     wifiNetworks.clear();
     {
         size_t wifiNetLen = prefs.getBytesLength("wifiNetworks");
-        const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1; // 129 bytes
+        const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1;
         if (wifiNetLen >= 1) {
             uint8_t* buf = new uint8_t[wifiNetLen];
             if (buf != nullptr) {
@@ -373,7 +379,6 @@ void loadSettings() {
         if (buf != nullptr) {
             prefs.getBytes("udpPeers", buf, peersLen);
             uint8_t peerCount = buf[0];
-            // Old format: 5 bytes per peer (without enabled), new format: 6 bytes per peer
             bool newFormat = (peersLen == 1 + (size_t)peerCount * 6);
             size_t stride = newFormat ? 6 : 5;
             for (uint8_t i = 0; i < peerCount && 1 + (size_t)i * stride + 4 < peersLen; i++) {
@@ -385,6 +390,7 @@ void loadSettings() {
             delete[] buf;
         }
     }
+#endif
 
     // Load defaults
     if (storedLen != sizeof(settings)) {
@@ -395,13 +401,13 @@ void loadSettings() {
         strcpy(settings.position, "");
         settings.apMode = true;
         settings.dhcpActive = true;
+#ifdef HAS_WIFI
         settings.wifiIP = IPAddress(192,168,33,60);
         settings.wifiNetMask = IPAddress(255,255,255,0);
         settings.wifiGateway = IPAddress(192,168,33,4);
         settings.wifiDNS = IPAddress(192,168,33,4);
         settings.wifiBrodcast = IPAddress(255,255,255,255);
-        // No default frequency – RF remains disabled until the user
-        // explicitly selects a band (433 MHz amateur radio or 868 MHz public).
+#endif
         settings.loraFrequency = 0.0;
         settings.loraOutputPower = LORA_DEFAULT_TX_POWER;
         settings.loraBandwidth = 62.5;
@@ -415,7 +421,6 @@ void loadSettings() {
 
     // Band-specific corrections after loading
     if (loraConfigured(settings.loraFrequency)) {
-        // Enforce regulatory maximum for EU public band
         if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
             settings.loraOutputPower = PUBLIC_MAX_TX_POWER;
         }
@@ -424,6 +429,7 @@ void loadSettings() {
     // Calculate maximum message length
     settings.loraMaxMessageLength = 255 - (4 * (MAX_CALLSIGN_LENGTH + 1)) - 8;
 
+#ifdef HAS_WIFI
     // Migrate legacy single WiFi to network list
     if (wifiNetworks.empty() && settings.wifiSSID[0] != '\0') {
         WifiNetwork net;
@@ -434,11 +440,13 @@ void loadSettings() {
         wifiNetworks.push_back(net);
         saveWifiNetworks();
     }
+#endif
 
     // Reinitialize hardware
     initHal();
 }
 
+#ifdef HAS_WIFI
 void saveWifiNetworks() {
     uint8_t count = (uint8_t)wifiNetworks.size();
     const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1;
@@ -484,6 +492,7 @@ void saveUdpPeers() {
     delete[] buf;
     sendSettings();
 }
+#endif
 
 void saveOledSettings() {
     prefs.putBool("oledEnabled", oledEnabled);
@@ -493,15 +502,14 @@ void saveOledSettings() {
 void saveSettings() {
     Serial.println("Saving settings...");
 
-    // Sync settings.wifiSSID ↔ wifiNetworks (for display-device compatibility)
+#ifdef HAS_WIFI
+    // Sync settings.wifiSSID <-> wifiNetworks
     if (!wifiNetworks.empty()) {
-        // Check if display device changed wifiSSID (differs from current favorite)
         int favIdx = 0;
         for (size_t i = 0; i < wifiNetworks.size(); i++) {
             if (wifiNetworks[i].favorite) { favIdx = (int)i; break; }
         }
         if (settings.wifiSSID[0] != '\0' && strcmp(wifiNetworks[favIdx].ssid, settings.wifiSSID) != 0) {
-            // Display changed SSID -> sync into wifiNetworks
             bool found = false;
             for (size_t i = 0; i < wifiNetworks.size(); i++) {
                 if (strcmp(wifiNetworks[i].ssid, settings.wifiSSID) == 0) {
@@ -522,12 +530,10 @@ void saveSettings() {
                 wifiNetworks.push_back(net);
             }
         } else {
-            // Normal save: sync wifiSSID from wifiNetworks favorite
             strlcpy(settings.wifiSSID,     wifiNetworks[favIdx].ssid,     sizeof(settings.wifiSSID));
             strlcpy(settings.wifiPassword, wifiNetworks[favIdx].password, sizeof(settings.wifiPassword));
         }
     } else if (settings.wifiSSID[0] != '\0') {
-        // No networks in list, add current SSID as favorite
         WifiNetwork net;
         memset(&net, 0, sizeof(net));
         strlcpy(net.ssid,     settings.wifiSSID,    sizeof(net.ssid));
@@ -535,6 +541,7 @@ void saveSettings() {
         net.favorite = true;
         wifiNetworks.push_back(net);
     }
+#endif
 
     prefs.putBytes("config", &settings, sizeof(settings));
     prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
@@ -543,7 +550,9 @@ void saveSettings() {
     prefs.putBool("batEnabled", batteryEnabled);
     prefs.putFloat("batFullV", batteryFullVoltage);
     saveOledSettings();
-    saveWifiNetworks();  // Saves WiFi networks + AP settings + calls sendSettings()
-    saveUdpPeers();      // Saves peers (sendSettings() already called above, but ok)
+#ifdef HAS_WIFI
+    saveWifiNetworks();
+    saveUdpPeers();
+#endif
     initHal();
 }
