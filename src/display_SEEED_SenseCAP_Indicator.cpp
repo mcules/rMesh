@@ -274,7 +274,6 @@ static int  monHead  = 0;
 static int  monCount = 0;
 
 // Gruppen
-static char groupNames[MAX_GROUPS][MAX_CALLSIGN_LENGTH + 1];
 static int  groupCount  = 0;
 static int  groupUnread[MAX_GROUPS]  = {0};
 static bool groupMute[MAX_GROUPS]    = {false};

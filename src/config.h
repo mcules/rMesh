@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vector>
+#include <algorithm>
+
 /**
  * @file config.h
  * @brief Central compile-time configuration for rMesh.

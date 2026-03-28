@@ -2,6 +2,9 @@
 
 ## [v1.0.31-dev]
 
+### Build
+- FIX: Kompilierfehler bei LILYGO T-LoraPager und SEEED SenseCAP Indicator behoben – lokale `groupNames`-Deklaration in den Display-Dateien kollidierte mit der globalen aus `settings.h` (unterschiedliche Array-Dimensionen); doppelte Deklaration entfernt, beide Targets nutzen jetzt die gemeinsame globale Variable
+
 ### Flash-Persistenz
 - NEU: Routing-Tabelle wird im Flash gespeichert (`/routes.bin`) – nach Reboot sofort routingfähig ohne Route-Discovery; Kapazität von 100 auf 1000 Routen erhöht
 - NEU: Peer-Liste wird im Flash gespeichert (`/peers.bin`) – bekannte Peers sind nach Reboot sofort verfügbar mit 2-Minuten Grace-Timeout
