@@ -14,6 +14,7 @@
 #define LORA_BUSY   17   // P0.17
 
 #define LORA_DEFAULT_TX_POWER 22
+#define WIFI_MAX_TX_POWER_DBM 20
 
 // 1.54" E-Paper Display GDEH0154D67 (200x200, SPI)
 #define EINK_CS     30   // P0.30

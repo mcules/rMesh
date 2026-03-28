@@ -71,6 +71,11 @@ inline int settimeofday(const struct timeval* tv, const void* tz) {
     return 0;
 }
 
+// ── CPU Frequency Stubs (nRF52840 runs at fixed 64 MHz) ─────────────────
+
+inline void setCpuFrequencyMhz(uint32_t) {}
+inline uint32_t getCpuFrequencyMhz() { return 64; }
+
 // ── System Functions ─────────────────────────────────────────────────────────
 
 inline void platformRestart() {
@@ -173,6 +178,11 @@ public:
     size_t putUChar(const char* key, uint8_t value) { return putBytes(key, &value, 1); }
     uint8_t getUChar(const char* key, uint8_t def = 0) {
         uint8_t v = def; if (getBytesLength(key) == 1) getBytes(key, &v, 1); return v;
+    }
+
+    size_t putChar(const char* key, int8_t value) { return putBytes(key, &value, 1); }
+    int8_t getChar(const char* key, int8_t def = 0) {
+        int8_t v = def; if (getBytesLength(key) == 1) getBytes(key, &v, 1); return v;
     }
 
     size_t putBool(const char* key, bool value) { uint8_t v = value ? 1 : 0; return putBytes(key, &v, 1); }

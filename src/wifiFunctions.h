@@ -2,6 +2,8 @@
 
 #ifdef HAS_WIFI
 
+#include <WiFi.h>
+
 void wifiInit();
 void showWiFiStatus();
 void checkForUpdates(bool force = false, uint8_t forceChannel = 0);
