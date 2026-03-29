@@ -620,6 +620,7 @@ void checkSerialRX() {
                             bool legacy = (sp && strstr(sp, "legacy") != nullptr);
                             udpPeers.push_back(tempIP);
                             udpPeerLegacy.push_back(legacy);
+                            udpPeerEnabled.push_back(true);
                             saveUdpPeers();
                             Serial.printf("UDP-Peer %zu hinzugefügt: %d.%d.%d.%d%s\n",
                                 udpPeers.size(), tempIP[0], tempIP[1], tempIP[2], tempIP[3],
