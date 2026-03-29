@@ -45,7 +45,7 @@
     "name": "HELTEC_HT-Tracker_V1_2",
     "chip": "ESP32-S3",
     "lfs_offset": 3735552,
-    "image": "heltec_ht_tracker_v1_2.webp"
+    "image": "heltec_ht-tracker_v1_2.png"
   },
   {
     "name": "HELTEC_WiFi_LoRa_32_V4",
