@@ -52,40 +52,137 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build all environments
+      - name: Determine environment lists
         if: steps.check.outputs.skip != 'true'
-        run: pio run
+        id: envs
+        run: |
+          esp32_envs=$(pio project config --json-output \
+            | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for section in data:
+              name = section[0]
+              if not name.startswith('env:'):
+                  continue
+              opts = dict(section[1])
+              platform = opts.get('platform', '')
+              if 'nrf' not in platform.lower():
+                  print(name.split(':',1)[1])
+          ")
+          nrf52_envs=$(pio project config --json-output \
+            | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for section in data:
+              name = section[0]
+              if not name.startswith('env:'):
+                  continue
+              opts = dict(section[1])
+              platform = opts.get('platform', '')
+              if 'nrf' in platform.lower():
+                  print(name.split(':',1)[1])
+          ")
+          echo "esp32_envs<<DELIM" >> "$GITHUB_OUTPUT"
+          echo "$esp32_envs" >> "$GITHUB_OUTPUT"
+          echo "DELIM" >> "$GITHUB_OUTPUT"
+          echo "nrf52_envs<<DELIM" >> "$GITHUB_OUTPUT"
+          echo "$nrf52_envs" >> "$GITHUB_OUTPUT"
+          echo "DELIM" >> "$GITHUB_OUTPUT"
+          echo "ESP32 environments: $esp32_envs"
+          echo "nRF52 environments: $nrf52_envs"
+
+      - name: Build ESP32 environments
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          while IFS= read -r env_name; do
+            [ -z "$env_name" ] && continue
+            echo "::group::Building $env_name"
+            pio run -e "$env_name"
+            echo "::endgroup::"
+          done <<< "${{ steps.envs.outputs.esp32_envs }}"
+
+      - name: Build nRF52 environments
+        if: steps.check.outputs.skip != 'true' && steps.envs.outputs.nrf52_envs != ''
+        run: |
+          while IFS= read -r env_name; do
+            [ -z "$env_name" ] && continue
+            echo "::group::Building $env_name"
+            pio run -e "$env_name"
+            echo "::endgroup::"
+          done <<< "${{ steps.envs.outputs.nrf52_envs }}"
 
       - name: Collect firmware binaries
         if: steps.check.outputs.skip != 'true'
         run: |
           set -euo pipefail
           mkdir -p release
-          for env_dir in .pio/build/*/; do
-            env_name=$(basename "$env_dir")
-            [ "$env_name" = "project.checksum" ] && continue
+
+          # ESP32: firmware.bin, bootloader.bin, partitions.bin
+          while IFS= read -r env_name; do
+            [ -z "$env_name" ] && continue
+            env_dir=".pio/build/$env_name"
             [ ! -f "$env_dir/firmware.bin" ] && { echo "SKIP $env_name (no firmware.bin)"; continue; }
             for f in firmware.bin bootloader.bin partitions.bin; do
               [ -f "$env_dir/$f" ] && cp "$env_dir/$f" "release/${env_name}_${f}"
             done
-            echo "OK $env_name"
-          done
+            echo "OK $env_name (ESP32)"
+          done <<< "${{ steps.envs.outputs.esp32_envs }}"
 
-      - name: Build all filesystems
+          # nRF52: firmware.hex and .uf2
+          while IFS= read -r env_name; do
+            [ -z "$env_name" ] && continue
+            env_dir=".pio/build/$env_name"
+            copied=false
+            for f in firmware.hex firmware.uf2; do
+              if [ -f "$env_dir/$f" ]; then
+                cp "$env_dir/$f" "release/${env_name}_${f}"
+                copied=true
+              fi
+            done
+            # Also grab zip (DFU package) if present
+            for f in "$env_dir"/*.zip; do
+              [ -f "$f" ] && cp "$f" "release/${env_name}_dfu.zip" && copied=true
+            done
+            if $copied; then
+              echo "OK $env_name (nRF52)"
+            else
+              echo "SKIP $env_name (no firmware found)"
+            fi
+          done <<< "${{ steps.envs.outputs.nrf52_envs }}"
+
+      - name: Build ESP32 filesystems
         if: steps.check.outputs.skip != 'true'
-        run: pio run --target buildfs
+        run: |
+          while IFS= read -r env_name; do
+            [ -z "$env_name" ] && continue
+            echo "::group::buildfs $env_name"
+            pio run -e "$env_name" --target buildfs
+            echo "::endgroup::"
+          done <<< "${{ steps.envs.outputs.esp32_envs }}"
 
       - name: Collect filesystem images and package ZIPs
         if: steps.check.outputs.skip != 'true'
         run: |
           set -euo pipefail
-          for env_dir in .pio/build/*/; do
-            env_name=$(basename "$env_dir")
-            [ "$env_name" = "project.checksum" ] && continue
+
+          # ESP32: LittleFS image + zip with all bins
+          while IFS= read -r env_name; do
+            [ -z "$env_name" ] && continue
+            env_dir=".pio/build/$env_name"
             [ ! -f "release/${env_name}_firmware.bin" ] && continue
             [ -f "$env_dir/littlefs.bin" ] && cp "$env_dir/littlefs.bin" "release/${env_name}_littlefs.bin"
             zip -j "release/${env_name}.zip" release/${env_name}_*.bin
-          done
+          done <<< "${{ steps.envs.outputs.esp32_envs }}"
+
+          # nRF52: zip whatever was collected
+          while IFS= read -r env_name; do
+            [ -z "$env_name" ] && continue
+            shopt -s nullglob
+            files=(release/${env_name}_*)
+            shopt -u nullglob
+            [ ${#files[@]} -eq 0 ] && continue
+            zip -j "release/${env_name}.zip" "${files[@]}"
+          done <<< "${{ steps.envs.outputs.nrf52_envs }}"
 
       - name: Generate esp-web-tools manifests
         if: steps.check.outputs.skip != 'true'
