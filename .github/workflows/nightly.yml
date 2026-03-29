@@ -1,0 +1,116 @@
+name: Nightly Build
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # 02:00 UTC
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev-next
+          fetch-depth: 0
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            .pio/libdeps
+          key: pio-${{ hashFiles('platformio.ini', 'extra_scripts/patch_lilygolib.py') }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Check for changes since last nightly
+        id: check
+        run: |
+          last_tag=$(gh release list --json tagName,isPrerelease --jq '[.[] | select(.tagName | startswith("nightly-"))][0].tagName' 2>/dev/null || echo "")
+          if [ -n "$last_tag" ]; then
+            last=$(gh release view "$last_tag" --json targetCommitish --jq .targetCommitish 2>/dev/null || echo "")
+          else
+            last=""
+          fi
+          current=$(git rev-parse HEAD)
+          if [ "$last" = "$current" ]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "No changes since last nightly – skipping."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "tag=nightly-$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+            echo "Building $current (last nightly was ${last:-none})"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build all environments
+        if: steps.check.outputs.skip != 'true'
+        run: pio run
+
+      - name: Collect firmware binaries
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          for env_dir in .pio/build/*/; do
+            env_name=$(basename "$env_dir")
+            [ "$env_name" = "project.checksum" ] && continue
+            [ ! -f "$env_dir/firmware.bin" ] && { echo "SKIP $env_name (no firmware.bin)"; continue; }
+            for f in firmware.bin bootloader.bin partitions.bin; do
+              [ -f "$env_dir/$f" ] && cp "$env_dir/$f" "release/${env_name}_${f}"
+            done
+            echo "OK $env_name"
+          done
+
+      - name: Build all filesystems
+        if: steps.check.outputs.skip != 'true'
+        run: pio run --target buildfs
+
+      - name: Collect filesystem images and package ZIPs
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          for env_dir in .pio/build/*/; do
+            env_name=$(basename "$env_dir")
+            [ "$env_name" = "project.checksum" ] && continue
+            [ ! -f "release/${env_name}_firmware.bin" ] && continue
+            [ -f "$env_dir/littlefs.bin" ] && cp "$env_dir/littlefs.bin" "release/${env_name}_littlefs.bin"
+            zip -j "release/${env_name}.zip" release/${env_name}_*.bin
+          done
+
+      - name: Generate esp-web-tools manifests
+        if: steps.check.outputs.skip != 'true'
+        run: python extra_scripts/gen_manifests.py "${{ steps.check.outputs.tag }}" release
+
+      - name: Create nightly release
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          gh release create "${{ steps.check.outputs.tag }}" \
+            --target dev-next \
+            --title "Nightly Build ($(date -u +%Y-%m-%d))" \
+            --notes "Automated nightly build from \`dev-next\` @ $(git rev-parse --short HEAD).
+
+          **This is an unstable development build — use at your own risk.**" \
+            --prerelease \
+            release/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old nightly releases (keep last 3)
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          gh release list --json tagName --jq '[.[] | select(.tagName | startswith("nightly-"))][3:][].tagName' | while read -r tag; do
+            echo "Deleting old nightly: $tag"
+            gh release delete "$tag" --cleanup-tag --yes
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
