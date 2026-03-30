@@ -626,10 +626,12 @@ void setup() {
     Serial.printf("\n[Boot] Reset reason: %s\n", lastResetReason);
     Serial.printf("[Boot] Free heap: %u bytes\n", ESP.getFreeHeap());
 
-    // Task-WDT deaktivieren: WiFi-Stack blockiert CPU 0 bei Scans/Reconnects
-    // für >30s, was den Task-WDT auslöst. Der Interrupt-WDT (Hardware) bleibt
-    // als Sicherheitsnetz gegen echte Hänger aktiv.
+    // ESP32 (original): Task-WDT deaktivieren, da der WiFi-Stack bei
+    // Scans/Reconnects CPU 0 für >30s blockiert. ESP32-S3 hat dieses
+    // Problem nicht. Der Interrupt-WDT bleibt als Sicherheitsnetz aktiv.
+    #if !CONFIG_IDF_TARGET_ESP32S3 && !CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32C3
     esp_task_wdt_deinit();
+    #endif
     #endif
 
     // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
