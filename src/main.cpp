@@ -592,7 +592,8 @@ void setup() {
     // Initialise UART debug output
     Serial.begin(115200);
     #ifndef NRF52_PLATFORM
-    Serial.setDebugOutput(true);
+    // setDebugOutput erst nach Settings-Load aktivieren (siehe unten),
+    // damit frühe UART-Ausgaben nicht den esptool auto-reset stören.
     #endif
 
     #if defined(LILYGO_T_LORA_PAGER)
@@ -618,7 +619,10 @@ void setup() {
         digitalWrite(PIN_LED_GREEN, LOW);
     }
     #else
-    while (!Serial) {}
+    {
+        uint32_t serialWait = millis();
+        while (!Serial && (millis() - serialWait < 3000)) { delay(10); }
+    }
     #endif
 
     #ifndef NRF52_PLATFORM
@@ -642,11 +646,11 @@ void setup() {
     #endif
     #endif
 
-    // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
-    setCpuFrequencyMhz(80);
     #ifndef NRF52_PLATFORM
-    // Lock CPU to 240 MHz (recommended for reliable SPI timing)
-    setCpuFrequencyMhz(240);
+    // 160 MHz Basis: guter Kompromiss zwischen Stromverbrauch und
+    // WiFi-Stabilität (WiFi-Stack instabil bei 80 MHz).
+    // Wird nur für LoRa-TX kurz auf 240 MHz hochgetaktet.
+    setCpuFrequencyMhz(160);
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
     esp_log_level_set("vfs", ESP_LOG_NONE);
@@ -672,6 +676,10 @@ void setup() {
 
     // Load user settings from NVS / InternalFS
     loadSettings();
+
+    #ifndef NRF52_PLATFORM
+    Serial.setDebugOutput(serialDebug);
+    #endif
 
     // Pre-populate the in-RAM deduplication ring-buffer from messages.json
     File file = LittleFS.open("/messages.json", "r");
@@ -853,7 +861,9 @@ void loop() {
                                 txBuffer[i].transmitMillis = millis() + 5000;
                                 break;
                             }
+                            setCpuFrequencyMhz(240);
                             transmitFrame(txBuffer[i]);
+                            setCpuFrequencyMhz(160);
                             if (isPublicBand(settings.loraFrequency)) {
                                 dutyCycleTrackTx(toa);
                             }

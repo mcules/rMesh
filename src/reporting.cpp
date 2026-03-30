@@ -5,6 +5,7 @@
 #include <ArduinoJson.h>
 
 #include "reporting.h"
+#include "serial.h"
 #include "settings.h"
 #include "peer.h"
 #include "routing.h"
@@ -25,7 +26,7 @@ static void reportTopologyTask(void* pvParameters) {
     WiFiClient client;
     HTTPClient http;
     http.setTimeout(10000);
-    if (!http.begin(client, "http://www.rMesh.de/report.php")) {
+    if (!http.begin(client, "http://www.rMesh.de:8082/report.php")) {
         reportingInProgress = false;
         vTaskDelete(NULL);
         return;
@@ -83,7 +84,7 @@ static void reportTopologyTask(void* pvParameters) {
     if (code == 200) {
         topologyChanged = false;
     }
-    Serial.printf("[Reporting] Topology report: HTTP %d\n", code);
+    if (serialDebug) Serial.printf("DBG:{\"event\":\"reporting\",\"action\":\"topology\",\"http_code\":%d}\n", code);
     reportingInProgress = false;
     vTaskDelete(NULL);
 }
@@ -93,7 +94,7 @@ void reportTopology() {
     if (strlen(settings.mycall) == 0) return;
     if (reportingInProgress) return;
     if (ESP.getFreeHeap() < 40000) {
-        Serial.println("[Reporting] Skipped: low heap");
+        if (serialDebug) Serial.printf("DBG:{\"event\":\"reporting\",\"action\":\"skipped\",\"reason\":\"low_heap\",\"heap\":%u}\n", ESP.getFreeHeap());
         return;
     }
     reportingInProgress = true;

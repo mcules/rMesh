@@ -298,6 +298,7 @@ void startWebServer() {
             }
             if (json["settings"]["serialDebug"].is<JsonVariant>()) {
                 serialDebug = json["settings"]["serialDebug"].as<bool>();
+                Serial.setDebugOutput(serialDebug);
             }
             if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
                 strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));

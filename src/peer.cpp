@@ -44,10 +44,13 @@ void checkPeerList() {
     time_t now = time(NULL);
 
     // Zeitsprung nach NTP-Sync: Peer-Timestamps aus der Vor-NTP-Phase
-    // (nahe 0) auf jetzt korrigieren, statt sie sofort ablaufen zu lassen
-    if (now > 1700000000) {  // Systemzeit ist plausibel (nach 2023)
+    // (nahe 0) auf jetzt korrigieren, statt sie sofort ablaufen zu lassen.
+    // Ohne NTP liefert time(NULL) auf ESP32 Werte nahe 0 (Sekunden seit Boot).
+    // Nach NTP-Sync springt der Wert auf die reale Unixzeit (>1e9).
+    const time_t NTP_PLAUSIBLE = 1000000000;  // Sep 2001 – jeder NTP-Sync liefert mehr
+    if (now > NTP_PLAUSIBLE) {
         for (auto& peer : peerList) {
-            if (peer.timestamp < 1700000000) {
+            if (peer.timestamp < NTP_PLAUSIBLE) {
                 peer.timestamp = now - (PEER_INACTIVE_TIMEOUT - PEER_INITIAL_TIMEOUT);
                 update = true;
             }
@@ -55,7 +58,7 @@ void checkPeerList() {
     }
 
     // Vor NTP-Sync keine Timeouts auswerten (Zeitbasis unzuverlässig)
-    if (now < 1700000000) {
+    if (now < NTP_PLAUSIBLE) {
         if (update) { sendPeerList(); markTopologyChanged(); }
         return;
     }
@@ -65,15 +68,18 @@ void checkPeerList() {
         if (peer.available && (now - peer.timestamp) > PEER_INACTIVE_TIMEOUT) {
             peer.available = false;
             update = true;
-            Serial.printf("[Peer] %s (Port %d) marked unavailable due to inactivity\n", peer.nodeCall, peer.port);
+            if (serialDebug) {
+                Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"inactivity\"}\n", peer.nodeCall, peer.port);
+            }
         }
     }
 
     // Remove peers after full timeout
     for (auto it = peerList.begin(); it != peerList.end();) {
         if ((now - it->timestamp) > PEER_TIMEOUT) {
-            Serial.printf("[Peer] %s (Port %d) removed due to timeout (now=%ld, ts=%ld, diff=%ld)\n",
-                it->nodeCall, it->port, (long)now, (long)it->timestamp, (long)(now - it->timestamp));
+            if (serialDebug) {
+                Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"removed\",\"call\":\"%s\",\"port\":%d,\"reason\":\"timeout\"}\n", it->nodeCall, it->port);
+            }
             it = peerList.erase(it);
             update = true;
             peersDirty = true;
@@ -88,8 +94,10 @@ void checkPeerList() {
             if (peer.available && peer.port == 0 && peer.snr < extSettings.minSnr) {
                 peer.available = false;
                 update = true;
-                Serial.printf("[Peer] %s (Port %d) below min SNR (%.1f < %d dB)\n",
-                    peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
+                if (serialDebug) {
+                    Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"snr\",\"snr\":%.1f,\"min_snr\":%d}\n",
+                        peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
+                }
             }
         }
     }
@@ -256,21 +264,19 @@ void addPeerList(Frame &f) {
     }
 
     if (strcmp(f.nodeCall, settings.mycall) == 0) {
-        if (serialDebug) Serial.printf("[Peer] Ignoring own call: %s\n", f.nodeCall);
+        if (serialDebug) Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"ignore\",\"call\":\"%s\",\"reason\":\"own_call\"}\n", f.nodeCall);
         return;
     }
 
     time_t now = time(NULL);
-    if (serialDebug) Serial.printf("[Peer] addPeerList: %s port=%d time=%ld listSize=%d\n",
-        f.nodeCall, f.port, (long)now, (int)peerList.size());
-
     // Search for an existing peer with same callsign and port
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) {
         return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port);
     });
 
     bool isNew = (it == peerList.end());
-    if (serialDebug) Serial.printf("[Peer] isNew=%d\n", isNew);
+    if (serialDebug) Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"lookup\",\"call\":\"%s\",\"port\":%d,\"isNew\":%s,\"listSize\":%d}\n",
+        f.nodeCall, f.port, isNew ? "true" : "false", (int)peerList.size());
 
     if (!isNew) {
         // Update existing peer, but keep current availability state
@@ -299,8 +305,6 @@ void addPeerList(Frame &f) {
         p.available = false;
         peerList.push_back(p);
         peersDirty = true;
-
-        Serial.printf("[Reporting] New peer: %s (Port %d)\n", f.nodeCall, f.port);
 
         if (serialDebug) {
             JsonDocument dbgPeer;

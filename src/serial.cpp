@@ -682,8 +682,12 @@ void checkSerialRX() {
                 if (strncmp(serialRxBuffer, "dbg", 3) == 0 && (serialRxBuffer[3] == ' ' || serialRxBuffer[3] == '\0')) {
                     if (strlen(parameter) > 0) {
                         serialDebug = (parameter[0] == '1' || parameter[0] == 'e' || parameter[0] == 't');
+                        #ifndef NRF52_PLATFORM
+                        Serial.setDebugOutput(serialDebug);
+                        #endif
+                        saveSettings();
                     }
-                    Serial.printf("Debug: %s\n", serialDebug ? "on" : "off");
+                    Serial.printf("DBG:{\"event\":\"debug\",\"enabled\":%s}\n", serialDebug ? "true" : "false");
                 }
 
                 // Send direct message: "msg <CALL> <TEXT>"

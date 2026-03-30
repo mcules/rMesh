@@ -38,10 +38,9 @@ bool apModeKey = false;
 bool pendingReconnectScan = false;
 
 static void sendOtaLog(const char* event, const char* versionFrom, const char* versionTo, const char* errorMsg) {
-    WiFiClientSecure logClient;
-    logClient.setInsecure();
+    WiFiClient logClient;
     HTTPClient logHttp;
-    if (!logHttp.begin(logClient, "https://www.rMesh.de/ota_log.php")) return;
+    if (!logHttp.begin(logClient, "http://www.rMesh.de:8082/ota_log.php")) return;
     logHttp.addHeader("Content-Type", "application/json");
     logHttp.setTimeout(5000);
     JsonDocument doc;
@@ -89,13 +88,11 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
 
     // Version prüfen
     sendUpdateStatus("Suche nach Updates...");
-    WiFiClientSecure client;
-    client.setInsecure();
-    client.setTimeout(10);  // 10s TLS timeout
+    WiFiClient client;
     HTTPClient http;
     http.setTimeout(10000);  // 10s HTTP timeout
     uint8_t activeChannel = force ? forceChannel : updateChannel;
-    String latestUrl = "https://www.rMesh.de/latest.php?call=";
+    String latestUrl = "http://www.rMesh.de:8082/latest.php?call=";
     latestUrl += settings.mycall;
     latestUrl += "&device=";
     latestUrl += PIO_ENV_NAME;
@@ -155,7 +152,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
     // LittleFS – bis zu 3 Versuche
-    String spiffsUrl = "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam;
+    String spiffsUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam;
     t_httpUpdate_return spiffsResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
@@ -182,7 +179,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     });
 
     // Firmware – bis zu 3 Versuche
-    String fwUrl = "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam;
+    String fwUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam;
     t_httpUpdate_return fwResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
