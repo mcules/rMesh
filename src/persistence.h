@@ -49,8 +49,8 @@ void loadPeers();
 /**
  * @brief Save the current peerList to /peers.bin.
  *
- * Only persists callsign, port, timestamp, and available flag.
- * RSSI/SNR/frqError are omitted (stale after reboot).
+ * Persists callsign, port, available flag, RSSI, SNR, and frqError.
+ * V2 format includes signal data; V1 files are loaded with zeroed values.
  * Runs as a FreeRTOS task with fsMutex protection.
  * Clears peersDirty on success.
  */

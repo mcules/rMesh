@@ -258,9 +258,12 @@ void addPeerList(Frame &f) {
     if (!isNew) {
         // Update existing peer, but keep current availability state
         it->timestamp = now;
-        it->rssi = f.rssi;
-        it->snr = f.snr;
-        it->frqError = f.frqError;
+        // Nur überschreiben wenn neue Werte vorhanden (RSSI ist bei LoRa immer negativ)
+        if (f.rssi != 0 || f.snr != 0 || f.frqError != 0) {
+            it->rssi = f.rssi;
+            it->snr = f.snr;
+            it->frqError = f.frqError;
+        }
         it->port = f.port;
     } else {
         // Add new peer (enforce capacity limit)
