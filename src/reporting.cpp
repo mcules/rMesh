@@ -13,6 +13,7 @@
 
 bool topologyChanged = false;
 static uint32_t changeDebounceTimer = 0xFFFFFFFF;
+static volatile bool reportingInProgress = false;
 
 // Gibt true zurück, wenn der Node Internet-Uplink hat
 // (WiFi-Client verbunden, nicht im AP-Mode)
@@ -21,15 +22,18 @@ static bool hasInternetUplink() {
     return (WiFi.status() == WL_CONNECTED);
 }
 
-void reportTopology() {
-    if (!hasInternetUplink()) return;
-    if (strlen(settings.mycall) == 0) return;
-
+static void reportTopologyTask(void* pvParameters) {
     WiFiClientSecure client;
     client.setInsecure();
+    client.setTimeout(10);  // 10s TLS timeout
     HTTPClient http;
-    if (!http.begin(client, "https://www.rMesh.de/report.php")) return;
+    if (!http.begin(client, "https://www.rMesh.de/report.php")) {
+        reportingInProgress = false;
+        vTaskDelete(NULL);
+        return;
+    }
     http.addHeader("Content-Type", "application/json");
+    http.setTimeout(10000);  // 10s HTTP timeout
 
     // JSON aufbauen
     JsonDocument doc;
@@ -51,29 +55,29 @@ void reportTopology() {
     doc["is_afu"] = isAmateurBand(settings.loraFrequency);
     doc["band"]   = isPublicBand(settings.loraFrequency) ? "868" : "433";
 
-    // Peer-Liste
+    // Peer-Liste (Snapshot, da peerList sich ändern kann)
     JsonArray peers = doc["peers"].to<JsonArray>();
-    for (auto& p : peerList) {
-        if (!p.available) continue;
+    for (size_t i = 0; i < peerList.size(); i++) {
+        if (!peerList[i].available) continue;
         JsonObject o = peers.add<JsonObject>();
-        o["call"]      = p.nodeCall;
-        o["rssi"]      = p.rssi;
-        o["snr"]       = p.snr;
-        o["port"]      = p.port;
-        o["available"] = p.available;
+        o["call"]      = peerList[i].nodeCall;
+        o["rssi"]      = peerList[i].rssi;
+        o["snr"]       = peerList[i].snr;
+        o["port"]      = peerList[i].port;
+        o["available"] = peerList[i].available;
     }
 
     // Routing-Tabelle
     JsonArray routes = doc["routes"].to<JsonArray>();
-    for (auto& r : routingList) {
+    for (size_t i = 0; i < routingList.size(); i++) {
         JsonObject o = routes.add<JsonObject>();
-        o["src"]  = r.srcCall;
-        o["via"]  = r.viaCall;
-        o["hops"] = r.hopCount;
+        o["src"]  = routingList[i].srcCall;
+        o["via"]  = routingList[i].viaCall;
+        o["hops"] = routingList[i].hopCount;
     }
 
     char* buf = (char*)malloc(4096);
-    if (!buf) { http.end(); return; }
+    if (!buf) { http.end(); reportingInProgress = false; vTaskDelete(NULL); return; }
     size_t len = serializeJson(doc, buf, 4096);
     int code = http.POST((uint8_t*)buf, len);
     free(buf);
@@ -82,6 +86,18 @@ void reportTopology() {
     if (code == 200) {
         topologyChanged = false;
     }
+    Serial.printf("[Reporting] Topology report: HTTP %d\n", code);
+    reportingInProgress = false;
+    vTaskDelete(NULL);
+}
+
+void reportTopology() {
+    if (!hasInternetUplink()) return;
+    if (strlen(settings.mycall) == 0) return;
+    if (reportingInProgress) return;
+    reportingInProgress = true;
+
+    xTaskCreate(reportTopologyTask, "ReportTopo", 8192, NULL, 1, NULL);
 }
 
 // Muss regelmäßig aus dem main loop aufgerufen werden

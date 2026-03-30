@@ -91,7 +91,9 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     sendUpdateStatus("Suche nach Updates...");
     WiFiClientSecure client;
     client.setInsecure();
+    client.setTimeout(10);  // 10s TLS timeout
     HTTPClient http;
+    http.setTimeout(10000);  // 10s HTTP timeout
     uint8_t activeChannel = force ? forceChannel : updateChannel;
     String latestUrl = "https://www.rMesh.de/latest.php?call=";
     latestUrl += settings.mycall;
