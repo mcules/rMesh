@@ -838,13 +838,17 @@
       var fwFile = document.getElementById('otaFwFile').files[0];
       var fsFile = document.getElementById('otaFsFile').files[0];
       if (!fwFile && !fsFile) { msgBox('Firmware and LittleFS file missing.'); return; }
-      if (!fwFile) { msgBox('Firmware file missing.'); return; }
-      if (!fsFile) { msgBox('LittleFS file missing.'); return; }
       try {
-        msgBox('Uploading firmware (' + Math.round(fwFile.size / 1024) + ' KB)...');
-        await uploadFile('firmware', fwFile, true);
-        msgBox('Uploading LittleFS (' + Math.round(fsFile.size / 1024) + ' KB)...');
-        await uploadFile('spiffs', fsFile, false);
+        // Dateisystem zuerst (ohne Reboot), dann Firmware (mit Reboot)
+        // So startet der neue Code mit dem neuen Dateisystem
+        if (fsFile) {
+          msgBox('Uploading LittleFS (' + Math.round(fsFile.size / 1024) + ' KB)...');
+          await uploadFile('spiffs', fsFile, fwFile ? true : false);
+        }
+        if (fwFile) {
+          msgBox('Uploading firmware (' + Math.round(fwFile.size / 1024) + ' KB)...');
+          await uploadFile('firmware', fwFile, false);
+        }
         msgBox('Upload complete! Node is restarting...');
       } catch(e) {
         msgBox('Upload failed: ' + e);
