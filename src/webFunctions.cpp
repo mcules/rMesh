@@ -39,6 +39,10 @@ AsyncWebSocket ws("/socket", wsHandler.eventHandler());
  * Otherwise, sends only to authenticated clients.
  */
 void wsBroadcast(const char *buf, size_t len) {
+    // ws.textAll/text alloziert intern shared_ptr<vector> auf dem Heap.
+    // Bei Heap-Knappheit würde operator new std::terminate() auslösen.
+    if (ESP.getFreeHeap() < 20000) return;
+
     if (webPasswordHash.isEmpty()) {
         ws.textAll(buf, len);
         return;

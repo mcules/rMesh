@@ -399,7 +399,7 @@ void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
     }
     String jsonOutput;
     serializeJson(doc, jsonOutput);
-    ws.textAll(jsonOutput);
+    wsBroadcast(jsonOutput.c_str(), jsonOutput.length());
 }
 
 

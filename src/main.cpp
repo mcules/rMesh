@@ -405,7 +405,7 @@ void processRxFrame(Frame &f) {
                 }
                 size_t len = f.messageJSON(jsonBuffer, 4096);
                 #ifdef HAS_WIFI
-                ws.textAll(jsonBuffer, len);
+                wsBroadcast(jsonBuffer, len);
                 #endif
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
                 #ifdef LILYGO_T_LORA_PAGER
@@ -944,7 +944,7 @@ void loop() {
         #endif
         char jsonBuffer[512];
         size_t len = serializeJson(doc, jsonBuffer, sizeof(jsonBuffer));
-        ws.textAll(jsonBuffer, len);
+        wsBroadcast(jsonBuffer, len);
         #endif
         // Expire stale peers once per second
         checkPeerList();
