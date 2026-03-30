@@ -629,8 +629,16 @@ void setup() {
     // ESP32 (original): Task-WDT deaktivieren, da der WiFi-Stack bei
     // Scans/Reconnects CPU 0 für >30s blockiert. ESP32-S3 hat dieses
     // Problem nicht. Der Interrupt-WDT bleibt als Sicherheitsnetz aktiv.
+    // WDT wird mit langem Timeout neu initialisiert statt deaktiviert,
+    // damit esp_task_wdt_reset()-Aufrufe aus Arduino/async_tcp nicht spammen.
     #if !CONFIG_IDF_TARGET_ESP32S3 && !CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32C3
     esp_task_wdt_deinit();
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 120000,
+        .idle_core_mask = 0,
+        .trigger_panic = true
+    };
+    esp_task_wdt_init(&twdt_config);
     #endif
     #endif
 
