@@ -12,6 +12,7 @@
 #include "version.h"
 #include "webFunctions.h"
 #include "hal.h"
+#include "serial.h"
 
 Settings settings;
 ExtSettings extSettings;
@@ -244,6 +245,7 @@ void sendSettings() {
     doc["settings"]["wifiMaxTxPower"]     = WIFI_MAX_TX_POWER_DBM;
     doc["settings"]["displayBrightness"]  = displayBrightness;
     doc["settings"]["oledEnabled"]        = oledEnabled;
+    doc["settings"]["serialDebug"]        = serialDebug;
     doc["settings"]["oledDisplayGroup"]   = oledDisplayGroup;
     for (int i = 3; i <= MAX_CHANNELS; i++) {
         doc["settings"]["groupNames"][String(i)] = groupNames[i];
@@ -281,6 +283,7 @@ void loadSettings() {
     if (wifiTxPower > WIFI_MAX_TX_POWER_DBM) wifiTxPower = WIFI_MAX_TX_POWER_DBM;
     displayBrightness  = prefs.getUChar("dispBrightW", 200);
     oledEnabled        = prefs.getBool("oledEnabled", false);
+    serialDebug        = prefs.getBool("serialDebug", false);
     {
         String grp = prefs.getString("oledGroup", "");
         strlcpy(oledDisplayGroup, grp.c_str(), sizeof(oledDisplayGroup));
@@ -560,6 +563,7 @@ void saveSettings() {
     prefs.putFloat("batFullV", batteryFullVoltage);
     prefs.putChar("wifiTxPow", wifiTxPower);
     prefs.putUChar("dispBrightW", displayBrightness);
+    prefs.putBool("serialDebug", serialDebug);
     saveOledSettings();
 #ifdef HAS_WIFI
     saveWifiNetworks();

@@ -13,6 +13,7 @@
 #include "peer.h"
 #include "routing.h"
 #include "auth.h"
+#include "serial.h"
 
 #ifdef HELTEC_WIFI_LORA_32_V3
 #include "display_HELTEC_WiFi_LoRa_32_V3.h"
@@ -290,6 +291,9 @@ void startWebServer() {
             }
             if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
                 oledEnabled = json["settings"]["oledEnabled"].as<bool>();
+            }
+            if (json["settings"]["serialDebug"].is<JsonVariant>()) {
+                serialDebug = json["settings"]["serialDebug"].as<bool>();
             }
             if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
                 strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
