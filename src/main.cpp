@@ -625,6 +625,14 @@ void setup() {
     lastResetReason = getResetReasonStr();
     Serial.printf("\n[Boot] Reset reason: %s\n", lastResetReason);
     Serial.printf("[Boot] Free heap: %u bytes\n", ESP.getFreeHeap());
+
+    // Task-WDT-Timeout auf 15s erhöhen (WiFi-Scans blockieren CPU 0 bis zu 13s)
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 15000,
+        .idle_core_mask = (1 << 0) | (1 << 1),
+        .trigger_panic = true
+    };
+    esp_task_wdt_reconfigure(&twdt_config);
     #endif
 
     // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
