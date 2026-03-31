@@ -40,6 +40,10 @@
 - FIX: Private WiFi/UDP-Nachrichten an fremde Callsigns werden nicht mehr lokal angezeigt oder gespeichert, sondern nur noch weitergeleitet
 - FIX: Absturz bei DNS-/HTTP-Fehlern im Update- und Reporting-Pfad behoben
 - FIX: Mehrere Stabilitätsprobleme behoben, u. a. bei Speicher-Allokationen, Timern, Reboot-Logik, Buffer-Grenzen, TRACE-Echo, File-Handling und Auth-Session-Verwaltung
+- FIX: Gerichtete Nachrichten gingen verloren, wenn der geroutete Next-Hop unavailable oder identisch mit dem Absender war – Relay fällt jetzt auf Flooding zurück statt die Nachricht stillschweigend zu verwerfen
+- FIX: Duplikat-Erkennung für MESSAGE_FRAMEs greift jetzt vor der teuren JSON-Debug-Serialisierung und addPeerList() – behebt extrem langsame WiFi-Reaktion bei Retransmit-Flut von Nachbar-Nodes
+- FIX: sendPeerList() wurde bei jedem empfangenen Frame aufgerufen (JSON+malloc+WebSocket-Broadcast) und verursachte Memory Leak bis zum OOM-Crash nach ~3,5 h – RSSI-Updates werden jetzt per Dirty-Flag max. 1×/s geflusht
+- NEU: Peer-Cooldown (10 min) nach Retry-Exhaustion verhindert den Announce→Relay→Exhaust→Re-Announce-Zyklus bei einseitigen Funkverbindungen
 
 - NEU: Nach LoRa-Sendungen wird eine zusätzliche Guard-Zeit eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können
 - NEU: Duty-Cycle-Enforcement für das öffentliche 869,4–869,65-MHz-Band – überschrittene Sendungen werden verzögert statt verworfen
