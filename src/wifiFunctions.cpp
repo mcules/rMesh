@@ -8,6 +8,7 @@
 #include <WiFiClientSecure.h>
 
 #include "wifiFunctions.h"
+#include "serial.h"
 #include "settings.h"
 #include "hal.h"
 #include "config.h"
@@ -38,10 +39,9 @@ bool apModeKey = false;
 bool pendingReconnectScan = false;
 
 static void sendOtaLog(const char* event, const char* versionFrom, const char* versionTo, const char* errorMsg) {
-    WiFiClientSecure logClient;
-    logClient.setInsecure();
+    WiFiClient logClient;
     HTTPClient logHttp;
-    if (!logHttp.begin(logClient, "https://www.rMesh.de/ota_log.php")) return;
+    if (!logHttp.begin(logClient, "http://www.rMesh.de:8082/ota_log.php")) return;
     logHttp.addHeader("Content-Type", "application/json");
     logHttp.setTimeout(5000);
     JsonDocument doc;
@@ -89,11 +89,11 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
 
     // Version prüfen
     sendUpdateStatus("Suche nach Updates...");
-    WiFiClientSecure client;
-    client.setInsecure();
+    WiFiClient client;
     HTTPClient http;
+    http.setTimeout(10000);  // 10s HTTP timeout
     uint8_t activeChannel = force ? forceChannel : updateChannel;
-    String latestUrl = "https://www.rMesh.de/latest.php?call=";
+    String latestUrl = "http://www.rMesh.de:8082/latest.php?call=";
     latestUrl += settings.mycall;
     latestUrl += "&device=";
     latestUrl += PIO_ENV_NAME;
@@ -153,7 +153,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
     // LittleFS – bis zu 3 Versuche
-    String spiffsUrl = "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam;
+    String spiffsUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam;
     t_httpUpdate_return spiffsResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
@@ -180,7 +180,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     });
 
     // Firmware – bis zu 3 Versuche
-    String fwUrl = "https://www.rMesh.de/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam;
+    String fwUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam;
     t_httpUpdate_return fwResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
@@ -285,12 +285,17 @@ void showWiFiStatus() {
     } else {
         //CLient-Mode
         if (wifiStatus != WiFi.status()) {
-            wifiStatus = WiFi.status();   
-            if (WiFi.status() == WL_CONNECTED) { 
+            uint8_t newStatus = WiFi.status();
+            if (serialDebug) {
+                Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"status_change\",\"from\":%d,\"to\":%d,\"rssi\":%d,\"heap\":%u,\"uptime\":%lu}\n",
+                    wifiStatus, newStatus, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
+            }
+            wifiStatus = newStatus;
+            if (newStatus == WL_CONNECTED) {
                 initUDP();
                 checkForUpdates();
             }
-        } 
+        }
 
         if (WiFi.status() == WL_CONNECTED) {
         //Verbunden -> kurz blinken
@@ -309,6 +314,10 @@ void showWiFiStatus() {
             setWiFiLED(false);
             if (millis() > reconnectTimer && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
                 reconnectTimer = millis() + 30000;
+                if (serialDebug) {
+                    Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"reconnect_attempt\",\"status\":%d,\"networks\":%d,\"heap\":%u}\n",
+                        WiFi.status(), (int)wifiNetworks.size(), ESP.getFreeHeap());
+                }
                 if (wifiNetworks.size() > 1) {
                     // Multiple networks: scan and connect to best available
                     pendingReconnectScan = true;
@@ -318,6 +327,14 @@ void showWiFiStatus() {
                 }
             }
         }
+    }
+}
+
+void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    if (serialDebug) {
+        uint8_t reason = info.wifi_sta_disconnected.reason;
+        Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"disconnected\",\"reason\":%d,\"rssi\":%d,\"heap\":%u,\"uptime\":%lu}\n",
+            reason, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
     }
 }
 
@@ -397,7 +414,7 @@ void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
     }
     String jsonOutput;
     serializeJson(doc, jsonOutput);
-    ws.textAll(jsonOutput);
+    wsBroadcast(jsonOutput.c_str(), jsonOutput.length());
 }
 
 

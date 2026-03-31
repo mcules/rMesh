@@ -131,15 +131,19 @@ bool checkReceive(Frame &f) {
         uint8_t rxBuffer[256];
         size_t rxBufferLength = radio.getPacketLength();
         int16_t state = radio.readData(rxBuffer, rxBufferLength);
+        //RSSI/SNR VOR startReceive() lesen, da startReceive() die Register zurücksetzen kann
+        float rxRssi = radio.getRSSI();
+        float rxSnr = radio.getSNR();
+        float rxFrqError = radio.getFrequencyError();
         radio.startReceive();  // Always restart RX immediately
 
         if (state == RADIOLIB_ERR_NONE) {
             f.importBinary(rxBuffer, rxBufferLength);
             f.tx = false;
             f.timestamp = time(NULL);
-            f.rssi = radio.getRSSI();
-            f.snr = radio.getSNR();
-            f.frqError = radio.getFrequencyError();
+            f.rssi = rxRssi;
+            f.snr = rxSnr;
+            f.frqError = rxFrqError;
             f.port = 0;
             return true;
         }

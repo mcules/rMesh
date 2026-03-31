@@ -119,12 +119,11 @@ void Frame::monitorJSON() {
     size_t len = measureJson(doc);
     if (len == 0) return;
     #ifdef HAS_WIFI
-    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len);
-    if (wsBuffer != nullptr) {
-        serializeJson(doc, (char*)wsBuffer->get(), len);
-        ws.textAll(wsBuffer);
-    } else {
-        Serial.println(F("Fehler: Kein RAM für Buffer"));
+    char* buf = (char*)malloc(len + 1);
+    if (buf) {
+        serializeJson(doc, buf, len + 1);
+        wsBroadcast(buf, len);
+        free(buf);
     }
     #endif
 

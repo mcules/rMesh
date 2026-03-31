@@ -76,6 +76,27 @@
 /** POSIX timezone rule string for CET/CEST (Central Europe). */
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
 
+#ifndef NRF52_PLATFORM
+/** Human-readable string for the last ESP32 reset reason. */
+static const char* lastResetReason = "unknown";
+
+static const char* getResetReasonStr() {
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:  return "power-on";
+        case ESP_RST_EXT:      return "external";
+        case ESP_RST_SW:       return "software";
+        case ESP_RST_PANIC:    return "panic/crash";
+        case ESP_RST_INT_WDT:  return "interrupt-watchdog";
+        case ESP_RST_TASK_WDT: return "task-watchdog";
+        case ESP_RST_WDT:      return "other-watchdog";
+        case ESP_RST_DEEPSLEEP:return "deep-sleep";
+        case ESP_RST_BROWNOUT: return "brownout";
+        case ESP_RST_SDIO:     return "SDIO";
+        default:               return "unknown";
+    }
+}
+#endif
+
 /** Outgoing frame queue (see main.h for details). */
 std::vector<Frame> txBuffer;
 
@@ -165,6 +186,31 @@ void processRxFrame(Frame &f) {
     // Log to monitor
     f.monitorJSON();
 
+    // Early duplicate drop for MESSAGE_FRAME: if we already have this (srcCall, id)
+    // in the ring-buffer AND the frame is not directly addressed to us, skip the
+    // expensive JSON debug serialization, addPeerList, and full case logic.
+    // Directly-addressed duplicates (viaCall == mycall) are NOT dropped so that
+    // re-ACKs still work for retransmitting peers.
+    if (f.frameType == Frame::FrameTypes::MESSAGE_FRAME &&
+        strcmp(f.viaCall, settings.mycall) != 0) {
+        for (int i = 0; i < MAX_STORED_MESSAGES_RAM; i++) {
+            if (messages[i].id == f.id &&
+                strcmp(messages[i].srcCall, f.srcCall) == 0) {
+                // Duplicate: remove any pending relay copies from TX buffer
+                txBuffer.erase(
+                    std::remove_if(txBuffer.begin(), txBuffer.end(),
+                        [&](const Frame& txB) {
+                            return (strcmp(txB.srcCall, f.srcCall) == 0) &&
+                                   (txB.id == f.id) &&
+                                   (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
+                        }),
+                    txBuffer.end()
+                );
+                return;
+            }
+        }
+    }
+
     // Debug output for test framework
     if (serialDebug) {
         JsonDocument dbg;
@@ -228,8 +274,13 @@ void processRxFrame(Frame &f) {
         // Remote node confirmed our announce; mark it available and update routing.
         case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:
             if (strcmp(f.viaCall, settings.mycall) == 0) {
+                // Direct ACK to us: mark peer available, add 0-hop route
                 availablePeerList(f.nodeCall, true, f.port);
                 addRoutingList(f.nodeCall, f.nodeCall, f.hopCount);
+            } else if (strlen(f.viaCall) > 0) {
+                // Overheard ACK: nodeCall confirmed viaCall as its peer.
+                // Learn that viaCall is reachable through nodeCall (1 extra hop).
+                addRoutingList(f.viaCall, f.nodeCall, f.hopCount + 1);
             }
             break;
 
@@ -384,7 +435,7 @@ void processRxFrame(Frame &f) {
                 }
                 size_t len = f.messageJSON(jsonBuffer, 4096);
                 #ifdef HAS_WIFI
-                ws.textAll(jsonBuffer, len);
+                wsBroadcast(jsonBuffer, len);
                 #endif
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
                 #ifdef LILYGO_T_LORA_PAGER
@@ -514,6 +565,25 @@ void processRxFrame(Frame &f) {
                         if (tf.messageLength > 255) tf.messageLength = 255;
                     }
 
+                    // Check if the routed next-hop is actually reachable.
+                    // If not, fall back to flooding so the message isn't silently lost.
+                    if (routing) {
+                        bool routeReachable = false;
+                        for (size_t pi = 0; pi < peerList.size(); pi++) {
+                            if (strcmp(peerList[pi].nodeCall, viaCall) == 0 &&
+                                peerList[pi].available &&
+                                strcmp(peerList[pi].nodeCall, f.nodeCall) != 0 &&
+                                strcmp(peerList[pi].nodeCall, f.srcCall) != 0) {
+                                routeReachable = true;
+                                break;
+                            }
+                        }
+                        if (!routeReachable) {
+                            routing = false;  // fall back to flood
+                            routeViaWifi = false;
+                        }
+                    }
+
                     // Iterate ports: WiFi first (port 1), then LoRa (port 0)
                     for (int _port = 1; _port >= 0; _port--) {
                         tf.port = (uint8_t)_port;
@@ -571,7 +641,8 @@ void setup() {
     // Initialise UART debug output
     Serial.begin(115200);
     #ifndef NRF52_PLATFORM
-    Serial.setDebugOutput(true);
+    // setDebugOutput erst nach Settings-Load aktivieren (siehe unten),
+    // damit frühe UART-Ausgaben nicht den esptool auto-reset stören.
     #endif
 
     #if defined(LILYGO_T_LORA_PAGER)
@@ -597,14 +668,37 @@ void setup() {
         digitalWrite(PIN_LED_GREEN, LOW);
     }
     #else
-    while (!Serial) {}
+    {
+        uint32_t serialWait = millis();
+        while (!Serial && (millis() - serialWait < 3000)) { delay(10); }
+    }
     #endif
 
-    // Start at 80 MHz to save power; boost to 240 MHz only during LoRa TX
-    setCpuFrequencyMhz(80);
     #ifndef NRF52_PLATFORM
-    // Lock CPU to 240 MHz (recommended for reliable SPI timing)
-    setCpuFrequencyMhz(240);
+    lastResetReason = getResetReasonStr();
+    Serial.printf("\n[Boot] Reset reason: %s\n", lastResetReason);
+    Serial.printf("[Boot] Free heap: %u bytes\n", ESP.getFreeHeap());
+
+    // ESP32 (original): Task-WDT deaktivieren, da der WiFi-Stack bei
+    // Scans/Reconnects CPU 0 für >30s blockiert. ESP32-S3 hat dieses
+    // Problem nicht. Der Interrupt-WDT bleibt als Sicherheitsnetz aktiv.
+    // WDT wird mit langem Timeout neu initialisiert statt deaktiviert,
+    // damit esp_task_wdt_reset()-Aufrufe aus Arduino/async_tcp nicht spammen.
+    #if !CONFIG_IDF_TARGET_ESP32S3 && !CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32C3
+    esp_task_wdt_deinit();
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 120000,
+        .idle_core_mask = 0,
+        .trigger_panic = true
+    };
+    esp_task_wdt_init(&twdt_config);
+    #endif
+    #endif
+
+    #ifndef NRF52_PLATFORM
+    // 160 MHz: guter Kompromiss zwischen Stromverbrauch und WiFi-Stabilität.
+    // Kein dynamisches Umschalten – APB-Clock-Wechsel stört laufende WiFi-Verbindungen.
+    setCpuFrequencyMhz(160);
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
     esp_log_level_set("vfs", ESP_LOG_NONE);
@@ -630,6 +724,10 @@ void setup() {
 
     // Load user settings from NVS / InternalFS
     loadSettings();
+
+    #ifndef NRF52_PLATFORM
+    Serial.setDebugOutput(serialDebug);
+    #endif
 
     // Pre-populate the in-RAM deduplication ring-buffer from messages.json
     File file = LittleFS.open("/messages.json", "r");
@@ -666,6 +764,7 @@ void setup() {
     #ifdef HAS_WIFI
     // Register WiFi scan handler once (before wifiInit, which may be called repeatedly)
     WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    WiFi.onEvent(onWiFiDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
@@ -759,12 +858,6 @@ void loop() {
 
     // ── 5. TX-buffer draining ─────────────────────────────────────────────────
     // Only transmit when no LoRa TX/RX is already in progress
-    // Boost CPU to 240 MHz during TX processing, hold for 2 s cooldown
-    static uint32_t cpuBoostUntil = 0;
-    if ((txFlag == false) && (rxFlag == false) && txBuffer.size() > 0) {
-        setCpuFrequencyMhz(240);
-        cpuBoostUntil = millis() + 1000;
-    }
     if ((txFlag == false) && (rxFlag == false)) {
 
         // Synchronous frames (retry > 1) must be sent one at a time per port.
@@ -860,6 +953,13 @@ void loop() {
                         deadVia[sizeof(deadVia) - 1] = '\0';
                         uint8_t deadPort = txBuffer[i].port;
                         availablePeerList(deadVia, false, deadPort);
+                        // Set cooldown so ANNOUNCE_ACK cannot immediately re-enable
+                        for (auto& p : peerList) {
+                            if (strcmp(p.nodeCall, deadVia) == 0 && p.port == deadPort) {
+                                p.cooldownUntil = millis() + PEER_RETRY_COOLDOWN;
+                                break;
+                            }
+                        }
                         txBuffer.erase(
                             std::remove_if(txBuffer.begin(), txBuffer.end(),
                                 [&](const Frame& txB) {
@@ -877,10 +977,6 @@ void loop() {
         }
     }
 
-    // Drop CPU back to 80 MHz after cooldown
-    if (getCpuFrequencyMhz() > 80 && timerExpired(cpuBoostUntil)) {
-        setCpuFrequencyMhz(80);
-    }
 
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
@@ -900,23 +996,24 @@ void loop() {
         doc["status"]["txBufferCount"]= txBuffer.size();
         doc["status"]["retry"]        = currentRetry;
         doc["status"]["heap"]         = ESP.getFreeHeap();
+        doc["status"]["minHeap"]      = ESP.getMinFreeHeap();
         doc["status"]["uptime"]       = millis() / 1000;
         doc["status"]["cpuFreq"]      = getCpuFrequencyMhz();
+        doc["status"]["resetReason"]  = lastResetReason;
         #ifdef HAS_BATTERY_ADC
         if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
         #endif
-        char* jsonBuffer = (char*)malloc(1024);
-        if (jsonBuffer != nullptr) {
-            size_t len = serializeJson(doc, jsonBuffer, 1024);
-            ws.textAll(jsonBuffer, len);
-            free(jsonBuffer);
-            jsonBuffer = nullptr;
-        } else {
-            Serial.println("[OOM] loop status: malloc failed");
-        }
+        char jsonBuffer[512];
+        size_t len = serializeJson(doc, jsonBuffer, sizeof(jsonBuffer));
+        wsBroadcast(jsonBuffer, len);
         #endif
         // Expire stale peers once per second
         checkPeerList();
+        // Flush deferred RSSI/SNR updates to WebSocket clients
+        if (peerListDirty) {
+            peerListDirty = false;
+            sendPeerList();
+        }
     }
 
     // ── 7b. Periodic flash persistence of routes/peers ─────────────────────

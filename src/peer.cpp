@@ -25,6 +25,9 @@
 /** Runtime peer table; extern-declared in peer.h. */
 std::vector<Peer> peerList;
 
+/** Deferred-broadcast flag for RSSI/SNR updates (see peer.h). */
+bool peerListDirty = false;
+
 /**
  * @brief Periodic peer-list maintenance — called once per second from loop().
  *
@@ -43,20 +46,43 @@ void checkPeerList() {
     bool update = false;
     time_t now = time(NULL);
 
+    // Zeitsprung nach NTP-Sync: Peer-Timestamps aus der Vor-NTP-Phase
+    // (nahe 0) auf jetzt korrigieren, statt sie sofort ablaufen zu lassen.
+    // Ohne NTP liefert time(NULL) auf ESP32 Werte nahe 0 (Sekunden seit Boot).
+    // Nach NTP-Sync springt der Wert auf die reale Unixzeit (>1e9).
+    const time_t NTP_PLAUSIBLE = 1000000000;  // Sep 2001 – jeder NTP-Sync liefert mehr
+    if (now > NTP_PLAUSIBLE) {
+        for (auto& peer : peerList) {
+            if (peer.timestamp < NTP_PLAUSIBLE) {
+                peer.timestamp = now - (PEER_INACTIVE_TIMEOUT - PEER_INITIAL_TIMEOUT);
+                update = true;
+            }
+        }
+    }
+
+    // Vor NTP-Sync keine Timeouts auswerten (Zeitbasis unzuverlässig)
+    if (now < NTP_PLAUSIBLE) {
+        if (update) { sendPeerList(); markTopologyChanged(); }
+        return;
+    }
+
     // Mark peers as unavailable after inactivity timeout
     for (auto& peer : peerList) {
         if (peer.available && (now - peer.timestamp) > PEER_INACTIVE_TIMEOUT) {
             peer.available = false;
             update = true;
-            Serial.printf("[Peer] %s (Port %d) marked unavailable due to inactivity\n", peer.nodeCall, peer.port);
+            if (serialDebug) {
+                Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"inactivity\"}\n", peer.nodeCall, peer.port);
+            }
         }
     }
 
     // Remove peers after full timeout
     for (auto it = peerList.begin(); it != peerList.end();) {
         if ((now - it->timestamp) > PEER_TIMEOUT) {
-            Serial.printf("[Peer] %s (Port %d) removed due to timeout (now=%ld, ts=%ld, diff=%ld)\n",
-                it->nodeCall, it->port, (long)now, (long)it->timestamp, (long)(now - it->timestamp));
+            if (serialDebug) {
+                Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"removed\",\"call\":\"%s\",\"port\":%d,\"reason\":\"timeout\"}\n", it->nodeCall, it->port);
+            }
             it = peerList.erase(it);
             update = true;
             peersDirty = true;
@@ -71,8 +97,10 @@ void checkPeerList() {
             if (peer.available && peer.port == 0 && peer.snr < extSettings.minSnr) {
                 peer.available = false;
                 update = true;
-                Serial.printf("[Peer] %s (Port %d) below min SNR (%.1f < %d dB)\n",
-                    peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
+                if (serialDebug) {
+                    Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"snr\",\"snr\":%.1f,\"min_snr\":%d}\n",
+                        peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
+                }
             }
         }
     }
@@ -191,6 +219,21 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
             effectiveAvailable = false;
         }
 
+        // Reject availability while cooldown is active (retry exhaustion)
+        if (effectiveAvailable && it->cooldownUntil != 0 && millis() < it->cooldownUntil) {
+            effectiveAvailable = false;
+        }
+        // Clear expired cooldown
+        if (it->cooldownUntil != 0 && millis() >= it->cooldownUntil) {
+            it->cooldownUntil = 0;
+        }
+
+        if (!available) {
+            // When explicitly marking unavailable, clear cooldown
+            // (the caller may set a new one afterwards)
+            it->cooldownUntil = 0;
+        }
+
         if (it->available != effectiveAvailable) {
             it->available = effectiveAvailable;
             update = true;
@@ -239,28 +282,29 @@ void addPeerList(Frame &f) {
     }
 
     if (strcmp(f.nodeCall, settings.mycall) == 0) {
-        if (serialDebug) Serial.printf("[Peer] Ignoring own call: %s\n", f.nodeCall);
+        if (serialDebug) Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"ignore\",\"call\":\"%s\",\"reason\":\"own_call\"}\n", f.nodeCall);
         return;
     }
 
     time_t now = time(NULL);
-    if (serialDebug) Serial.printf("[Peer] addPeerList: %s port=%d time=%ld listSize=%d\n",
-        f.nodeCall, f.port, (long)now, (int)peerList.size());
-
     // Search for an existing peer with same callsign and port
     auto it = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) {
         return (strcmp(peer.nodeCall, f.nodeCall) == 0) && (peer.port == f.port);
     });
 
     bool isNew = (it == peerList.end());
-    if (serialDebug) Serial.printf("[Peer] isNew=%d\n", isNew);
+    if (serialDebug) Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"lookup\",\"call\":\"%s\",\"port\":%d,\"isNew\":%s,\"listSize\":%d}\n",
+        f.nodeCall, f.port, isNew ? "true" : "false", (int)peerList.size());
 
     if (!isNew) {
         // Update existing peer, but keep current availability state
         it->timestamp = now;
-        it->rssi = f.rssi;
-        it->snr = f.snr;
-        it->frqError = f.frqError;
+        // Nur überschreiben wenn neue Werte vorhanden (RSSI ist bei LoRa immer negativ)
+        if (f.rssi != 0 || f.snr != 0 || f.frqError != 0) {
+            it->rssi = f.rssi;
+            it->snr = f.snr;
+            it->frqError = f.frqError;
+        }
         it->port = f.port;
     } else {
         // Add new peer (enforce capacity limit)
@@ -279,8 +323,6 @@ void addPeerList(Frame &f) {
         p.available = false;
         peerList.push_back(p);
         peersDirty = true;
-
-        Serial.printf("[Reporting] New peer: %s (Port %d)\n", f.nodeCall, f.port);
 
         if (serialDebug) {
             JsonDocument dbgPeer;
@@ -301,9 +343,12 @@ void addPeerList(Frame &f) {
         return a.snr > b.snr;
     });
 
-    sendPeerList();
-
     if (isNew) {
+        // New peer: broadcast immediately and flag topology change
+        sendPeerList();
         markTopologyChanged();
+    } else {
+        // Existing peer with updated RSSI/SNR: defer broadcast to main-loop timer
+        peerListDirty = true;
     }
 }

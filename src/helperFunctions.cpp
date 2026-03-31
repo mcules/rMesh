@@ -107,7 +107,7 @@ void sendFrame(Frame &f) {
     }
     size_t len = f.messageJSON(jsonBuffer, 2048);
     #ifdef HAS_WIFI
-    ws.textAll(jsonBuffer, len);
+    wsBroadcast(jsonBuffer, len);
     #endif
     addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
     free(jsonBuffer);

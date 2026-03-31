@@ -8,8 +8,11 @@
  * Route entry (22 bytes):
  *   [srcCall : 10 bytes][viaCall : 10 bytes][hopCount : 1 byte][padding : 1 byte]
  *
- * Peer entry (12 bytes):
+ * Peer entry V1 (12 bytes):
  *   [nodeCall : 10 bytes][port : 1 byte][available : 1 byte]
+ * Peer entry V2 (24 bytes):
+ *   [nodeCall : 10 bytes][port : 1 byte][available : 1 byte]
+ *   [rssi : 4 bytes][snr : 4 bytes][frqError : 4 bytes]
  *
  * Timestamps are NOT persisted for routes (set to now on load).
  * For peers, the timestamp is set so that the PEER_INITIAL_TIMEOUT grace
@@ -34,7 +37,8 @@
 
 static const char* ROUTES_FILE = "/routes.bin";
 static const char* PEERS_FILE  = "/peers.bin";
-static const uint8_t FILE_VERSION = 1;
+static const uint8_t FILE_VERSION = 2;
+static const uint8_t PEER_FILE_VERSION_V1 = 1;
 
 volatile bool routesDirty = false;
 volatile bool peersDirty  = false;
@@ -64,7 +68,7 @@ void loadRoutes() {
 
     uint8_t version = 0;
     f.read(&version, 1);
-    if (version != FILE_VERSION) {
+    if (version != FILE_VERSION && version != PEER_FILE_VERSION_V1) {
         Serial.printf("[Persistence] Unknown routes file version %d — skipping\n", version);
         f.close();
         xSemaphoreGive(fsMutex);
@@ -154,11 +158,21 @@ void saveRoutes() {
 
 // ── Peer persistence ─────────────────────────────────────────────────────────
 
-/** Packed on-disk peer entry (no RSSI/SNR — stale after reboot). */
+/** Packed on-disk peer entry V1 (no RSSI/SNR). */
+struct __attribute__((packed)) PeerEntryV1 {
+    char nodeCall[MAX_CALLSIGN_LENGTH + 1];
+    uint8_t port;
+    uint8_t available;
+};
+
+/** Packed on-disk peer entry V2 (with RSSI/SNR/frqError). */
 struct __attribute__((packed)) PeerEntry {
     char nodeCall[MAX_CALLSIGN_LENGTH + 1];
     uint8_t port;
     uint8_t available;
+    float rssi;
+    float snr;
+    float frqError;
 };
 
 void loadPeers() {
@@ -176,7 +190,7 @@ void loadPeers() {
 
     uint8_t version = 0;
     f.read(&version, 1);
-    if (version != FILE_VERSION) {
+    if (version != FILE_VERSION && version != PEER_FILE_VERSION_V1) {
         Serial.printf("[Persistence] Unknown peers file version %d — skipping\n", version);
         f.close();
         xSemaphoreGive(fsMutex);
@@ -196,23 +210,32 @@ void loadPeers() {
     peerList.clear();
     peerList.reserve(count);
 
-    PeerEntry entry;
     uint16_t loaded = 0;
     for (uint16_t i = 0; i < count; i++) {
-        if (f.read((uint8_t*)&entry, sizeof(entry)) != sizeof(entry)) break;
-
-        // Skip own callsign
-        if (strcmp(settings.mycall, entry.nodeCall) == 0) continue;
-
         Peer p;
-        memcpy(p.nodeCall, entry.nodeCall, sizeof(p.nodeCall));
+        if (version == PEER_FILE_VERSION_V1) {
+            PeerEntryV1 entry;
+            if (f.read((uint8_t*)&entry, sizeof(entry)) != sizeof(entry)) break;
+            if (strcmp(settings.mycall, entry.nodeCall) == 0) continue;
+            memcpy(p.nodeCall, entry.nodeCall, sizeof(p.nodeCall));
+            p.port = entry.port;
+            p.available = entry.available;
+            p.rssi = 0;
+            p.snr = 0;
+            p.frqError = 0;
+        } else {
+            PeerEntry entry;
+            if (f.read((uint8_t*)&entry, sizeof(entry)) != sizeof(entry)) break;
+            if (strcmp(settings.mycall, entry.nodeCall) == 0) continue;
+            memcpy(p.nodeCall, entry.nodeCall, sizeof(p.nodeCall));
+            p.port = entry.port;
+            p.available = entry.available;
+            p.rssi = entry.rssi;
+            p.snr = entry.snr;
+            p.frqError = entry.frqError;
+        }
         p.nodeCall[MAX_CALLSIGN_LENGTH] = '\0';
-        p.port = entry.port;
-        p.available = entry.available;
         p.timestamp = graceTimestamp;
-        p.rssi = 0;
-        p.snr = 0;
-        p.frqError = 0;
         peerList.push_back(p);
         loaded++;
     }
@@ -249,6 +272,9 @@ static void savePeersTask(void* pvParameters) {
         memcpy(entry.nodeCall, p.nodeCall, sizeof(entry.nodeCall));
         entry.port = p.port;
         entry.available = p.available ? 1 : 0;
+        entry.rssi = p.rssi;
+        entry.snr = p.snr;
+        entry.frqError = p.frqError;
         f.write((uint8_t*)&entry, sizeof(entry));
     }
 

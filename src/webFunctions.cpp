@@ -13,6 +13,7 @@
 #include "peer.h"
 #include "routing.h"
 #include "auth.h"
+#include "serial.h"
 
 #ifdef HELTEC_WIFI_LORA_32_V3
 #include "display_HELTEC_WiFi_LoRa_32_V3.h"
@@ -38,6 +39,10 @@ AsyncWebSocket ws("/socket", wsHandler.eventHandler());
  * Otherwise, sends only to authenticated clients.
  */
 void wsBroadcast(const char *buf, size_t len) {
+    // ws.textAll/text alloziert intern shared_ptr<vector> auf dem Heap.
+    // Bei Heap-Knappheit würde operator new std::terminate() auslösen.
+    if (ESP.getFreeHeap() < 20000) return;
+
     if (webPasswordHash.isEmpty()) {
         ws.textAll(buf, len);
         return;
@@ -290,6 +295,10 @@ void startWebServer() {
             }
             if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
                 oledEnabled = json["settings"]["oledEnabled"].as<bool>();
+            }
+            if (json["settings"]["serialDebug"].is<JsonVariant>()) {
+                serialDebug = json["settings"]["serialDebug"].as<bool>();
+                Serial.setDebugOutput(serialDebug);
             }
             if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
                 strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
