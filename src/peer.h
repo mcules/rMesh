@@ -46,6 +46,16 @@ struct Peer {
      * - 1 = UDP / WiFi
      */
     uint8_t port = 0;
+
+    /**
+     * @brief millis() timestamp until this peer is blocked from becoming available.
+     *
+     * Set after all TX retries exhaust (peer unreachable).  While
+     * millis() < cooldownUntil, availablePeerList(…, true, …) is rejected
+     * so that the next ANNOUNCE_ACK cycle cannot immediately re-enable
+     * a peer that just failed 10 retries.
+     */
+    uint32_t cooldownUntil = 0;
 };
 
 /**
@@ -99,3 +109,10 @@ void sendPeerList();
 
 /** Global peer list; populated and maintained by the functions above. */
 extern std::vector<Peer> peerList;
+
+/**
+ * @brief Flag set by addPeerList() when RSSI/SNR changed but a full
+ *        WebSocket broadcast was deferred.  The main loop clears this
+ *        once per second by calling sendPeerList().
+ */
+extern bool peerListDirty;

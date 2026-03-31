@@ -186,6 +186,31 @@ void processRxFrame(Frame &f) {
     // Log to monitor
     f.monitorJSON();
 
+    // Early duplicate drop for MESSAGE_FRAME: if we already have this (srcCall, id)
+    // in the ring-buffer AND the frame is not directly addressed to us, skip the
+    // expensive JSON debug serialization, addPeerList, and full case logic.
+    // Directly-addressed duplicates (viaCall == mycall) are NOT dropped so that
+    // re-ACKs still work for retransmitting peers.
+    if (f.frameType == Frame::FrameTypes::MESSAGE_FRAME &&
+        strcmp(f.viaCall, settings.mycall) != 0) {
+        for (int i = 0; i < MAX_STORED_MESSAGES_RAM; i++) {
+            if (messages[i].id == f.id &&
+                strcmp(messages[i].srcCall, f.srcCall) == 0) {
+                // Duplicate: remove any pending relay copies from TX buffer
+                txBuffer.erase(
+                    std::remove_if(txBuffer.begin(), txBuffer.end(),
+                        [&](const Frame& txB) {
+                            return (strcmp(txB.srcCall, f.srcCall) == 0) &&
+                                   (txB.id == f.id) &&
+                                   (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
+                        }),
+                    txBuffer.end()
+                );
+                return;
+            }
+        }
+    }
+
     // Debug output for test framework
     if (serialDebug) {
         JsonDocument dbg;
@@ -249,8 +274,13 @@ void processRxFrame(Frame &f) {
         // Remote node confirmed our announce; mark it available and update routing.
         case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:
             if (strcmp(f.viaCall, settings.mycall) == 0) {
+                // Direct ACK to us: mark peer available, add 0-hop route
                 availablePeerList(f.nodeCall, true, f.port);
                 addRoutingList(f.nodeCall, f.nodeCall, f.hopCount);
+            } else if (strlen(f.viaCall) > 0) {
+                // Overheard ACK: nodeCall confirmed viaCall as its peer.
+                // Learn that viaCall is reachable through nodeCall (1 extra hop).
+                addRoutingList(f.viaCall, f.nodeCall, f.hopCount + 1);
             }
             break;
 
@@ -535,6 +565,25 @@ void processRxFrame(Frame &f) {
                         if (tf.messageLength > 255) tf.messageLength = 255;
                     }
 
+                    // Check if the routed next-hop is actually reachable.
+                    // If not, fall back to flooding so the message isn't silently lost.
+                    if (routing) {
+                        bool routeReachable = false;
+                        for (size_t pi = 0; pi < peerList.size(); pi++) {
+                            if (strcmp(peerList[pi].nodeCall, viaCall) == 0 &&
+                                peerList[pi].available &&
+                                strcmp(peerList[pi].nodeCall, f.nodeCall) != 0 &&
+                                strcmp(peerList[pi].nodeCall, f.srcCall) != 0) {
+                                routeReachable = true;
+                                break;
+                            }
+                        }
+                        if (!routeReachable) {
+                            routing = false;  // fall back to flood
+                            routeViaWifi = false;
+                        }
+                    }
+
                     // Iterate ports: WiFi first (port 1), then LoRa (port 0)
                     for (int _port = 1; _port >= 0; _port--) {
                         tf.port = (uint8_t)_port;
@@ -647,9 +696,8 @@ void setup() {
     #endif
 
     #ifndef NRF52_PLATFORM
-    // 160 MHz Basis: guter Kompromiss zwischen Stromverbrauch und
-    // WiFi-Stabilität (WiFi-Stack instabil bei 80 MHz).
-    // Wird nur für LoRa-TX kurz auf 240 MHz hochgetaktet.
+    // 160 MHz: guter Kompromiss zwischen Stromverbrauch und WiFi-Stabilität.
+    // Kein dynamisches Umschalten – APB-Clock-Wechsel stört laufende WiFi-Verbindungen.
     setCpuFrequencyMhz(160);
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
@@ -716,6 +764,7 @@ void setup() {
     #ifdef HAS_WIFI
     // Register WiFi scan handler once (before wifiInit, which may be called repeatedly)
     WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    WiFi.onEvent(onWiFiDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
@@ -809,12 +858,6 @@ void loop() {
 
     // ── 5. TX-buffer draining ─────────────────────────────────────────────────
     // Only transmit when no LoRa TX/RX is already in progress
-    // Boost CPU to 240 MHz during TX processing, hold for 2 s cooldown
-    static uint32_t cpuBoostUntil = 0;
-    if ((txFlag == false) && (rxFlag == false) && txBuffer.size() > 0) {
-        setCpuFrequencyMhz(240);
-        cpuBoostUntil = millis() + 1000;
-    }
     if ((txFlag == false) && (rxFlag == false)) {
 
         // Synchronous frames (retry > 1) must be sent one at a time per port.
@@ -861,9 +904,7 @@ void loop() {
                                 txBuffer[i].transmitMillis = millis() + 5000;
                                 break;
                             }
-                            setCpuFrequencyMhz(240);
                             transmitFrame(txBuffer[i]);
-                            setCpuFrequencyMhz(160);
                             if (isPublicBand(settings.loraFrequency)) {
                                 dutyCycleTrackTx(toa);
                             }
@@ -912,6 +953,13 @@ void loop() {
                         deadVia[sizeof(deadVia) - 1] = '\0';
                         uint8_t deadPort = txBuffer[i].port;
                         availablePeerList(deadVia, false, deadPort);
+                        // Set cooldown so ANNOUNCE_ACK cannot immediately re-enable
+                        for (auto& p : peerList) {
+                            if (strcmp(p.nodeCall, deadVia) == 0 && p.port == deadPort) {
+                                p.cooldownUntil = millis() + PEER_RETRY_COOLDOWN;
+                                break;
+                            }
+                        }
                         txBuffer.erase(
                             std::remove_if(txBuffer.begin(), txBuffer.end(),
                                 [&](const Frame& txB) {
@@ -929,10 +977,6 @@ void loop() {
         }
     }
 
-    // Drop CPU back to 80 MHz after cooldown
-    if (getCpuFrequencyMhz() > 80 && timerExpired(cpuBoostUntil)) {
-        setCpuFrequencyMhz(80);
-    }
 
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
@@ -965,6 +1009,11 @@ void loop() {
         #endif
         // Expire stale peers once per second
         checkPeerList();
+        // Flush deferred RSSI/SNR updates to WebSocket clients
+        if (peerListDirty) {
+            peerListDirty = false;
+            sendPeerList();
+        }
     }
 
     // ── 7b. Periodic flash persistence of routes/peers ─────────────────────

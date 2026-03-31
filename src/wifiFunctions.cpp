@@ -8,6 +8,7 @@
 #include <WiFiClientSecure.h>
 
 #include "wifiFunctions.h"
+#include "serial.h"
 #include "settings.h"
 #include "hal.h"
 #include "config.h"
@@ -284,12 +285,17 @@ void showWiFiStatus() {
     } else {
         //CLient-Mode
         if (wifiStatus != WiFi.status()) {
-            wifiStatus = WiFi.status();   
-            if (WiFi.status() == WL_CONNECTED) { 
+            uint8_t newStatus = WiFi.status();
+            if (serialDebug) {
+                Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"status_change\",\"from\":%d,\"to\":%d,\"rssi\":%d,\"heap\":%u,\"uptime\":%lu}\n",
+                    wifiStatus, newStatus, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
+            }
+            wifiStatus = newStatus;
+            if (newStatus == WL_CONNECTED) {
                 initUDP();
                 checkForUpdates();
             }
-        } 
+        }
 
         if (WiFi.status() == WL_CONNECTED) {
         //Verbunden -> kurz blinken
@@ -308,6 +314,10 @@ void showWiFiStatus() {
             setWiFiLED(false);
             if (millis() > reconnectTimer && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
                 reconnectTimer = millis() + 30000;
+                if (serialDebug) {
+                    Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"reconnect_attempt\",\"status\":%d,\"networks\":%d,\"heap\":%u}\n",
+                        WiFi.status(), (int)wifiNetworks.size(), ESP.getFreeHeap());
+                }
                 if (wifiNetworks.size() > 1) {
                     // Multiple networks: scan and connect to best available
                     pendingReconnectScan = true;
@@ -317,6 +327,14 @@ void showWiFiStatus() {
                 }
             }
         }
+    }
+}
+
+void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
+    if (serialDebug) {
+        uint8_t reason = info.wifi_sta_disconnected.reason;
+        Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"disconnected\",\"reason\":%d,\"rssi\":%d,\"heap\":%u,\"uptime\":%lu}\n",
+            reason, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
     }
 }
 

@@ -25,6 +25,9 @@
 /** Runtime peer table; extern-declared in peer.h. */
 std::vector<Peer> peerList;
 
+/** Deferred-broadcast flag for RSSI/SNR updates (see peer.h). */
+bool peerListDirty = false;
+
 /**
  * @brief Periodic peer-list maintenance — called once per second from loop().
  *
@@ -216,6 +219,21 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
             effectiveAvailable = false;
         }
 
+        // Reject availability while cooldown is active (retry exhaustion)
+        if (effectiveAvailable && it->cooldownUntil != 0 && millis() < it->cooldownUntil) {
+            effectiveAvailable = false;
+        }
+        // Clear expired cooldown
+        if (it->cooldownUntil != 0 && millis() >= it->cooldownUntil) {
+            it->cooldownUntil = 0;
+        }
+
+        if (!available) {
+            // When explicitly marking unavailable, clear cooldown
+            // (the caller may set a new one afterwards)
+            it->cooldownUntil = 0;
+        }
+
         if (it->available != effectiveAvailable) {
             it->available = effectiveAvailable;
             update = true;
@@ -325,9 +343,12 @@ void addPeerList(Frame &f) {
         return a.snr > b.snr;
     });
 
-    sendPeerList();
-
     if (isNew) {
+        // New peer: broadcast immediately and flag topology change
+        sendPeerList();
         markTopologyChanged();
+    } else {
+        // Existing peer with updated RSSI/SNR: defer broadcast to main-loop timer
+        peerListDirty = true;
     }
 }

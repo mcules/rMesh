@@ -82,6 +82,14 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Number of TX retries before a frame is considered undeliverable. */
 #define TX_RETRY 10
 
+/**
+ * Cooldown period (ms) after all TX retries exhaust for a peer.
+ * During this time the peer cannot be re-enabled by ANNOUNCE_ACK,
+ * preventing the announce → relay → exhaust → re-announce cycle.
+ * Default: 10 minutes.
+ */
+#define PEER_RETRY_COOLDOWN (10 * 60 * 1000UL)
+
 /** Maximum number of messages persisted in messages.json (flash). */
 #define MAX_STORED_MESSAGES 1000
 
