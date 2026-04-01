@@ -86,6 +86,11 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         sendUpdateStatus("Kein automatisches Update: lokaler Dev-Build.");
         return;
     }
+    // Nightly-Builds sollen sich nie automatisch updaten
+    if (!force && strncmp(VERSION, "nightly-", 8) == 0) {
+        sendUpdateStatus("Kein automatisches Update: Nightly-Build.");
+        return;
+    }
 
     // Version prüfen
     sendUpdateStatus("Suche nach Updates...");
