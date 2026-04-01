@@ -158,12 +158,23 @@ void checkPeerList() {
  * @endcode
  */
 void sendPeerList() {
-    JsonDocument doc;
-    doc["peerlist"]["peers"] = JsonArray();
-    for (int i = 0; i < peerList.size(); i++) {
+    // Build JSON with snprintf instead of JsonDocument to avoid heap fragmentation.
+    // Each peer entry is ~130 bytes; use tight malloc based on actual peer count.
+    size_t bufSize = 40 + peerList.size() * 150;
+    if (bufSize < 256) bufSize = 256;
+    char* jsonBuffer = (char*)malloc(bufSize);
+    if (jsonBuffer == nullptr) {
+        Serial.println(F("[OOM] sendPeerList: malloc failed"));
+        return;
+    }
+    size_t pos = 0;
+
+    pos += snprintf(jsonBuffer + pos, bufSize - pos, "{\"peerlist\":{\"peers\":[");
+
+    for (size_t i = 0; i < peerList.size() && pos < bufSize - 200; i++) {
         // Check if same callsign exists on a different port (dual-path node)
         bool dualPath = false;
-        for (int j = 0; j < peerList.size(); j++) {
+        for (size_t j = 0; j < peerList.size(); j++) {
             if (i != j && strcmp(peerList[i].nodeCall, peerList[j].nodeCall) == 0
                        && peerList[i].port != peerList[j].port) {
                 dualPath = true;
@@ -171,28 +182,26 @@ void sendPeerList() {
             }
         }
 
-        JsonObject peer = doc["peerlist"]["peers"].add<JsonObject>();
-        peer["port"] = peerList[i].port;
-        peer["call"] = peerList[i].nodeCall;
-        peer["timestamp"] = peerList[i].timestamp;
-        peer["rssi"] = peerList[i].rssi;
-        peer["snr"] = peerList[i].snr;
-        peer["frqError"] = peerList[i].frqError;
-        peer["available"] = peerList[i].available;
+        if (i > 0) jsonBuffer[pos++] = ',';
+        pos += snprintf(jsonBuffer + pos, bufSize - pos,
+            "{\"port\":%u,\"call\":\"%s\",\"timestamp\":%ld,\"rssi\":%.1f,"
+            "\"snr\":%.1f,\"frqError\":%.1f,\"available\":%s",
+            peerList[i].port, peerList[i].nodeCall,
+            (long)peerList[i].timestamp, peerList[i].rssi,
+            peerList[i].snr, peerList[i].frqError,
+            peerList[i].available ? "true" : "false");
         if (dualPath) {
-            peer["preferred"] = peerList[i].available;
+            pos += snprintf(jsonBuffer + pos, bufSize - pos,
+                ",\"preferred\":%s", peerList[i].available ? "true" : "false");
         }
+        jsonBuffer[pos++] = '}';
     }
-    
-    size_t jsonLen = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)malloc(jsonLen);
-    if (jsonBuffer != nullptr) {
-        size_t len = serializeJson(doc, jsonBuffer, jsonLen);
-        wsBroadcast(jsonBuffer, len);
-        free(jsonBuffer);
-    } else {
-        Serial.println(F("[OOM] sendPeerList: malloc failed"));
+
+    pos += snprintf(jsonBuffer + pos, bufSize - pos, "]}}");
+    if (pos < bufSize) {
+        wsBroadcast(jsonBuffer, pos);
     }
+    free(jsonBuffer);
 }
 
 /**

@@ -130,27 +130,57 @@ void Frame::monitorJSON() {
 
 }
 
+/**
+ * @brief Escape a string for safe JSON embedding (handles \, ", and control chars).
+ * @return Number of bytes written (excluding NUL).
+ */
+static size_t jsonEscape(char* dst, size_t dstLen, const char* src) {
+    size_t d = 0;
+    for (size_t i = 0; src[i] && d + 6 < dstLen; i++) {
+        char c = src[i];
+        if (c == '"')       { dst[d++] = '\\'; dst[d++] = '"'; }
+        else if (c == '\\') { dst[d++] = '\\'; dst[d++] = '\\'; }
+        else if (c == '\n') { dst[d++] = '\\'; dst[d++] = 'n'; }
+        else if (c == '\r') { dst[d++] = '\\'; dst[d++] = 'r'; }
+        else if (c == '\t') { dst[d++] = '\\'; dst[d++] = 't'; }
+        else if ((uint8_t)c < 0x20) {
+            d += snprintf(dst + d, dstLen - d, "\\u%04x", (uint8_t)c);
+        }
+        else { dst[d++] = c; }
+    }
+    dst[d] = '\0';
+    return d;
+}
+
 size_t Frame::messageJSON(char* buffer, size_t length) {
-    //Schreibt Message-Daten in JSON-Buffer
-    JsonDocument doc;
-    // for (size_t i = 0; i < messageLength; i++) {
-    //     doc["message"]["message"][i] = message[i];
-    // }    
-    if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
+    // Build message JSON without heap-allocating JsonDocument.
+    char escapedText[512] = {0};
+    char escapedDst[MAX_CALLSIGN_LENGTH * 2 + 1] = {0};
+    char escapedDstGrp[MAX_CALLSIGN_LENGTH * 2 + 1] = {0};
+    char escapedSrc[MAX_CALLSIGN_LENGTH * 2 + 1] = {0};
+
+    jsonEscape(escapedDst, sizeof(escapedDst), dstCall);
+    jsonEscape(escapedDstGrp, sizeof(escapedDstGrp), dstGroup);
+    jsonEscape(escapedSrc, sizeof(escapedSrc), srcCall);
+
+    size_t pos = 0;
+    pos += snprintf(buffer + pos, length - pos, "{\"message\":{");
+
+    if ((messageLength > 0) && (messageType == Frame::MessageTypes::TEXT_MESSAGE || messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
         char text[messageLength + 1];
         safeUtf8Copy(text, (uint8_t*)message, messageLength);
-        doc["message"]["text"] = text;  
+        jsonEscape(escapedText, sizeof(escapedText), text);
+        pos += snprintf(buffer + pos, length - pos, "\"text\":\"%s\",", escapedText);
     }
-    doc["message"]["messageType"] = messageType;
-    doc["message"]["dstCall"] = dstCall;
-    doc["message"]["dstGroup"] = dstGroup;
-    doc["message"]["srcCall"] = srcCall;
-    doc["message"]["id"] = id;
-    doc["message"]["tx"] = tx;
-    doc["message"]["timestamp"] = timestamp;
-    doc["message"]["hopCount"] = hopCount;
-    size_t len = serializeJson(doc, buffer, length);
-    return len;
+
+    pos += snprintf(buffer + pos, length - pos,
+        "\"messageType\":%u,\"dstCall\":\"%s\",\"dstGroup\":\"%s\","
+        "\"srcCall\":\"%s\",\"id\":%lu,\"tx\":%s,\"timestamp\":%ld,\"hopCount\":%u}}",
+        messageType, escapedDst, escapedDstGrp, escapedSrc,
+        (unsigned long)id, tx ? "true" : "false",
+        (long)timestamp, hopCount);
+
+    return pos;
 }
 
 

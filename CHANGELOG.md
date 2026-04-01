@@ -2,6 +2,15 @@
 
 ## [v1.0.31]
 
+- NEU: CPU-Frequenz einstellbar (80 / 160 / 240 MHz, Default 240 MHz) – persistiert in NVS, sofort wirksam, konfigurierbar über WebUI (Dropdown unter System)
+- NEU: Channel 1 (all) und 2 (direct) können jetzt per Doppelklick stummgeschaltet werden – gleicher Dialog wie bei Gruppen-Channels, mit Tooltip auf den Icon-Buttons
+- FIX: Heap-Fragmentierung durch wiederholte JsonDocument-Allokationen behoben – Status-Broadcast, messageJSON(), sendPeerList() und sendRoutingList() verwenden jetzt snprintf statt ArduinoJson
+- FIX: malloc(4096)/malloc(2048) in processRxFrame und sendFrame durch Stack-Buffer ersetzt – weniger Heap-Druck bei hohem Nachrichtenaufkommen
+- FIX: Tote WebSocket-Clients werden jetzt periodisch (1×/s) aufgeräumt statt nur bei Connect/Disconnect-Events
+- FIX: Heap-Watchdog – automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
+- FIX: File-Serving Mutex-Timeout von 10 s auf 2 s reduziert – schnellerer Recovery bei laufenden Trim-Operationen
+- UI: Channel-Einstellungsdialog optisch überarbeitet – einheitliches Styling mit dem Rest der WebUI (CSS-Klassen statt Inline-Styles)
+
 - FIX: Build-Problem bei LILYGO T-LoraPager und SEEED SenseCAP Indicator durch doppelte `groupNames`-Deklaration behoben
 
 - NEU: WebUI grundlegend überarbeitet – Mobile und Desktop wurden zu einem gemeinsamen responsiven Interface zusammengeführt

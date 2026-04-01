@@ -782,6 +782,10 @@ function fillSettingsForm(s) {
         updateDispBrightnessLabel(parseInt(dispBrEl.value));
     }
 
+    // CPU frequency
+    var cpuFreqEl = document.getElementById("settingsCpuFrequency");
+    if (cpuFreqEl) cpuFreqEl.value = s.cpuFrequency || 240;
+
     // Serial debug
     var serialDebugEl = document.getElementById("settingsSerialDebug");
     if (serialDebugEl) serialDebugEl.checked = s.serialDebug === true;
@@ -871,6 +875,8 @@ function saveSettings() {
     if (dispBrEl) s["displayBrightness"] = parseInt(dispBrEl.value);
     var oledEnabledEl = document.getElementById("settingsOledEnabled");
     if (oledEnabledEl) s["oledEnabled"] = oledEnabledEl.checked;
+    var cpuFreqEl = document.getElementById("settingsCpuFrequency");
+    if (cpuFreqEl) s["cpuFrequency"] = parseInt(cpuFreqEl.value);
     var serialDebugEl = document.getElementById("settingsSerialDebug");
     if (serialDebugEl) s["serialDebug"] = serialDebugEl.checked;
     var oledGroupEl = document.getElementById("settingsOledDisplayGroup");

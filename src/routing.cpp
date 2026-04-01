@@ -37,25 +37,31 @@ bool checkRoute(char* srcCall, char* viaCall) {
 }
 
 void sendRoutingList() {
-    JsonDocument doc;
-    doc["routingList"]["routes"] = JsonArray();
-    for (int i = 0; i < routingList.size(); i++) {
-        JsonObject route = doc["routingList"]["routes"].add<JsonObject>();
-        route["srcCall"] = routingList[i].srcCall;
-        route["viaCall"] = routingList[i].viaCall;
-        route["timestamp"] = routingList[i].timestamp;
-        route["hopCount"] = routingList[i].hopCount;
-    }
-    
-    size_t jsonLen = measureJson(doc) + 1;
-    char* jsonBuffer = (char*)malloc(jsonLen);
-    if (jsonBuffer != nullptr) {
-        size_t len = serializeJson(doc, jsonBuffer, jsonLen);
-        wsBroadcast(jsonBuffer, len);
-        free(jsonBuffer);
-    } else {
+    // Estimate required buffer size: ~80 bytes per route entry + overhead
+    size_t bufSize = 40 + routingList.size() * 90;
+    if (bufSize < 256) bufSize = 256;
+    char* jsonBuffer = (char*)malloc(bufSize);
+    if (jsonBuffer == nullptr) {
         Serial.println(F("[OOM] sendRoutingList: malloc failed"));
+        return;
     }
+    size_t pos = 0;
+
+    pos += snprintf(jsonBuffer + pos, bufSize - pos, "{\"routingList\":{\"routes\":[");
+
+    for (size_t i = 0; i < routingList.size() && pos < bufSize - 120; i++) {
+        if (i > 0) jsonBuffer[pos++] = ',';
+        pos += snprintf(jsonBuffer + pos, bufSize - pos,
+            "{\"srcCall\":\"%s\",\"viaCall\":\"%s\",\"timestamp\":%ld,\"hopCount\":%u}",
+            routingList[i].srcCall, routingList[i].viaCall,
+            (long)routingList[i].timestamp, routingList[i].hopCount);
+    }
+
+    pos += snprintf(jsonBuffer + pos, bufSize - pos, "]}}");
+    if (pos < bufSize) {
+        wsBroadcast(jsonBuffer, pos);
+    }
+    free(jsonBuffer);
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {

@@ -428,12 +428,8 @@ void processRxFrame(Frame &f) {
                 // ── New, unseen message addressed to us, a group, or broadcast ──
 
                 // Serialize to JSON, broadcast via WebSocket, and append to flash
-                char* jsonBuffer = (char*)malloc(4096);
-                if (jsonBuffer == nullptr) {
-                    Serial.println("[OOM] processRxFrame: malloc failed");
-                    break;
-                }
-                size_t len = f.messageJSON(jsonBuffer, 4096);
+                char jsonBuffer[1024];
+                size_t len = f.messageJSON(jsonBuffer, sizeof(jsonBuffer));
                 #ifdef HAS_WIFI
                 wsBroadcast(jsonBuffer, len);
                 #endif
@@ -442,8 +438,6 @@ void processRxFrame(Frame &f) {
                 // Archive to SD card without size limit when a card is inserted
                 pagerAddMessageToSD(jsonBuffer, len);
                 #endif
-                free(jsonBuffer);
-                jsonBuffer = nullptr;
 
                 // Display incoming message on T-LoraPager screen
                 #ifdef LILYGO_T_LORA_PAGER
@@ -696,9 +690,6 @@ void setup() {
     #endif
 
     #ifndef NRF52_PLATFORM
-    // 160 MHz: guter Kompromiss zwischen Stromverbrauch und WiFi-Stabilität.
-    // Kein dynamisches Umschalten – APB-Clock-Wechsel stört laufende WiFi-Verbindungen.
-    setCpuFrequencyMhz(160);
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
     esp_log_level_set("vfs", ESP_LOG_NONE);
@@ -726,6 +717,9 @@ void setup() {
     loadSettings();
 
     #ifndef NRF52_PLATFORM
+    // CPU-Frequenz aus Settings anwenden (Default 240 MHz).
+    // Kein dynamisches Umschalten – APB-Clock-Wechsel stört laufende WiFi-Verbindungen.
+    setCpuFrequencyMhz(cpuFrequency);
     Serial.setDebugOutput(serialDebug);
     #endif
 
@@ -989,23 +983,37 @@ void loop() {
     if (timerExpired(statusTimer)) {
         statusTimer = millis() + 1000;
         #ifdef HAS_WIFI
-        JsonDocument doc;
-        doc["status"]["time"]         = time(NULL);
-        doc["status"]["tx"]           = txFlag;
-        doc["status"]["rx"]           = rxFlag;
-        doc["status"]["txBufferCount"]= txBuffer.size();
-        doc["status"]["retry"]        = currentRetry;
-        doc["status"]["heap"]         = ESP.getFreeHeap();
-        doc["status"]["minHeap"]      = ESP.getMinFreeHeap();
-        doc["status"]["uptime"]       = millis() / 1000;
-        doc["status"]["cpuFreq"]      = getCpuFrequencyMhz();
-        doc["status"]["resetReason"]  = lastResetReason;
+        // Periodically clean up dead WebSocket clients to prevent heap leaks
+        ws.cleanupClients();
+
+        // Build status JSON on the stack without JsonDocument to avoid heap fragmentation
+        char jsonBuffer[384];
+        int len;
         #ifdef HAS_BATTERY_ADC
-        if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
+        if (batteryEnabled) {
+            len = snprintf(jsonBuffer, sizeof(jsonBuffer),
+                "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
+                "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                "\"cpuFreq\":%u,\"resetReason\":%d,\"battery\":%.2f}}",
+                (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
+                (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
+                ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                lastResetReason, getBatteryVoltage());
+        } else
         #endif
-        char jsonBuffer[512];
-        size_t len = serializeJson(doc, jsonBuffer, sizeof(jsonBuffer));
-        wsBroadcast(jsonBuffer, len);
+        {
+            len = snprintf(jsonBuffer, sizeof(jsonBuffer),
+                "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
+                "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                "\"cpuFreq\":%u,\"resetReason\":%d}}",
+                (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
+                (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
+                ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                lastResetReason);
+        }
+        if (len > 0 && (size_t)len < sizeof(jsonBuffer)) {
+            wsBroadcast(jsonBuffer, len);
+        }
         #endif
         // Expire stale peers once per second
         checkPeerList();
@@ -1015,6 +1023,15 @@ void loop() {
             sendPeerList();
         }
     }
+
+    // ── 7a. Heap watchdog — reboot when heap is critically low ──────────────
+    #ifndef NRF52_PLATFORM
+    if (ESP.getFreeHeap() < 10000 && !rebootRequested) {
+        Serial.printf("[HEAP] Critical: %u bytes free — rebooting\n", ESP.getFreeHeap());
+        rebootTimer = millis() + 500;
+        rebootRequested = true;
+    }
+    #endif
 
     // ── 7b. Periodic flash persistence of routes/peers ─────────────────────
     if (timerExpired(persistTimer)) {

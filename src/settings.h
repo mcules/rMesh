@@ -96,6 +96,9 @@ extern int8_t wifiTxPower;
 // Display brightness (0-255, persisted, applied to LCD/OLED where supported)
 extern uint8_t displayBrightness;
 
+// CPU frequency in MHz (80, 160, 240; persisted, applied at boot)
+extern uint16_t cpuFrequency;
+
 // OLED status display settings (boards with SSD1306)
 extern bool oledEnabled;                // Display on/off (persisted, survives reboot)
 extern char oledDisplayGroup[17];       // Group to show last message from

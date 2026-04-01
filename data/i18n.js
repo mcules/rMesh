@@ -43,6 +43,7 @@ const I18N = {
         'setup.section_system': 'System',
         'setup.language': 'Language:',
         'setup.chat_fontsize': 'Chat font size:',
+        'setup.cpu_frequency': 'CPU Frequency:',
         'setup.serial_debug': 'Serial Debug:',
         // Network
         'net.ap': 'Access Point:', 'net.ap_name': 'AP Name:', 'net.ap_password': 'AP Password:',
@@ -118,6 +119,7 @@ const I18N = {
         'setup.section_system': 'System',
         'setup.language': 'Sprache:',
         'setup.chat_fontsize': 'Chat-Schriftgröße:',
+        'setup.cpu_frequency': 'CPU-Frequenz:',
         'setup.serial_debug': 'Serieller Debug:',
         'net.ap': 'Accesspoint:', 'net.ap_name': 'AP-Name:', 'net.ap_password': 'AP-Passwort:',
         'net.wifi_networks': 'WLAN-Netzwerke', 'net.favorite': 'Bevorzugt',

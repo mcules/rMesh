@@ -293,6 +293,13 @@ void startWebServer() {
                 displayBrightness = json["settings"]["displayBrightness"].as<uint8_t>();
                 if (displayBrightness < 5) displayBrightness = 5;
             }
+            if (json["settings"]["cpuFrequency"].is<JsonVariant>()) {
+                uint16_t freq = json["settings"]["cpuFrequency"].as<uint16_t>();
+                if (freq == 80 || freq == 160 || freq == 240) {
+                    cpuFrequency = freq;
+                    setCpuFrequencyMhz(cpuFrequency);
+                }
+            }
             if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
                 oledEnabled = json["settings"]["oledEnabled"].as<bool>();
             }
@@ -441,7 +448,8 @@ void startWebServer() {
         String path = request->url();
         if (path == "/") path = "/index.html";
 
-        if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
+        // Shorter timeout (2s) — prevents long UI hangs during trim operations
+        if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(2000))) {
             bool gzipped = !LittleFS.exists(path) && LittleFS.exists(path + ".gz");
             String servePath = gzipped ? path + ".gz" : path;
 

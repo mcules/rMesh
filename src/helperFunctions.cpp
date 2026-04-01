@@ -100,18 +100,12 @@ void sendFrame(Frame &f) {
     if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
 
     //Message an Websocket senden & speichern
-    char* jsonBuffer = (char*)malloc(2048);
-    if (jsonBuffer == nullptr) {
-        Serial.println("[OOM] sendFrame: malloc failed");
-        return;
-    }
-    size_t len = f.messageJSON(jsonBuffer, 2048);
+    char jsonBuffer[1024];
+    size_t len = f.messageJSON(jsonBuffer, sizeof(jsonBuffer));
     #ifdef HAS_WIFI
     wsBroadcast(jsonBuffer, len);
     #endif
     addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
-    free(jsonBuffer);
-    jsonBuffer = nullptr;
 }
 
 void sendMessage(const char* dst, const char* text, uint8_t messageType) {
