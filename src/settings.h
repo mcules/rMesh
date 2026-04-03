@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <vector>
+#include "config.h"
 
 #ifdef NRF52_PLATFORM
 #include "platform_nrf52.h"
@@ -19,14 +20,14 @@ struct WifiNetwork {
     bool favorite;
 };
 
-//Konfiguration
+//Configuration
 struct Settings {
   bool dhcpActive;
   bool apMode;
   char wifiSSID[64];    // Kept for display-device compatibility; synced with wifiNetworks
   char wifiPassword[64];
-  char mycall[17];
-  char position[24];   // lat/lon "48.1234,11.5678" oder Maidenhead-Locator "JN48mw"
+  char mycall[17];  // WebUI validates MAX_CALLSIGN_LENGTH; keep [17] for NVS struct compatibility
+  char position[24];   // lat/lon "48.1234,11.5678" or Maidenhead locator "JN48mw"
   char ntpServer[64];
 #ifdef HAS_WIFI
   IPAddress wifiIP;
@@ -85,10 +86,10 @@ extern Settings settings;
 extern ExtSettings extSettings;
 extern Preferences prefs;
 extern uint8_t updateChannel; // 0=release (default), 1=dev
-extern bool loraEnabled;      // HF-Sender aktiv (false = LoRa komplett deaktiviert)
-extern bool loraReady;  // true = HF-Modul initialisiert und betriebsbereit
-extern bool batteryEnabled;       // Akkustand anzeigen
-extern float batteryFullVoltage;  // Spannung bei 100 % (V)
+extern bool loraEnabled;      // RF transmitter active (false = LoRa completely disabled)
+extern bool loraReady;  // true = RF module initialized and operational
+extern bool batteryEnabled;       // Show battery level
+extern float batteryFullVoltage;  // Voltage at 100% (V)
 
 // WiFi TX power (dBm, persisted, clamped to WIFI_MAX_TX_POWER_DBM per HAL)
 extern int8_t wifiTxPower;

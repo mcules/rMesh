@@ -15,34 +15,92 @@
 #include "peer.h"
 #include "config.h"
 #include "routing.h"
+#include "logging.h"
 
+
+// Monotonic message-ID counter, seeded with a random value on boot so that
+// IDs don't collide across reboots.  Incremented for every outgoing message.
+static uint32_t msgIdCounter = 0;
+static bool     msgIdSeeded  = false;
+
+static uint32_t nextMsgId() {
+    if (!msgIdSeeded) {
+        #ifdef NRF52_PLATFORM
+        msgIdCounter = (uint32_t)random(0, INT32_MAX);
+        #else
+        msgIdCounter = esp_random();
+        #endif
+        msgIdSeeded = true;
+    }
+    return ++msgIdCounter;
+}
 
 void printHexArray(uint8_t* data, size_t length) {
   for (size_t i = 0; i < length; i++) {
     if (data[i] < 0x10) {
-      Serial.print("0"); // Führende Null für Werte kleiner als 16
+      Serial.print("0"); // Leading zero for values less than 16
     }
     Serial.print(data[i], HEX); 
-    Serial.print(" "); // Leerzeichen zur besseren Lesbarkeit
+    Serial.print(" "); // Space for better readability
   }
-  Serial.println(); // Zeilenumbruch am Ende
+  Serial.println(); // Newline at the end
 }
 
 
 
+// ── Deferred send queue ──────────────────────────────────────────────────────
+// sendFrame() is not thread-safe (it mutates txBuffer and the messages[]
+// ring-buffer without locking).  The async WebSocket handler runs on a
+// different FreeRTOS task, so calling sendFrame() from there is a race.
+// Instead, background tasks push the prepared Frame into a small queue
+// protected by pendingSendMutex; the main loop drains it once per iteration.
+
+static SemaphoreHandle_t pendingSendMutex = NULL;
+static std::vector<Frame> pendingSendQueue;
+
+void initPendingSendQueue() {
+    pendingSendMutex = xSemaphoreCreateMutex();
+    pendingSendQueue.reserve(5);
+}
+
+void processPendingSends() {
+    if (pendingSendQueue.empty()) return;
+    std::vector<Frame> local;
+    if (xSemaphoreTake(pendingSendMutex, pdMS_TO_TICKS(50))) {
+        local.swap(pendingSendQueue);
+        xSemaphoreGive(pendingSendMutex);
+    }
+    for (auto& frame : local) {
+        sendFrame(frame);
+    }
+}
+
 void sendFrame(Frame &f) {
-    //Frame senden
-    f.id = millis();
+    // Defer to main loop if called from a background task (e.g. WebSocket)
+    if (mainLoopTaskHandle != NULL && xTaskGetCurrentTaskHandle() != mainLoopTaskHandle) {
+        if (pendingSendMutex != NULL && xSemaphoreTake(pendingSendMutex, pdMS_TO_TICKS(500))) {
+            if (pendingSendQueue.size() < TX_BUFFER_SIZE) {
+                pendingSendQueue.push_back(f);
+            } else {
+                logPrintf(LOG_WARN, "TX", "Pending send queue full, dropping frame");
+            }
+            xSemaphoreGive(pendingSendMutex);
+        }
+        return;
+    }
+
+    //Send frame
+    f.id = nextMsgId();
     f.timestamp = time(NULL);
     f.tx = true;
 
-    //Nach Route suchen
+    //Search for route
     bool routing = false;
     char viaCall[MAX_CALLSIGN_LENGTH + 1] = {0};
     getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);    
     if (strlen(viaCall) > 0) { routing = true; }
 
-    // Prüfen ob das geroutete Ziel per WiFi erreichbar ist
+    // Check if the routed destination is reachable via WiFi
     bool routeViaWifi = false;
     if (routing) {
         for (size_t pi = 0; pi < peerList.size(); pi++) {
@@ -55,7 +113,7 @@ void sendFrame(Frame &f) {
     }
 
     for (int port = 1; port >= 0; port--) {
-        // LoRa komplett überspringen wenn geroutetes Ziel per WiFi erreichbar (WiFi = primär, HF = Fallback)
+        // Skip LoRa entirely if routed destination is reachable via WiFi (WiFi = primary, RF = fallback)
         if (port == 0 && routeViaWifi) continue;
 
         uint8_t availableNodeCount = 0;
@@ -64,26 +122,30 @@ void sendFrame(Frame &f) {
         f.initRetry = TX_RETRY;
         f.syncFlag = false;
         f.port = port;
-        //An alle Peers senden
+        //Send to all peers
         for (int i = 0; i < peerList.size(); i++) {
             if ((peerList[i].available) && (peerList[i].port == port)) {
                 if ((routing == false) || (strcmp(peerList[i].nodeCall, viaCall) == 0)) {
                     availableNodeCount++;
                     f.port = peerList[i].port;
                     memcpy(f.viaCall, peerList[i].nodeCall, sizeof(f.viaCall));
+                    if (txBuffer.size() >= TX_BUFFER_SIZE) {
+                        logPrintf(LOG_WARN, "TX", "Buffer full, dropping frame");
+                        continue;
+                    }
                     if (txBuffer.size() == 0) {f.syncFlag = true;} else {f.syncFlag = false;}
                     txBuffer.push_back(f);
                 }
             }
         }
 
-        //Wenn keine Peers, Frame ohne Ziel und Retry senden (WiFi nur wenn Peers konfiguriert sind)
+        //If no peers, send frame without destination and retry (WiFi only if peers are configured)
         #ifdef HAS_WIFI
         bool skipUdpBroadcast = (port == 1 && udpPeers.empty());
         #else
         bool skipUdpBroadcast = (port == 1);
         #endif
-        if (availableNodeCount == 0 && !skipUdpBroadcast) {
+        if (availableNodeCount == 0 && !skipUdpBroadcast && txBuffer.size() < TX_BUFFER_SIZE) {
             f.viaCall[0] = 0;
             f.retry = 1;
             f.initRetry = 1;
@@ -93,13 +155,12 @@ void sendFrame(Frame &f) {
         }
     }
 
-    //Message in Ringpuffer speichern
+    //Store message in ring buffer
     strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
     messages[messagesHead].id = f.id;
-    messagesHead++;
-    if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
+    if (++messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }                        
 
-    //Message an Websocket senden & speichern
+    //Send message to WebSocket & store
     char jsonBuffer[1024];
     size_t len = f.messageJSON(jsonBuffer, sizeof(jsonBuffer));
     #ifdef HAS_WIFI
@@ -110,26 +171,26 @@ void sendFrame(Frame &f) {
 
 void sendMessage(const char* dst, const char* text, uint8_t messageType) {
     if (strlen(text) == 0) {return;}
-    //Neuen Frame für alle Peers zusammenbauen
+    //Build new frame for all peers
     Frame f;
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
     strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
-    safeUtf8Copy((char*)f.dstCall, (uint8_t*)dst, MAX_CALLSIGN_LENGTH);
-    safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
+    safeUtf8Copy((char*)f.dstCall, (uint8_t*)dst, MAX_CALLSIGN_LENGTH, sizeof(f.dstCall));
+    safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message), sizeof(f.message));
     f.messageLength = strlen((char*)f.message);
     sendFrame(f);
 }
 
 void sendGroup(const char* dst, const char* text, uint8_t messageType) {
     if (strlen(text) == 0) {return;}
-    //Neuen Frame für alle Peers zusammenbauen
+    //Build new frame for all peers
     Frame f;
     f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
     f.messageType = messageType;
     strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
-    safeUtf8Copy((char*)f.dstGroup, (uint8_t*)dst, MAX_CALLSIGN_LENGTH);
-    safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message));
+    safeUtf8Copy((char*)f.dstGroup, (uint8_t*)dst, MAX_CALLSIGN_LENGTH, sizeof(f.dstGroup));
+    safeUtf8Copy((char*)f.message, (uint8_t*)text, sizeof(f.message), sizeof(f.message));
     f.messageLength = strlen((char*)f.message);
     sendFrame(f);
 }
@@ -137,7 +198,7 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
 // void addJSONtoFileTask(void * pvParameters) {
 //     FileWriteParams* p = (FileWriteParams*) pvParameters;
 
-//     // Warten, bis das Dateisystem frei ist (max 30 Sekunden warten)
+//     // Wait until the filesystem is free (max 30 seconds)
 //     if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
 //         //Zeilen zählen
 //         size_t lineCount = 0;
@@ -190,13 +251,13 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
 
 void addJSONtoFileTask(void * pvParameters) {
     FileWriteParams* p = (FileWriteParams*) pvParameters;
-    // Warten, bis das Dateisystem frei ist (max 30 Sekunden warten)
+    // Wait until the filesystem is free (max 30 seconds)
     if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
         // Check free space before writing (ESP32 only — nRF52 InternalFS has no totalBytes())
         #ifndef NRF52_PLATFORM
         size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
         if (freeSpace < FS_MIN_FREE_BYTES) {
-            Serial.printf("[FS] Low space (%u bytes free) — skipping write, requesting trim\n", freeSpace);
+            logPrintf(LOG_WARN, "FS", "Low space (%u bytes free) — skipping write, requesting trim", freeSpace);
             trimNeeded = true;
             xSemaphoreGive(fsMutex);
             if (p->content != nullptr) free(p->content);
@@ -206,38 +267,38 @@ void addJSONtoFileTask(void * pvParameters) {
         }
         #endif
 
-        // Datei im Append-Modus öffnen ("a")
-        // Falls die Datei nicht existiert, wird sie automatisch erstellt.
+        // Open file in append mode ("a")
+        // If the file does not exist, it will be created automatically.
         File file = LittleFS.open(p->fileName, "a");
         if (file) {
             if (p->content != nullptr && p->length > 0) {
-                // Den neuen Inhalt ans Ende schreiben
+                // Write the new content to the end
                 file.write((const uint8_t*)p->content, p->length);
-                file.print("\n"); // Neue Zeile für den nächsten Eintrag
+                file.print("\n"); // Newline for the next entry
             }
             file.close();
         } else {
-            Serial.printf("Fehler: Konnte Datei %s nicht zum Anhängen öffnen!\n", p->fileName);
+            logPrintf(LOG_ERROR, "FS", "Could not open file %s for appending", p->fileName);
         }
-        xSemaphoreGive(fsMutex); // Semaphore wieder freigeben
+        xSemaphoreGive(fsMutex); // Release semaphore
     } else {
-        Serial.println("Fehler: fsMutex Timeout in addJSONtoFileTask");
+        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in addJSONtoFileTask");
     }
-   // Speicherbereinigung
+   // Memory cleanup
     if (p->content != nullptr) {
         free(p->content);
     }
     delete p;
-    // Task beenden
+    // End task
     vTaskDelete(NULL);
 }
 
 
 void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
-    // Parameter für den Task vorbereiten
+    // Prepare parameters for the task
     FileWriteParams* p = new FileWriteParams();
     if (p == nullptr) {
-        Serial.println("[OOM] addJSONtoFile: new FileWriteParams failed");
+        logPrintf(LOG_ERROR, "FS", "addJSONtoFile: new FileWriteParams failed");
         return;
     }
     // 1. Inhalt kopieren
@@ -246,12 +307,12 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
         memcpy(p->content, buffer, length);
         p->length = length;
     } else {
-        Serial.println("[OOM] addJSONtoFile: malloc content failed");
+        logPrintf(LOG_ERROR, "FS", "addJSONtoFile: malloc content failed");
         p->length = 0;
     }
-    // 2. Dateinamen kopieren (DAS FEHLTE)
+    // 2. Copy filename (THIS WAS MISSING)
     strncpy(p->fileName, file, sizeof(p->fileName) - 1);
-    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Sicherstellen der Null-Terminierung
+    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Ensure null termination
     p->maxLines = lines;
     xTaskCreate(
         addJSONtoFileTask, 
@@ -266,9 +327,10 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
 
 void trimFileTask(void * pvParameters) {
     FileWriteParams* p = (FileWriteParams*) pvParameters;
-    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-        // 1. Zeilen zählen
-        size_t lineCount = 0;
+
+    // Phase 1: Count lines (short mutex hold)
+    size_t lineCount = 0;
+    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
         File countFile = LittleFS.open(p->fileName, "r");
         if (countFile) {
             while (countFile.available()) {
@@ -276,57 +338,64 @@ void trimFileTask(void * pvParameters) {
             }
             countFile.close();
         }
-        // Berechnen, wie viele Zeilen übersprungen werden müssen
-        if (lineCount > p->maxLines) {
-            size_t linesToSkip = lineCount - p->maxLines;
-            
-            File srcFile = LittleFS.open(p->fileName, "r");
-            File dstFile = LittleFS.open("/temp_trim.json", "w");
-            
-            if (srcFile && dstFile) {
-                char* lineBuffer = (char*)malloc(4096);
-                if (lineBuffer == nullptr) {
-                    srcFile.close();
-                    dstFile.close();
-                    xSemaphoreGive(fsMutex);
-                    delete p;
-                    vTaskDelete(NULL);
-                    return;
-                }
+        xSemaphoreGive(fsMutex);
+    } else {
+        delete p;
+        vTaskDelete(NULL);
+        return;
+    }
 
-                size_t currentLine = 0;
+    if (lineCount <= p->maxLines) {
+        delete p;
+        vTaskDelete(NULL);
+        return;
+    }
 
-                while (srcFile.available()) {
-                    // Zeile lesen
-                    int len = srcFile.readBytesUntil('\n', lineBuffer, 4096);
+    // Phase 2: Trim file (separate mutex hold)
+    size_t linesToSkip = lineCount - p->maxLines;
+    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
+        File srcFile = LittleFS.open(p->fileName, "r");
+        File dstFile = LittleFS.open("/temp_trim.json", "w");
 
-                    // Nur behalten, wenn wir über dem Skip-Limit sind
-                    if (currentLine >= linesToSkip) {
-                        dstFile.write((const uint8_t*)lineBuffer, len);
-                        dstFile.print("\n");
-                    }
-                    currentLine++;
-                }
-
+        if (srcFile && dstFile) {
+            char* lineBuffer = (char*)malloc(4096);
+            if (lineBuffer == nullptr) {
                 srcFile.close();
                 dstFile.close();
-                free(lineBuffer);
-                lineBuffer = nullptr;
-
-                // Alte Datei ersetzen
-                LittleFS.remove(p->fileName);
-                LittleFS.rename("/temp_trim.json", p->fileName);
-
-            } else {
-                // Close whichever file was successfully opened
-                if (srcFile) srcFile.close();
-                if (dstFile) dstFile.close();
+                xSemaphoreGive(fsMutex);
+                delete p;
+                vTaskDelete(NULL);
+                return;
             }
+
+            size_t currentLine = 0;
+
+            while (srcFile.available()) {
+                int len = srcFile.readBytesUntil('\n', lineBuffer, 4096);
+
+                if (currentLine >= linesToSkip) {
+                    dstFile.write((const uint8_t*)lineBuffer, len);
+                    dstFile.print("\n");
+                }
+                currentLine++;
+            }
+
+            srcFile.close();
+            dstFile.close();
+            free(lineBuffer);
+            lineBuffer = nullptr;
+
+            LittleFS.remove(p->fileName);
+            LittleFS.rename("/temp_trim.json", p->fileName);
+
+        } else {
+            if (srcFile) srcFile.close();
+            if (dstFile) dstFile.close();
         }
         xSemaphoreGive(fsMutex);
     }
 
-    delete p; // p->content ist hier nullptr, daher nur p löschen
+    delete p;
     vTaskDelete(NULL);
 }
 
@@ -334,16 +403,16 @@ void trimFileTask(void * pvParameters) {
 void trimFile(const char* fileName, size_t maxLines) {
     FileWriteParams* p = new FileWriteParams();
     if (p == nullptr) {
-        Serial.println("[OOM] trimFile: new FileWriteParams failed");
+        logPrintf(LOG_ERROR, "FS", "trimFile: new FileWriteParams failed");
         return;
     }
     strncpy(p->fileName, fileName, sizeof(p->fileName) - 1);
-    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Null-Terminierung erzwingen
+    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Force null termination
     p->maxLines = (uint16_t)maxLines;
     p->content = nullptr;
     p->length = 0;
 
-    // Task starten (Priorität etwas niedriger, da es ein Hintergrundjob ist)
+    // Start task (slightly lower priority since it's a background job)
     xTaskCreate(trimFileTask, "trimFileTask", 8192, p, 1, NULL);
 }
 
@@ -358,7 +427,7 @@ uint32_t getTOA(uint16_t payloadBytes) {
     bool DE = ( ( (1 << SF) * 1000 / BW ) > 16 ); 
     float Tsym = (float)(1 << SF) / (float)BW * 1000.0f;
     float Tpreamble = (settings.loraPreambleLength + 4.25f) * Tsym;
-    float payloadBits = 8.0f * payloadBytes - 4.0f * SF + 28.0f + 16.0f; // +16 für CRC
+    float payloadBits = 8.0f * payloadBytes - 4.0f * SF + 28.0f + 16.0f; // +16 for CRC
     float bitsPerSymbol = 4.0f * (SF - (DE ? 2 : 0));
     float payloadSymbols = 8.0f + fmaxf(ceilf(payloadBits / bitsPerSymbol) * (CR + 4), 0.0f);
     return (uint32_t)roundf(Tpreamble + (payloadSymbols * Tsym));
@@ -382,18 +451,18 @@ static inline bool isCont(uint8_t b) {
     return (b & 0xC0) == 0x80; // 0b10xxxxxx
 }
 
-void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength) {
+void safeUtf8Copy(char* dest, const uint8_t* src, size_t srcLen, size_t dstSize) {
     size_t d = 0;
 
-    for (size_t i = 0; i < maxLength; ) {
+    for (size_t i = 0; i < srcLen; ) {
         uint8_t b = src[i];
 
         if (b == 0x00) break;
 
         // ASCII
         if (b < 0x80) {
-            // JSON: nur erlaubte ASCII-Zeichen
-            if (b >= 0x20 || b == '\n' || b == '\r' || b == '\t') {
+            // JSON: only allowed ASCII characters
+            if ((b >= 0x20 || b == '\n' || b == '\r' || b == '\t') && d + 1 < dstSize) {
                 dest[d++] = b;
             }
             i++;
@@ -402,7 +471,7 @@ void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength) {
 
         // 2-Byte UTF-8
         if (b >= 0xC2 && b <= 0xDF) {
-            if (i + 1 < maxLength && isCont(src[i+1])) {
+            if (i + 1 < srcLen && d + 2 < dstSize && isCont(src[i+1])) {
                 dest[d++] = b;
                 dest[d++] = src[i+1];
             }
@@ -412,7 +481,7 @@ void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength) {
 
         // 3-Byte UTF-8
         if (b >= 0xE0 && b <= 0xEF) {
-            if (i + 2 < maxLength &&
+            if (i + 2 < srcLen && d + 3 < dstSize &&
                 isCont(src[i+1]) &&
                 isCont(src[i+2])) {
 
@@ -426,7 +495,7 @@ void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength) {
 
         // 4-Byte UTF-8
         if (b >= 0xF0 && b <= 0xF4) {
-            if (i + 3 < maxLength &&
+            if (i + 3 < srcLen && d + 4 < dstSize &&
                 isCont(src[i+1]) &&
                 isCont(src[i+2]) &&
                 isCont(src[i+3])) {
@@ -440,7 +509,7 @@ void safeUtf8Copy(char* dest, const uint8_t* src, size_t maxLength) {
             continue;
         }
 
-        // Alles andere verwerfen
+        // Discard everything else
         i++;
     }
 
@@ -454,7 +523,7 @@ void getFormattedTime(const char* format, char* outBuffer, size_t outSize) {
     struct tm timeinfo;
     
     if (!localtime_r(&now, &timeinfo)) {
-        snprintf(outBuffer, outSize, "Zeitfehler");
+        snprintf(outBuffer, outSize, "Time error");
         return;
     }
 

@@ -15,6 +15,7 @@
 #include "routing.h"
 #include "peer.h"
 #include "wifiFunctions.h"
+#include "logging.h"
 
 #include <LilyGoLib.h>
 #include <WiFi.h>
@@ -168,7 +169,7 @@ enum FieldType {
     FTYPE_DELETE_GROUP,   // delete group, aux = group index
     FTYPE_TOGGLE_MUTE,    // toggle mute,   aux = group index
     FTYPE_TOGGLE_INSAM,   // toggle inSammel, aux = group index
-    FTYPE_SET_SAMMEL,     // set/unset as Sammelgruppe, aux = group index
+    FTYPE_SET_SAMMEL,     // set/unset as collection group, aux = group index
 };
 
 struct DropF { const char* label; float v; };
@@ -197,8 +198,8 @@ static int  groupCount  = 0;
 static int  groupUnread[MAX_GROUPS]  = {0};
 static bool groupMute[MAX_GROUPS]    = {false};
 static bool groupInSammel[MAX_GROUPS]= {false};
-static int  sammelGroupIdx           = -1;   // Index der Sammelgruppe, -1 = keine
-static int  activeGroup = -1;   // -1 = "Alle"
+static int  sammelGroupIdx           = -1;   // Index of collection group, -1 = none
+static int  activeGroup = -1;   // -1 = "All"
 
 // ─── Forward declarations ──────────────────────────────────────────────
 static void doSave();
@@ -284,8 +285,8 @@ static MenuItem setupItems[] = {
 };
 
 // Dynamically built group menu
-// Per group: [Name] + [Loeschen] + [Stumm] + [Sammel/InSammel]
-// At the end: [+ Neue Gruppe] + [Speichern]
+// Per group: [Name] + [Delete] + [Mute] + [Collection/InCollection]
+// At the end: [+ New Group] + [Save]
 static MenuItem groupItemsBuf[MAX_GROUPS * 4 + 2];  // 4 items per group
 static char     groupLabelBufs[MAX_GROUPS][16];
 static char     groupMuteLbls [MAX_GROUPS][16];
@@ -382,9 +383,9 @@ static bool      monNewData  = false;
 // ─── Group helper functions ────────────────────────────────────────────
 static int buildTabList(int* tabList) {
     int count = 0;
-    tabList[count++] = -1;  // "Alle"
+    tabList[count++] = -1;  // "All"
     for (int i = 0; i < groupCount; i++) {
-        // inSammel-Gruppen werden nicht als eigener Tab angezeigt
+        // inSammel groups are not shown as a separate tab
         if (strlen(groupNames[i]) > 0 && !groupInSammel[i]) tabList[count++] = i;
     }
     return count;
@@ -946,7 +947,7 @@ static void drawMenuIcon(int idx, int ix, int iy, uint16_t col, uint16_t bg) {
             spr.fillRect(ix+11, iy+6, 3, 2, col);
             spr.fillRect(ix+0,  iy+6, 3, 2, col);
             break;
-        case 3: // Gruppen – two people
+        case 3: // Groups – two people
             spr.fillCircle(ix+4,  iy+3, 2, col);
             spr.fillRect(ix+2,   iy+6, 4, 6, col);
             spr.fillCircle(ix+10, iy+3, 2, col);
@@ -1464,11 +1465,11 @@ static void activateItem() {
             int idx = item.aux;
             if (idx >= 0 && idx < groupCount) {
                 if (sammelGroupIdx == idx) {
-                    // Ist die Sammelgruppe selbst → aufheben
+                    // This is the collection group itself -> unset it
                     sammelGroupIdx = -1;
                     for (int j = 0; j < groupCount; j++) groupInSammel[j] = false;
                 } else if (sammelGroupIdx < 0) {
-                    // Noch keine Sammelgruppe → diese Gruppe als Sammelgruppe setzen
+                    // No collection group yet -> set this group as collection group
                     sammelGroupIdx = idx;
                 } else if (groupInSammel[idx]) {
                     groupInSammel[idx] = false;
@@ -1547,10 +1548,10 @@ static void scrollListTo(int newSel) {
 
 // ─── Public API ───────────────────────────────────────────────────────
 void initDisplay() {
-    Serial.println("[disp] instance.begin() ...");
+    logPrintf(LOG_INFO, "Display", "instance.begin() ...");
     Serial.flush();
     uint32_t probe = instance.begin(NO_INIT_FATFS);
-    Serial.printf("[disp] instance.begin() done, probe=0x%08X\n", probe);
+    logPrintf(LOG_INFO, "Display", "instance.begin() done, probe=0x%08X", probe);
     Serial.flush();
 
     dispBrightness = (float)displayBrightness;
@@ -1603,7 +1604,7 @@ void initDisplay() {
     lcd.setFont(&fonts::Font0);
     lcd.endWrite();
     instance.unlockSPI();
-    Serial.println("[disp] lcd.init() done"); Serial.flush();
+    logPrintf(LOG_INFO, "Display", "lcd.init() done"); Serial.flush();
 
     instance.setBrightness((uint8_t)dispBrightness);
     delay(600);
@@ -1614,7 +1615,7 @@ void displayOnNewMessage(const char* srcCall, const char* text, const char* dstG
     const char* grp = (dstGroup && strlen(dstGroup) > 0) ? dstGroup : "";
     const char* dst = (dstCall  && strlen(dstCall)  > 0) ? dstCall  : "";
 
-    // Sammelgruppe-Umleitung: Nachricht in Sammelgruppe-Gruppe einsortieren
+    // Collection group redirect: sort message into collection group
     const char* storeGrp = grp;
     if (strlen(grp) > 0 && sammelGroupIdx >= 0) {
         for (int i = 0; i < groupCount; i++) {
@@ -1626,14 +1627,14 @@ void displayOnNewMessage(const char* srcCall, const char* text, const char* dstG
     }
     addLine(srcCall, text, false, storeGrp, dst);
 
-    // Unread-Counter: nur für normale, nicht-gemutete Gruppen
+    // Unread counter: only for normal, non-muted groups
     if (strlen(grp) > 0) {
         for (int i = 0; i < groupCount; i++) {
             if (strcmp(groupNames[i], grp) == 0) {
                 if (!groupMute[i] && !groupInSammel[i] && activeGroup != i) {
                     groupUnread[i]++;
                 }
-                // Sammelgruppe selbst bekommt keinen Unread-Counter
+                // Collection group itself does not get an unread counter
                 break;
             }
         }

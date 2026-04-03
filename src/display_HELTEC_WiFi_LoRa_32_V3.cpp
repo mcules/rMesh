@@ -9,6 +9,7 @@
 #include "settings.h"
 #include "hal.h"
 #include "webFunctions.h"
+#include "logging.h"
 
 // ── OLED pin definitions ────────────────────────────────────────────────────
 #define OLED_SDA  17
@@ -56,13 +57,13 @@ bool initStatusDisplay() {
     Wire.beginTransmission(OLED_I2C_ADDR);
     if (Wire.endTransmission() != 0) {
         displayDetected = false;
-        Serial.println("[OLED] No SSD1306 found");
+        logPrintf(LOG_WARN, "Display", "No SSD1306 found");
         return false;
     }
 
     u8g2.begin();
     displayDetected = true;
-    Serial.println("[OLED] SSD1306 detected (Heltec V3)");
+    logPrintf(LOG_INFO, "Display", "SSD1306 detected (Heltec V3)");
 
     if (oledEnabled) {
         updateStatusDisplay();

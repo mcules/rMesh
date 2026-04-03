@@ -8,6 +8,7 @@
 #include "main.h"
 #include "helperFunctions.h"
 #include "dutycycle.h"
+#include "logging.h"
 
 // ── LoRa Radio (SX1262 on dedicated SPI bus) ────────────────────────────────
 
@@ -21,7 +22,7 @@ bool rxFlag = false;
 
 static void printState(int state) {
     if (state != RADIOLIB_ERR_NONE) {
-        Serial.printf("FAILED! code %d\n", state);
+        logPrintf(LOG_ERROR, "LoRa", "FAILED! code %d", state);
     }
 }
 
@@ -61,7 +62,7 @@ void initHal() {
 
     // Check if LoRa frequency is configured
     if (!loraConfigured(settings.loraFrequency)) {
-        Serial.println("[LoRa] No frequency configured - RF disabled.");
+        logPrintf(LOG_WARN, "LoRa", "No frequency configured - RF disabled.");
         loraReady = false;
         return;
     }
@@ -83,7 +84,7 @@ void initHal() {
         false   // use DC-DC regulator (not LDO)
     );
     if (state != RADIOLIB_ERR_NONE) {
-        Serial.printf("[LoRa] SX1262 init failed (code %d)\n", state);
+        logPrintf(LOG_ERROR, "LoRa", "SX1262 init failed (code %d)", state);
         loraReady = false;
         return;
     }
@@ -96,9 +97,9 @@ void initHal() {
     // Start continuous receive
     printState(radio.startReceive());
     loraReady = true;
-    Serial.printf("[LoRa] Ready: %.3f MHz SF%d BW%.1f\n",
-                  settings.loraFrequency, settings.loraSpreadingFactor,
-                  settings.loraBandwidth);
+    logPrintf(LOG_INFO, "LoRa", "Ready: %.3f MHz SF%d BW%.1f",
+              settings.loraFrequency, settings.loraSpreadingFactor,
+              settings.loraBandwidth);
 
     // Brief LED flash to confirm radio init
     digitalWrite(PIN_LED_GREEN, HIGH);
@@ -131,7 +132,7 @@ bool checkReceive(Frame &f) {
         uint8_t rxBuffer[256];
         size_t rxBufferLength = radio.getPacketLength();
         int16_t state = radio.readData(rxBuffer, rxBufferLength);
-        //RSSI/SNR VOR startReceive() lesen, da startReceive() die Register zurücksetzen kann
+        //Read RSSI/SNR BEFORE startReceive(), as startReceive() can reset the registers
         float rxRssi = radio.getRSSI();
         float rxSnr = radio.getSNR();
         float rxFrqError = radio.getFrequencyError();
@@ -158,7 +159,6 @@ void transmitFrame(Frame &f) {
     uint8_t txBuffer[255];
     size_t txBufferLength;
 
-    txFlag = true;
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx = true;
@@ -172,12 +172,12 @@ void transmitFrame(Frame &f) {
     if (isPublicBand(settings.loraFrequency)) {
         uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
         if (!dutyCycleAllowed(toa)) {
-            Serial.println("[LoRa] Duty cycle limit reached, TX skipped.");
+            logPrintf(LOG_WARN, "LoRa", "Duty cycle limit reached, TX skipped.");
             return;
         }
-        dutyCycleTrackTx(toa);
     }
 
+    txFlag = true;
     radio.startTransmit(txBuffer, txBufferLength);
 
     // Log to monitor

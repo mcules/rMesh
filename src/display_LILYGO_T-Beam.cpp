@@ -9,6 +9,7 @@
 #include "settings.h"
 #include "hal.h"
 #include "webFunctions.h"
+#include "logging.h"
 
 // ── OLED configuration (matches sfambach/ThingPulse reference) ──────────────
 #define OLED_SDA  21
@@ -30,14 +31,14 @@ bool initStatusDisplay() {
     Wire.beginTransmission(OLED_I2C_ADDR);
     if (Wire.endTransmission() != 0) {
         displayDetected = false;
-        Serial.println("[OLED] No display found");
+        logPrintf(LOG_WARN, "Display", "No display found");
         return false;
     }
 
     display.init();
     display.flipScreenVertically();
     displayDetected = true;
-    Serial.println("[OLED] SSD1306 128x64 detected (T-Beam, ThingPulse)");
+    logPrintf(LOG_INFO, "Display", "SSD1306 128x64 detected (T-Beam, ThingPulse)");
 
     if (oledEnabled) {
         updateStatusDisplay();

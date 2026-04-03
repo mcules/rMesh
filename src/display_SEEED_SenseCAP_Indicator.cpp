@@ -17,6 +17,7 @@
 #include "routing.h"
 #include "peer.h"
 #include "wifiFunctions.h"
+#include "logging.h"
 
 #include <Wire.h>
 #include <WiFi.h>
@@ -58,23 +59,23 @@ static void utf8ToCP437(const char* src, char* dst, size_t dstLen) {
     dst[di] = '\0';
 }
 
-// ─── Display-Konstanten ───────────────────────────────────────────────────────
+// ─── Display constants ───────────────────────────────────────────────────────
 #define DISP_W      480
 #define DISP_H      480
 
-// Grundlayout
-#define HDR_H       18      // Kopfzeile
-#define TAB_H       32      // Gruppen-Tabs
-#define NAV_H       50      // Navigationsleiste unten
+// Base layout
+#define HDR_H       18      // Header bar
+#define TAB_H       32      // Group tabs
+#define NAV_H       50      // Navigation bar at bottom
 #define NAV_Y       (DISP_H - NAV_H)                    // 430
 
-// Chat ohne Tastatur
+// Chat without keyboard
 #define MSG_Y       (HDR_H + TAB_H)                     // 50
 #define INPUT_H     36
 #define INPUT_Y     (NAV_Y - INPUT_H)                   // 394
 #define MSG_H       (INPUT_Y - MSG_Y)                   // 344
 
-// Chat mit Tastatur
+// Chat with keyboard
 #define KBD_ROW_H   41
 #define KBD_ROWS    4
 #define KBD_H       (KBD_ROWS * KBD_ROW_H)              // 164
@@ -82,7 +83,7 @@ static void utf8ToCP437(const char* src, char* dst, size_t dstLen) {
 #define INPUT_Y_KBD (KBD_Y - INPUT_H)                   // 230
 #define MSG_H_KBD   (INPUT_Y_KBD - MSG_Y)               // 180
 
-// Menü (Modal, fullscreen)
+// Menu (modal, fullscreen)
 #define MENU_HDR_H      40
 #define MENU_ITEM_H     48
 #define MENU_AREA_H     (NAV_Y - MENU_HDR_H)            // 390
@@ -224,7 +225,7 @@ bool pca9535_read_bit(int bit) {
     return false;
 }
 
-// ─── UiMode & Menü-Typen ──────────────────────────────────────────────────────
+// ─── UiMode & menu types ─────────────────────────────────────────────────────
 enum UiMode {
     UI_CHAT, UI_MENU_TOP, UI_MENU_LIST,
     UI_EDIT_STR, UI_EDIT_NUM, UI_EDIT_DROP,
@@ -238,7 +239,7 @@ enum FieldType {
     FTYPE_DELETE_GROUP,   // delete group, aux = group index
     FTYPE_TOGGLE_MUTE,    // toggle mute,   aux = group index
     FTYPE_TOGGLE_INSAM,   // toggle inSammel, aux = group index
-    FTYPE_SET_SAMMEL,     // set/unset as Sammelgruppe, aux = group index
+    FTYPE_SET_SAMMEL,     // set/unset as collection group, aux = group index
 };
 
 struct DropF { const char* label; float v; };
@@ -273,15 +274,15 @@ static char monLines[MON_HISTORY][MON_LINE_W];
 static int  monHead  = 0;
 static int  monCount = 0;
 
-// Gruppen
+// Groups
 static int  groupCount  = 0;
 static int  groupUnread[MAX_GROUPS]  = {0};
 static bool groupMute[MAX_GROUPS]    = {false};
 static bool groupInSammel[MAX_GROUPS]= {false};
-static int  sammelGroupIdx           = -1;   // Index der Sammelgruppe, -1 = keine
+static int  sammelGroupIdx           = -1;   // Index of collection group, -1 = none
 static int  activeGroup = -1;
 
-// Tastatur & Eingabe
+// Keyboard & input
 static bool keyboardVisible = false;
 static bool kbdNumMode      = false;
 
@@ -291,12 +292,12 @@ static int  inputLen = 0;
 static char editStrBuf[INPUT_MAX_LEN + 1] = {0};
 static int  editStrLen = 0;
 
-// Zeiger auf den aktiven Puffer (Chat oder Edit)
+// Pointer to the active buffer (chat or edit)
 static char* kbdBuf = inputBuf;
 static int*  kbdLen = &inputLen;
 static int   kbdMax = INPUT_MAX_LEN;
 
-// Menü-Zustand
+// Menu state
 static UiMode    uiMode      = UI_CHAT;
 static int       topSel      = 0;
 static int       listSel     = 0;
@@ -313,7 +314,7 @@ static char      setupChipId[13] = {0};
 static bool     needRedraw = true;
 static int      lastMinute = -1;
 
-// View-State: 0=Nachrichten 1=Peers 2=Routen (nur im UI_CHAT)
+// View state: 0=Messages 1=Peers 2=Routes (only in UI_CHAT)
 static int currentView = 0;
 
 // ─── Forward Declarations ─────────────────────────────────────────────────────
@@ -330,7 +331,7 @@ static void buildGroupMenu();
 static void deleteGroup(int idx);
 static void fullRedraw();
 
-// ─── Dropdown-Optionen ────────────────────────────────────────────────────────
+// ─── Dropdown options ────────────────────────────────────────────────────────
 static const DropF bwOpts[] = {
     {"7 kHz",7.0f},{"10,4 kHz",10.4f},{"15,6 kHz",15.6f},
     {"20,8 kHz",20.8f},{"31,25 kHz",31.25f},{"62,5 kHz",62.5f},
@@ -346,7 +347,7 @@ static const DropI sfOpts[] = {
     {"11 - Maximum",11},{"12 - Deep Indoor",12},
 };
 
-// ─── IP-Hilfsfunktionen ───────────────────────────────────────────────────────
+// ─── IP helper functions ─────────────────────────────────────────────────────
 static char tmpPeerIP[5][16];
 
 static void ipToStr(IPAddress& ip, char* buf, int len) {
@@ -358,7 +359,7 @@ static void strToIP(const char* s, IPAddress& ip) {
     ip = IPAddress(a,b,c,d);
 }
 
-// ─── Menü-Arrays ──────────────────────────────────────────────────────────────
+// ─── Menu arrays ─────────────────────────────────────────────────────────────
 static MenuItem netItems[] = {
     {"AP Mode",     FTYPE_BOOL,   &settings.apMode,       0, nullptr, nullptr,  0.f, 0.f, 0.f, nullptr},
     {"SSID",        FTYPE_STRING, settings.wifiSSID,     63, nullptr, nullptr,  0.f, 0.f, 0.f, nullptr},
@@ -434,16 +435,16 @@ static void fmtAge(time_t t, char* buf, size_t bufLen) {
     else                  snprintf(buf, bufLen, "%lldd", (long long)(age/86400));
 }
 
-// ─── Menü-Aktionen ────────────────────────────────────────────────────────────
+// ─── Menu actions ────────────────────────────────────────────────────────────
 static void doSave() {
-    // Erste 5 Einträge aus Display-UI in den dynamischen Vektor übernehmen
-    // Leere / 0.0.0.0-Einträge am Ende abschneiden, bestehende Legacy-Flags behalten
+    // Transfer first 5 entries from display UI into dynamic vector
+    // Trim empty / 0.0.0.0 entries at the end, keep existing legacy flags
     IPAddress parsedIPs[5];
     for (int i = 0; i < 5; i++) strToIP(tmpPeerIP[i], parsedIPs[i]);
-    // Vektor neu aufbauen: vorhandene Legacy-Flags für die ersten 5 Slots merken
+    // Rebuild vector: remember existing legacy flags for the first 5 slots
     bool legacyBak[5] = {};
     for (int i = 0; i < 5 && (size_t)i < udpPeerLegacy.size(); i++) legacyBak[i] = (bool)udpPeerLegacy[i];
-    // Peers >5 aus altem Vektor retten
+    // Rescue peers >5 from old vector
     std::vector<IPAddress> tail;
     std::vector<bool> tailLegacy;
     for (size_t i = 5; i < udpPeers.size(); i++) { tail.push_back(udpPeers[i]); tailLegacy.push_back((bool)udpPeerLegacy[i]); }
@@ -659,7 +660,7 @@ static void fmtValue(char* buf, int buflen, MenuItem& item) {
     }
 }
 
-// ─── Kopfzeile ────────────────────────────────────────────────────────────────
+// ─── Header bar ──────────────────────────────────────────────────────────────
 static void drawHeader(bool menuOpen) {
     lcd.fillRect(0, 0, DISP_W, HDR_H, COL_HDR_BG);
     lcd.setTextColor(COL_HDR_FG, COL_HDR_BG);
@@ -674,20 +675,20 @@ static void drawHeader(bool menuOpen) {
     char tbuf[6]; snprintf(tbuf, sizeof(tbuf), "%02d:%02d", tm.tm_hour, tm.tm_min);
     lcd.drawString(tbuf, DISP_W - 70, 1);
 
-    // Menü-Button (≡ Hamburger) — als Pixel-Balken gezeichnet
+    // Menu button (hamburger icon) — drawn as pixel bars
     uint32_t mbg = menuOpen ? COL_NAV_ACT_BG : COL_HDR_BG;
     uint32_t mfg = menuOpen ? COL_NAV_ACT_FG : 0xFFFFu;
     lcd.fillRect(DISP_W - 28, 0, 28, HDR_H, mbg);
-    // 3 waagerechte Balken bei y = 3, 8, 13
+    // 3 horizontal bars at y = 3, 8, 13
     lcd.fillRect(DISP_W - 24, 3,  20, 3, mfg);
     lcd.fillRect(DISP_W - 24, 8,  20, 3, mfg);
     lcd.fillRect(DISP_W - 24, 13, 20, 2, mfg);
 }
 
-// ─── Gruppen-Tabs ─────────────────────────────────────────────────────────────
+// ─── Group tabs ──────────────────────────────────────────────────────────────
 static void drawTabs() {
     lcd.fillRect(0, HDR_H, DISP_W, TAB_H, COL_TAB_BG);
-    lcd.setTextSize(2);  // größer für Touch
+    lcd.setTextSize(2);  // larger for touch
 
     int tabList[MAX_GROUPS + 1]; int tabCount = 0;
     tabList[tabCount++] = -1;
@@ -715,7 +716,7 @@ static void drawTabs() {
     lcd.setTextSize(1);
 }
 
-// ─── Navigationsleiste ────────────────────────────────────────────────────────
+// ─── Navigation bar ──────────────────────────────────────────────────────────
 static void drawNavBar() {
     const int third = DISP_W / 3;  // 160px
     lcd.setTextSize(1);
@@ -741,12 +742,12 @@ static void drawNavBar() {
 
     lcd.drawFastVLine(2*third, NAV_Y, NAV_H, COL_SEPARATOR);
 
-    // Tastatur-Toggle
+    // Keyboard toggle
     lcd.fillRect(2*third+1, NAV_Y, third-1, NAV_H, COL_NAV_BG);
     lcd.setTextColor(keyboardVisible ? COL_NAV_ACT_FG : COL_NAV_FG,
                      keyboardVisible ? COL_NAV_ACT_BG : COL_NAV_BG);
     if (keyboardVisible) lcd.fillRect(2*third+1, NAV_Y, third-1, NAV_H, COL_NAV_ACT_BG);
-    // Tastatur-Icon: einfaches Symbol
+    // Keyboard icon: simple symbol
     lcd.setTextSize(1);
     const char* kbdIcon = keyboardVisible ? "[ v ]" : "[ ^ ]";
     int kw = strlen(kbdIcon) * 6;
@@ -755,7 +756,7 @@ static void drawNavBar() {
     lcd.setTextSize(1);
 }
 
-// ─── Menü-Navigationsleiste (Zurück) ─────────────────────────────────────────
+// ─── Menu navigation bar (back) ──────────────────────────────────────────────
 static void drawMenuNavBack(const char* hint = "< Zurueck") {
     lcd.fillRect(0, NAV_Y, DISP_W, NAV_H, COL_MENU_HDR);
     lcd.drawFastHLine(0, NAV_Y, DISP_W, COL_SEPARATOR);
@@ -766,7 +767,7 @@ static void drawMenuNavBack(const char* hint = "< Zurueck") {
     lcd.setTextSize(1);
 }
 
-// ─── Eingabezeile ─────────────────────────────────────────────────────────────
+// ─── Input line ──────────────────────────────────────────────────────────────
 static void drawInputBar(int iy) {
     lcd.fillRect(0, iy, DISP_W, INPUT_H, COL_INPUT_BG);
     lcd.drawFastHLine(0, iy, DISP_W, COL_SEPARATOR);
@@ -784,7 +785,7 @@ static void drawInputBar(int iy) {
     char dispLine[INPUT_MAX_LEN + 24];
     char* buf = kbdBuf;
     snprintf(dispLine, sizeof(dispLine), "%s%s", prompt, buf);
-    // Zeige nur die letzten ~78 Zeichen (480px / 6px = 80 Zeichen)
+    // Show only the last ~78 characters (480px / 6px = 80 characters)
     int dispLen = strlen(dispLine);
     int maxChars = (DISP_W - 8) / 6;
     const char* showStart = dispLine;
@@ -798,7 +799,7 @@ static void drawInputBar(int iy) {
     lcd.drawFastVLine(cursorX, iy + 4, INPUT_H - 8, COL_CURSOR);
 }
 
-// ─── Software-Tastatur ────────────────────────────────────────────────────────
+// ─── Software keyboard ───────────────────────────────────────────────────────
 static const char* kbdRowsQWERTY[3] = {"QWERTYUIOP", "ASDFGHJKL\x7F", "ZXCVBNM,.~"};
 static const char* kbdRowsNum[3]    = {"1234567890", "-_+=/:.,!\x7F", "@#$%&*()?~"};
 // \x7F = Backspace marker,  ~ = Enter marker
@@ -831,7 +832,7 @@ static void drawKeyboard() {
         }
     }
 
-    // Zeile 3: [123/ABC] [SPACE×5] [DEL] [SEND]
+    // Row 3: [123/ABC] [SPACE x5] [DEL] [SEND]
     int y3 = KBD_Y + 3 * KBD_ROW_H;
     // 123/ABC (96px)
     lcd.fillRect(kx+1,   y3+1, 95, KBD_ROW_H-2, COL_KBD_SP_BG);
@@ -857,7 +858,7 @@ static void drawKeyboard() {
     lcd.setTextSize(1);
 }
 
-// ─── Tastatur-Eingabe verarbeiten ─────────────────────────────────────────────
+// ─── Process keyboard input ──────────────────────────────────────────────────
 static void handleKbdChar(char c) {
     if (*kbdLen >= kbdMax) return;
     kbdBuf[(*kbdLen)++] = c;
@@ -930,7 +931,7 @@ static void handleKbdSend() {
     if (inputLen == 0) return;
     inputBuf[inputLen] = '\0';
 
-    // Rufzeichen prüfen
+    // Check callsign
     if (strlen(settings.mycall) == 0) {
         addLine("!", "Kein Rufzeichen! Bitte in Setup konfigurieren.", false, "");
         needRedraw = true;
@@ -952,7 +953,7 @@ static void handleKbdSend() {
     needRedraw = true;
 }
 
-// ─── Nachrichtenbereich ───────────────────────────────────────────────────────
+// ─── Message area ────────────────────────────────────────────────────────────
 static void drawMessages(int msgH) {
     lcd.fillRect(0, MSG_Y, DISP_W, msgH, COL_BG);
     lcd.setTextSize(1);
@@ -982,13 +983,13 @@ static void drawMessages(int msgH) {
         int callW = strlen(cbuf) * 6 + 4;
         lcd.setTextColor(0xFFFFu, COL_BG);
         char tbuf[INPUT_MAX_LEN + 1]; utf8ToCP437(cl.text, tbuf, sizeof(tbuf));
-        // Wrapping: bei 480px - callW (max 78 Zeichen pro Zeile)
+        // Wrapping: at 480px - callW (max 78 characters per line)
         int avail = (DISP_W - 2 - callW) / 6;
         lcd.drawString(tbuf, 2 + callW, y);
     }
 }
 
-// ─── Peer-Liste ───────────────────────────────────────────────────────────────
+// ─── Peer list ───────────────────────────────────────────────────────────────
 static void drawPeerList() {
     lcd.fillRect(0, MSG_Y, DISP_W, MSG_H, COL_BG);
     lcd.setTextSize(1);
@@ -1017,7 +1018,7 @@ static void drawPeerList() {
     }
 }
 
-// ─── Routen-Liste ─────────────────────────────────────────────────────────────
+// ─── Route list ──────────────────────────────────────────────────────────────
 static void drawRouteList() {
     lcd.fillRect(0, MSG_Y, DISP_W, MSG_H, COL_BG);
     lcd.setTextSize(1);
@@ -1121,7 +1122,7 @@ static void drawAbout() {
     drawMenuNavBack("< Zurueck");
 }
 
-// ─── Menü Top-Ebene (3×3 Grid) ────────────────────────────────────────────────
+// ─── Menu top level (3x3 grid) ───────────────────────────────────────────────
 #define TOP_MENU_N  9
 static const char* topMenuLabels[TOP_MENU_N] = {
     "Network","LoRa","Setup","Gruppen","Routing","Peers","Monitor","Announce","About"
@@ -1158,7 +1159,7 @@ static void drawMenuTop() {
     drawMenuNavBack("< Zurueck");
 }
 
-// ─── Menü Item-Liste ──────────────────────────────────────────────────────────
+// ─── Menu item list ──────────────────────────────────────────────────────────
 static void drawMenuList() {
     lcd.fillScreen(COL_BG);
     lcd.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
@@ -1220,7 +1221,7 @@ static void drawMenuList() {
     drawMenuNavBack("< Zurueck");
 }
 
-// ─── Edit: String (mit Tastatur) ──────────────────────────────────────────────
+// ─── Edit: string (with keyboard) ────────────────────────────────────────────
 static void drawEditStr() {
     lcd.fillScreen(COL_BG);
     lcd.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
@@ -1234,14 +1235,14 @@ static void drawEditStr() {
     lcd.drawString(tbuf, 4, (MENU_HDR_H-16)/2);
     lcd.setTextSize(1);
 
-    // Eingabefeld
+    // Input field
     int iy = INPUT_Y_KBD;
     drawInputBar(iy);
     drawKeyboard();
     drawMenuNavBack("Abbr.");
 }
 
-// ─── Edit: Zahl (+/- Buttons) ─────────────────────────────────────────────────
+// ─── Edit: number (+/- buttons) ──────────────────────────────────────────────
 static void drawEditNum() {
     lcd.fillScreen(COL_BG);
     lcd.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
@@ -1253,7 +1254,7 @@ static void drawEditNum() {
     }
     lcd.setTextSize(1);
 
-    // Wert anzeigen
+    // Display value
     MenuItem& item = curMenu[editItemIdx];
     int dec = (item.step >= 1.0f) ? 0 : (fabsf(item.step-0.1f)<0.05f) ? 1 : 3;
     char fmt[12]; snprintf(fmt, sizeof(fmt), "%%.%df", dec);
@@ -1268,9 +1269,9 @@ static void drawEditNum() {
     lcd.drawString(valStr, (DISP_W-vw)/2, DISP_H/2 - 24);
     lcd.setTextSize(1);
 
-    // +/- Buttons
+    // +/- buttons
     const int btnW = 140, btnH = 60, btnY = DISP_H/2 + 20;
-    // --- (großer Schritt)
+    // --- (large step)
     lcd.fillRoundRect(10, btnY, btnW, btnH, 8, COL_MENU_EDIT_BG);
     lcd.setTextColor(COL_MENU_FG, COL_MENU_EDIT_BG);
     lcd.setTextSize(3);
@@ -1283,7 +1284,7 @@ static void drawEditNum() {
     lcd.fillRoundRect(DISP_W-10-btnW-10-btnW, btnY, btnW, btnH, 8, COL_MENU_EDIT_BG);
     lcd.setTextColor(COL_MENU_FG, COL_MENU_EDIT_BG);
     lcd.drawString("+", DISP_W-10-btnW-10-btnW+(btnW-18)/2, btnY+(btnH-24)/2);
-    // ++ (großer Schritt)
+    // ++ (large step)
     lcd.fillRoundRect(DISP_W-10-btnW, btnY, btnW, btnH, 8, COL_MENU_EDIT_BG);
     lcd.setTextColor(COL_MENU_FG, COL_MENU_EDIT_BG);
     lcd.drawString("++", DISP_W-10-btnW+(btnW-36)/2, btnY+(btnH-24)/2);
@@ -1301,7 +1302,7 @@ static void drawEditNum() {
     lcd.setTextSize(1);
 }
 
-// ─── Edit: Dropdown ───────────────────────────────────────────────────────────
+// ─── Edit: dropdown ──────────────────────────────────────────────────────────
 static void drawEditDrop() {
     lcd.fillScreen(COL_BG);
     lcd.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
@@ -1340,7 +1341,7 @@ static void drawEditDrop() {
     drawMenuNavBack("Abbr.");
 }
 
-// ─── Menü-Navigation ──────────────────────────────────────────────────────────
+// ─── Menu navigation ─────────────────────────────────────────────────────────
 static void openMenu() {
     for (int i = 0; i < 5; i++) {
         if ((size_t)i < udpPeers.size()) ipToStr(udpPeers[i], tmpPeerIP[i], sizeof(tmpPeerIP[i]));
@@ -1424,11 +1425,11 @@ static void activateItem() {
             int idx = item.aux;
             if (idx >= 0 && idx < groupCount) {
                 if (sammelGroupIdx == idx) {
-                    // Ist die Sammelgruppe selbst → aufheben
+                    // This is the collection group itself -> unset it
                     sammelGroupIdx = -1;
                     for (int j = 0; j < groupCount; j++) groupInSammel[j] = false;
                 } else if (sammelGroupIdx < 0) {
-                    // Noch keine Sammelgruppe → diese Gruppe als Sammelgruppe setzen
+                    // No collection group yet -> set this group as collection group
                     sammelGroupIdx = idx;
                 } else if (groupInSammel[idx]) {
                     groupInSammel[idx] = false;
@@ -1474,7 +1475,7 @@ static void confirmEditDrop() {
     uiMode = UI_MENU_LIST; needRedraw = true;
 }
 
-// ─── Vollständiges Neuzeichnen ────────────────────────────────────────────────
+// ─── Full redraw ─────────────────────────────────────────────────────────────
 static void fullRedraw() {
     switch (uiMode) {
         case UI_MENU_TOP:
@@ -1493,7 +1494,7 @@ static void fullRedraw() {
             drawEditDrop();
             break;
         case UI_ROUTING:
-            // Kompakte Routing-Liste
+            // Compact routing list
             lcd.fillScreen(COL_BG);
             lcd.fillRect(0, 0, DISP_W, MENU_HDR_H, COL_MENU_HDR);
             lcd.setTextColor(COL_MENU_HDR_FG, COL_MENU_HDR);
@@ -1585,7 +1586,7 @@ static void handleTouch(int16_t tx, int16_t ty) {
                 if (currentView != 2) { currentView = 2; needRedraw = true; }
                 else { currentView = 0; needRedraw = true; }
             } else {
-                // Tastatur toggle (nur im Nachrichten-View)
+                // Keyboard toggle (only in messages view)
                 if (currentView == 0) {
                     keyboardVisible = !keyboardVisible;
                     kbdBuf = inputBuf; kbdLen = &inputLen; kbdMax = INPUT_MAX_LEN;
@@ -1594,13 +1595,13 @@ static void handleTouch(int16_t tx, int16_t ty) {
             }
             return;
         }
-        // Tastatur
+        // Keyboard
         if (keyboardVisible && ty >= KBD_Y && ty < NAV_Y && currentView == 0) {
             handleKbdTap(tx, ty);
             needRedraw = true;
             return;
         }
-        // Gruppen-Tabs
+        // Groups-Tabs
         if (ty >= HDR_H && ty < HDR_H + TAB_H) {
             int tabList[MAX_GROUPS + 1]; int tabCount = 0;
             tabList[tabCount++] = -1;
@@ -1619,7 +1620,7 @@ static void handleTouch(int16_t tx, int16_t ty) {
             }
             return;
         }
-        // Kopfzeile: Menü-Button
+        // Header: menu button
         if (ty < HDR_H && tx >= DISP_W - 28) {
             openMenu();
             return;
@@ -1637,7 +1638,7 @@ static void handleTouch(int16_t tx, int16_t ty) {
                 enterSubmenu(idx);
             }
         } else if (ty >= NAV_Y) {
-            // Zurück
+            // Back
             uiMode = UI_CHAT; needRedraw = true;
         }
         break;
@@ -1734,7 +1735,7 @@ static void handleTouch(int16_t tx, int16_t ty) {
     }
 }
 
-// ─── Gruppen aus NVS laden ────────────────────────────────────────────────────
+// ─── Load groups from NVS ────────────────────────────────────────────────────
 static void loadGroups() {
     groupCount = prefs.getInt("grpCount", 0);
     if (groupCount > MAX_GROUPS) groupCount = MAX_GROUPS;
@@ -1751,21 +1752,21 @@ static void loadGroups() {
     }
 }
 
-// ─── Öffentliche API ──────────────────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────────────
 void initDisplay() {
     Wire.begin(SENSECAP_I2C_SDA, SENSECAP_I2C_SCL, 400000);
     pca9535_init();
 
     // I2C-Scan: Touch-Controller-Adresse
-    Serial.print("[Touch] I2C-Scan:");
+    logPrintf(LOG_INFO, "Touch", "I2C-Scan starting...");
     for (uint8_t addr = 0x08; addr < 0x78; addr++) {
         Wire.beginTransmission(addr);
         if (Wire.endTransmission() == 0) {
-            Serial.printf(" 0x%02X", addr);
+            logPrintf(LOG_INFO, "Touch", "Found device at 0x%02X", addr);
             if (addr == 0x38 || addr == 0x3B || addr == 0x48) touchAddr = addr;
         }
     }
-    Serial.printf(" -> Touch@0x%02X\n", touchAddr);
+    logPrintf(LOG_INFO, "Touch", "Touch@0x%02X", touchAddr);
 
     lcd.init();
     lcd.setRotation(2);
@@ -1778,13 +1779,13 @@ void initDisplay() {
     lcd.setFont(&fonts::Font0);
     lcd.setTextSize(1);
 
-    // Chip-ID ermitteln
+    // Determine chip ID
     uint64_t mac = ESP.getEfuseMac();
     snprintf(setupChipId, sizeof(setupChipId), "%02X%02X%02X%02X%02X%02X",
         (uint8_t)(mac>>40),(uint8_t)(mac>>32),(uint8_t)(mac>>24),
         (uint8_t)(mac>>16),(uint8_t)(mac>>8),(uint8_t)mac);
 
-    // Gruppen laden
+    // Groups laden
     loadGroups();
 
     // Initiales UI zeichnen
@@ -1793,7 +1794,7 @@ void initDisplay() {
     // LCD_CS high: LoRa-SPI nutzt GPIO41/48 — Kollision vermeiden
     pca9535_write_bit(4, true);
 
-    Serial.println("[Display] SenseCAP Indicator ST7701S 480x480 bereit.");
+    logPrintf(LOG_INFO, "Display", "SenseCAP Indicator ST7701S 480x480 bereit.");
 }
 
 void displayUpdateLoop() {
@@ -1804,7 +1805,7 @@ void displayUpdateLoop() {
         if (uiMode == UI_CHAT) needRedraw = true;
     }
 
-    // Touch-Polling alle 20 ms
+    // Touch polling every 20 ms
     static uint32_t lastTouchMs = 0;
     static bool     wasTouched  = false;
     uint32_t ms = millis();
@@ -1818,7 +1819,7 @@ void displayUpdateLoop() {
         wasTouched = touched;
     }
 
-    // Peers/Routen alle 5 s aktualisieren
+    // Update peers/routes every 5 s
     static uint32_t lastInfoRefreshMs = 0;
     if ((currentView != 0 || uiMode == UI_ROUTING || uiMode == UI_PEERS || uiMode == UI_MONITOR)
         && ms - lastInfoRefreshMs >= 5000) {
@@ -1841,7 +1842,7 @@ void displayOnNewMessage(const char* srcCall, const char* text,
 
     const char* grp = (dstGroup && strlen(dstGroup) > 0) ? dstGroup : "";
 
-    // Sammelgruppe-Umleitung: Nachricht in Sammelgruppe-Gruppe einsortieren
+    // Collection group redirect: sort message into collection group
     const char* storeGrp = grp;
     if (strlen(grp) > 0 && sammelGroupIdx >= 0) {
         for (int i = 0; i < groupCount; i++) {
@@ -1853,14 +1854,14 @@ void displayOnNewMessage(const char* srcCall, const char* text,
     }
     addLine(label, text, false, storeGrp);
 
-    // Unread-Counter: nur für normale, nicht-gemutete Gruppen
+    // Unread counter: only for normal, non-muted groups
     if (strlen(grp) > 0) {
         for (int i = 0; i < groupCount; i++) {
             if (strcmp(groupNames[i], grp) == 0) {
                 if (!groupMute[i] && !groupInSammel[i] && activeGroup != i) {
                     groupUnread[i]++;
                 }
-                // Sammelgruppe selbst bekommt keinen Unread-Counter
+                // Collection group itself does not get an unread counter
                 break;
             }
         }

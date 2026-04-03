@@ -43,6 +43,7 @@
 #include "dutycycle.h"
 #include "persistence.h"
 #include "time.h"
+#include "logging.h"
 
 #ifdef LILYGO_T_LORA_PAGER
 #include "display_LILYGO_T-LoraPager.h"
@@ -106,6 +107,8 @@ uint16_t messagesHead = 0;
 
 /** Mutex protecting all LittleFS accesses. */
 SemaphoreHandle_t fsMutex = NULL;
+SemaphoreHandle_t listMutex = NULL;
+TaskHandle_t mainLoopTaskHandle = NULL;
 
 // ── Timing ────────────────────────────────────────────────────────────────────
 
@@ -144,6 +147,8 @@ bool pendingManualUpdate = false;
 bool pendingShutdown     = false;
 bool pendingForceUpdate  = false;
 uint8_t pendingForceChannel = 0;
+bool pendingLoraReinit   = false;
+bool pendingSettingsSave = false;
 
 /** First OTA update check fires 1 hour after boot. */
 uint32_t updateCheckTimer = 60 * 60 * 1000;
@@ -232,9 +237,7 @@ void processRxFrame(Frame &f) {
         dbg["rssi"] = f.rssi;
         dbg["snr"] = f.snr;
         dbg["port"] = f.port;
-        Serial.print("DBG:");
-        serializeJson(dbg, Serial);
-        Serial.println();
+        logJson(dbg);
     }
 
     // Update peer list with signal quality data from this frame
@@ -252,7 +255,7 @@ void processRxFrame(Frame &f) {
                 if (f.port == 0) {
                     bool peerOnWifi = false;
                     for (size_t pi = 0; pi < peerList.size(); pi++) {
-                        if (strcmp(f.nodeCall, peerList[pi].nodeCall) == 0 && peerList[pi].port == 1) {
+                        if (strcmp(f.nodeCall, peerList[pi].nodeCall) == 0 && peerList[pi].port == 1 && peerList[pi].available) {
                             peerOnWifi = true; break;
                         }
                     }
@@ -266,7 +269,7 @@ void processRxFrame(Frame &f) {
                     case 1: tf.transmitMillis = millis(); break;
                 }
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
-                txBuffer.push_back(tf);
+                if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(tf);
             }
             break;
 
@@ -314,9 +317,7 @@ void processRxFrame(Frame &f) {
                 dbgAck["srcCall"] = f.srcCall;
                 dbgAck["nodeCall"] = f.nodeCall;
                 dbgAck["id"] = f.id;
-                Serial.print("DBG:");
-                serializeJson(dbgAck, Serial);
-                Serial.println();
+                logJson(dbgAck);
             }
             break;
 
@@ -367,7 +368,7 @@ void processRxFrame(Frame &f) {
                 addACK(f.srcCall, f.nodeCall, f.id);
                 tf.frameType = Frame::FrameTypes::MESSAGE_ACK_FRAME;
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
-                memcpy(tf.srcCall, f.nodeCall, sizeof(tf.srcCall));
+                memcpy(tf.srcCall, f.srcCall, sizeof(tf.srcCall));
                 tf.id = f.id;
                 // Send the ACK via the same transport the peer is reachable on
                 bool nodeOnWifi = false;
@@ -380,11 +381,11 @@ void processRxFrame(Frame &f) {
                 if (nodeOnWifi) {
                     tf.port = 1;
                     tf.transmitMillis = 0;
-                    txBuffer.push_back(tf);
+                    if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(tf);
                 } else {
                     tf.port = 0;
                     tf.transmitMillis = millis() + calculateAckTime();
-                    txBuffer.push_back(tf);
+                    if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(tf);
                 }
             }
 
@@ -494,15 +495,33 @@ void processRxFrame(Frame &f) {
                         sendMessage(f.srcCall, traceMsg, Frame::MessageTypes::TRACE_MESSAGE);
                 }
 
-                // Remote COMMAND: execute instructions sent directly to this node
+                // Remote COMMAND: execute instructions sent directly to this node (only from known peers)
+                // The command is only executed after it has been successfully logged to the web backend.
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::COMMAND_MESSAGE) ) {
+                    bool cmdFromKnownPeer = false;
+                    for (size_t pi = 0; pi < peerList.size(); pi++) {
+                        if (strcmp(peerList[pi].nodeCall, f.srcCall) == 0 && peerList[pi].available) {
+                            cmdFromKnownPeer = true;
+                            break;
+                        }
+                    }
+                    if (!cmdFromKnownPeer) break;
+
+                    const char* cmdName = nullptr;
                     switch (f.message[0]) {
-                        case 0xff: // Version query: reply with firmware info string
-                            sendMessage(f.srcCall, NAME " " VERSION " " PIO_ENV_NAME);
-                            break;
-                        case 0xfe: // Reboot: schedule restart in 2.5 s
-                            rebootTimer = millis() + 2500; rebootRequested = true;
-                            break;
+                        case 0xff: cmdName = "version"; break;
+                        case 0xfe: cmdName = "reboot";  break;
+                    }
+
+                    if (cmdName && logRemoteCommand(f.srcCall, cmdName)) {
+                        switch (f.message[0]) {
+                            case 0xff: // Version query: reply with firmware info string
+                                sendMessage(f.srcCall, NAME " " VERSION " " PIO_ENV_NAME);
+                                break;
+                            case 0xfe: // Reboot: schedule restart in 2.5 s
+                                rebootTimer = millis() + 2500; rebootRequested = true;
+                                break;
+                        }
                     }
                 }
 
@@ -600,10 +619,12 @@ void processRxFrame(Frame &f) {
                                     memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
                                     tf.retry = TX_RETRY;
                                     tf.initRetry = TX_RETRY;
-                                    txBuffer.push_back(tf);
-                                    // Pre-record ACK so we don't send a redundant ACK
-                                    // if the peer echoes the message back
-                                    addACK(tf.srcCall, tf.viaCall, tf.id);
+                                    if (txBuffer.size() < TX_BUFFER_SIZE) {
+                                        txBuffer.push_back(tf);
+                                        // Pre-record ACK so we don't send a redundant ACK
+                                        // if the peer echoes the message back
+                                        addACK(tf.srcCall, tf.viaCall, tf.id);
+                                    }
                                 }
                             }
                         }
@@ -635,16 +656,16 @@ void setup() {
     // Initialise UART debug output
     Serial.begin(115200);
     #ifndef NRF52_PLATFORM
-    // setDebugOutput erst nach Settings-Load aktivieren (siehe unten),
-    // damit frühe UART-Ausgaben nicht den esptool auto-reset stören.
+    // Enable setDebugOutput only after settings load (see below),
+    // so early UART output doesn't interfere with esptool auto-reset.
     #endif
 
     #if defined(LILYGO_T_LORA_PAGER)
     // USB-CDC needs ~1 s to enumerate; early output would be lost
     delay(2000);
-    Serial.println("=== rMesh T-LoraPager boot ===");
-    Serial.printf("PSRAM: %s (%u bytes)\n", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
-    Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
+    logPrintf(LOG_INFO, "Boot", "=== rMesh T-LoraPager boot ===");
+    logPrintf(LOG_INFO, "Boot", "PSRAM: %s (%u bytes)", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
+    logPrintf(LOG_INFO, "Boot", "Free heap: %u", ESP.getFreeHeap());
     Serial.flush();
     #elif defined(SEEED_SENSECAP_INDICATOR)
     // UART0 via CH340 bridge — ready immediately, no wait needed
@@ -670,18 +691,17 @@ void setup() {
 
     #ifndef NRF52_PLATFORM
     lastResetReason = getResetReasonStr();
-    Serial.printf("\n[Boot] Reset reason: %s\n", lastResetReason);
-    Serial.printf("[Boot] Free heap: %u bytes\n", ESP.getFreeHeap());
+    logPrintf(LOG_INFO, "Boot", "Reset reason: %s", lastResetReason);
+    logPrintf(LOG_INFO, "Boot", "Free heap: %u bytes", ESP.getFreeHeap());
 
-    // ESP32 (original): Task-WDT deaktivieren, da der WiFi-Stack bei
-    // Scans/Reconnects CPU 0 für >30s blockiert. ESP32-S3 hat dieses
-    // Problem nicht. Der Interrupt-WDT bleibt als Sicherheitsnetz aktiv.
-    // WDT wird mit langem Timeout neu initialisiert statt deaktiviert,
-    // damit esp_task_wdt_reset()-Aufrufe aus Arduino/async_tcp nicht spammen.
+    // ESP32 (original): Reinitialize task WDT with reduced timeout,
+    // since the WiFi stack blocks CPU 0 for >30 s during scans/reconnects.
+    // ESP32-S3 does not have this issue. The interrupt WDT remains
+    // active as a safety net.
     #if !CONFIG_IDF_TARGET_ESP32S3 && !CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32C3
     esp_task_wdt_deinit();
     esp_task_wdt_config_t twdt_config = {
-        .timeout_ms = 120000,
+        .timeout_ms = 45000,
         .idle_core_mask = 0,
         .trigger_panic = true
     };
@@ -705,20 +725,23 @@ void setup() {
     InternalFS.begin();
     #else
     if (!LittleFS.begin(false)) {
-        Serial.println("[FS] Mount failed — formatting...");
+        logPrintf(LOG_WARN, "FS", "Mount failed — formatting...");
         if (!LittleFS.begin(true)) {
-            Serial.println("[FS] Format failed!");
+            logPrintf(LOG_ERROR, "FS", "Format failed!");
         }
     }
     #endif
     fsMutex = xSemaphoreCreateMutex();
+    listMutex = xSemaphoreCreateMutex();
+    mainLoopTaskHandle = xTaskGetCurrentTaskHandle();
+    initPendingSendQueue();
 
     // Load user settings from NVS / InternalFS
     loadSettings();
 
     #ifndef NRF52_PLATFORM
-    // CPU-Frequenz aus Settings anwenden (Default 240 MHz).
-    // Kein dynamisches Umschalten – APB-Clock-Wechsel stört laufende WiFi-Verbindungen.
+    // Apply CPU frequency from settings (default 240 MHz).
+    // No dynamic switching – APB clock changes disrupt active WiFi connections.
     setCpuFrequencyMhz(cpuFrequency);
     Serial.setDebugOutput(serialDebug);
     #endif
@@ -732,10 +755,9 @@ void setup() {
             if (error == DeserializationError::Ok) {
                 const char* tempSrc = doc["message"]["srcCall"] | "";
                 uint32_t tempId = doc["message"]["id"] | 0;
-                strncpy(messages[messagesHead].srcCall, tempSrc, MAX_CALLSIGN_LENGTH);
+                strncpy(messages[messagesHead].srcCall, tempSrc, MAX_CALLSIGN_LENGTH + 1);
                 messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
-                messagesHead++;
-                if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
+                if (++messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
             } else if (error != DeserializationError::EmptyInput) {
                 file.readStringUntil('\n'); // skip malformed line and continue
             }
@@ -774,7 +796,10 @@ void setup() {
     // Start the async web server and WebSocket endpoint
     startWebServer();
 
-    Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);
+    logPrintf(LOG_INFO, "System", "");
+    logPrintf(LOG_INFO, "System", "%s", PIO_ENV_NAME);
+    logPrintf(LOG_INFO, "System", "%s %s", NAME, VERSION);
+    logPrintf(LOG_INFO, "System", "READY.");
 
     // Emit ready event for test framework (only when debug enabled)
     if (serialDebug) {
@@ -783,9 +808,7 @@ void setup() {
         dbgReady["call"] = settings.mycall;
         dbgReady["version"] = VERSION;
         dbgReady["board"] = PIO_ENV_NAME;
-        Serial.print("DBG:");
-        serializeJson(dbgReady, Serial);
-        Serial.println();
+        logJson(dbgReady);
     }
 }
 
@@ -808,6 +831,9 @@ void setup() {
  * 11. Topology reporting (hourly + change-driven 30 s debounce).
  */
 void loop() {
+    // ── 0. Deferred sends from background tasks (e.g. WebSocket) ────────────
+    processPendingSends();
+
     // ── 1. Serial input ───────────────────────────────────────────────────────
     checkSerialRX();
 
@@ -843,10 +869,10 @@ void loop() {
         f.transmitMillis = 0;
         #ifdef HAS_WIFI
         f.port = 1;
-        txBuffer.push_back(f);
+        if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
         #endif
         f.port = 0;
-        txBuffer.push_back(f);
+        if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
         sendPeerList();
     }
 
@@ -885,6 +911,9 @@ void loop() {
                 // so remote receivers can settle back into RX mode (improves range)
                 if (txBuffer[i].port == 0 && !timerExpired(loraFluxGuard)) break;
 
+                // Track whether the frame was actually transmitted (not just postponed)
+                bool postponed = false;
+
                 // Transmit — discard silently if LoRa is disabled on this device
                 if (txBuffer[i].port == 0 && !loraEnabled) {
                     txBuffer[i].retry = 0;
@@ -896,6 +925,7 @@ void loop() {
                             if (isPublicBand(settings.loraFrequency) && !dutyCycleAllowed(toa)) {
                                 // Postpone frame instead of dropping it
                                 txBuffer[i].transmitMillis = millis() + 5000;
+                                postponed = true;
                                 break;
                             }
                             transmitFrame(txBuffer[i]);
@@ -907,6 +937,9 @@ void loop() {
                         }
                         case 1: sendUDP(txBuffer[i]); break;
                     }
+
+                    // Duty cycle postponed: skip retry logic, try again later
+                    if (postponed) break;
 
                     // Debug output for test framework
                     if (serialDebug) {
@@ -921,9 +954,7 @@ void loop() {
                         dbgTx["hopCount"] = txBuffer[i].hopCount;
                         dbgTx["port"] = txBuffer[i].port;
                         dbgTx["retry"] = txBuffer[i].retry;
-                        Serial.print("DBG:");
-                        serializeJson(dbgTx, Serial);
-                        Serial.println();
+                        logJson(dbgTx);
                     }
                 }
                 // Decrement retry counter and track progress for the status update
@@ -994,7 +1025,7 @@ void loop() {
             len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                 "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
                 "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
-                "\"cpuFreq\":%u,\"resetReason\":%d,\"battery\":%.2f}}",
+                "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"battery\":%.2f}}",
                 (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
                 (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
                 ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
@@ -1005,7 +1036,7 @@ void loop() {
             len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                 "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
                 "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
-                "\"cpuFreq\":%u,\"resetReason\":%d}}",
+                "\"cpuFreq\":%u,\"resetReason\":\"%s\"}}",
                 (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
                 (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
                 ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
@@ -1026,10 +1057,15 @@ void loop() {
 
     // ── 7a. Heap watchdog — reboot when heap is critically low ──────────────
     #ifndef NRF52_PLATFORM
-    if (ESP.getFreeHeap() < 10000 && !rebootRequested) {
-        Serial.printf("[HEAP] Critical: %u bytes free — rebooting\n", ESP.getFreeHeap());
-        rebootTimer = millis() + 500;
-        rebootRequested = true;
+    {
+        uint32_t freeHeap = ESP.getFreeHeap();
+        uint32_t maxAlloc = ESP.getMaxAllocHeap();
+        if ((freeHeap < 10000 || maxAlloc < 4096) && !rebootRequested) {
+            logPrintf(LOG_ERROR, "HEAP", "Critical: %u bytes free, largest block %u — rebooting",
+                      freeHeap, maxAlloc);
+            rebootTimer = millis() + 500;
+            rebootRequested = true;
+        }
     }
     #endif
 
@@ -1065,6 +1101,18 @@ void loop() {
         checkForUpdates(true, pendingForceChannel);
     }
     #endif
+
+    // Deferred settings save from WebSocket handler
+    if (pendingSettingsSave) {
+        pendingSettingsSave = false;
+        saveSettings();
+    }
+
+    // Deferred LoRa reinit after settings change
+    if (pendingLoraReinit) {
+        pendingLoraReinit = false;
+        initHal();
+    }
 
     // ── 10. messages.json housekeeping ────────────────────────────────────────
     if (trimNeeded) {

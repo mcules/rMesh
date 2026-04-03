@@ -1,18 +1,18 @@
 /*
  * hal_SEEED_SenseCAP_Indicator.cpp
  *
- * HAL für den Seeed Studio SenseCAP Indicator D1L (ESP32-S3R8 + SX1262).
+ * HAL for the Seeed Studio SenseCAP Indicator D1L (ESP32-S3R8 + SX1262).
  *
- * SX1262-Anbindung:
- *   SPI-Datenleitungen:  SCK=GPIO41, MOSI=GPIO48, MISO=GPIO47  (Hardware-SPI FSPI)
- *   Steuerpins via PCA9535 I2C-Expander (0x20, Port 0):
- *     Bit 0 = CS   (Ausgang, active low)
- *     Bit 1 = RST  (Ausgang, active low)
- *     Bit 2 = BUSY (Eingang, HIGH = chip beschäftigt)
- *     Bit 3 = DIO1 (Eingang, IRQ-Signal vom SX1262)
+ * SX1262 connection:
+ *   SPI data lines:  SCK=GPIO41, MOSI=GPIO48, MISO=GPIO47  (hardware SPI FSPI)
+ *   Control pins via PCA9535 I2C expander (0x20, port 0):
+ *     Bit 0 = CS   (output, active low)
+ *     Bit 1 = RST  (output, active low)
+ *     Bit 2 = BUSY (input, HIGH = chip busy)
+ *     Bit 3 = DIO1 (input, IRQ signal from SX1262)
  *
- * Custom RadioLib-HAL leitet digitalRead/Write für virtuelle Pins 200-203
- * über den PCA9535 um.
+ * Custom RadioLib HAL routes digitalRead/Write for virtual pins 200-203
+ * through the PCA9535.
  */
 
 #ifdef SEEED_SENSECAP_INDICATOR
@@ -28,26 +28,27 @@
 #include <RadioLib.h>
 #include <SPI.h>
 #include <Wire.h>
+#include "logging.h"
 
-// ─── Globale Flags ────────────────────────────────────────────────────────────
+// ─── Global flags ────────────────────────────────────────────────────────────
 bool txFlag = false;
 bool rxFlag = false;
 
-// ─── SPI-Instanz für SX1262 ───────────────────────────────────────────────────
+// ─── SPI instance for SX1262 ─────────────────────────────────────────────────
 static SPIClass loraSPI(FSPI);
 
-// ─── Custom RadioLib-HAL: routet virtuelle Pins 200-203 über PCA9535 ─────────
+// ─── Custom RadioLib HAL: routes virtual pins 200-203 through PCA9535 ────────
 class SenseCAPLoRaHal : public ArduinoHal {
 public:
     SenseCAPLoRaHal() : ArduinoHal(loraSPI) {}
 
-    // Gibt den PCA9535-Bit-Index für einen virtuellen Pin zurück (-1 = kein vPin)
+    // Returns the PCA9535 bit index for a virtual pin (-1 = not a vPin)
     static int vpinToBit(uint32_t pin) {
         switch (pin) {
             case LORA_NSS:  return 0;   // CS
             case LORA_RST:  return 1;   // RST
-            case LORA_BUSY: return 2;   // BUSY (Eingang)
-            case LORA_DIO1: return 3;   // DIO1 (Eingang)
+            case LORA_BUSY: return 2;   // BUSY (input)
+            case LORA_DIO1: return 3;   // DIO1 (input)
             default:        return -1;
         }
     }
@@ -57,7 +58,7 @@ public:
     }
 
     void pinMode(uint32_t pin, uint32_t mode) override {
-        if (vpinToBit(pin) >= 0) return;   // Richtung via PCA9535, nicht GPIO
+        if (vpinToBit(pin) >= 0) return;   // Direction via PCA9535, not GPIO
         ArduinoHal::pinMode(pin, mode);
     }
 
@@ -73,7 +74,7 @@ public:
         return ArduinoHal::digitalRead(pin);
     }
 
-    // PCA9535-Pins können keine Hardware-Interrupts auslösen
+    // PCA9535 pins cannot trigger hardware interrupts
     void attachInterrupt(uint32_t pin, void (*cb)(void), uint32_t mode) override {
         if (vpinToBit(pin) >= 0) return;
         ArduinoHal::attachInterrupt(pin, cb, mode);
@@ -89,25 +90,25 @@ static SenseCAPLoRaHal sensecapHal;
 // SX1262: cs=LORA_NSS(200), irq=LORA_DIO1(203), rst=LORA_RST(201), busy=LORA_BUSY(202)
 SX1262 radio = new Module(&sensecapHal, LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY);
 
-// ─── Hilfsfunktion Fehlerausgabe ──────────────────────────────────────────────
+// ─── Helper function for error output ────────────────────────────────────────
 static void printState(int state) {
     if (state != RADIOLIB_ERR_NONE) {
-        Serial.printf("[LoRa] FAILED code %d\n", state);
+        logPrintf(LOG_ERROR, "LoRa", "FAILED code %d", state);
     }
 }
 
-// ─── HAL-Implementierung ──────────────────────────────────────────────────────
+// ─── HAL implementation ──────────────────────────────────────────────────────
 
 void setWiFiLED(bool value) {
-    (void)value;  // kein dediziertes WiFi-LED
+    (void)value;  // no dedicated WiFi LED
 }
 
 bool getKeyApMode() {
-    return false;  // GPIO0 wird vom RP2040 auf LOW gezogen → immer false
+    return false;  // GPIO0 is pulled LOW by RP2040 -> always false
 }
 
 void initHal() {
-    // Display nur einmal initialisieren (Bus_RGB kann kein lcd.init() ein 2. Mal)
+    // Only initialize display once (Bus_RGB cannot handle lcd.init() a 2nd time)
     static bool displayInited = false;
     if (!displayInited) {
         displayInited = true;
@@ -117,32 +118,32 @@ void initHal() {
     txFlag = false;
     rxFlag = false;
 
-    // LoRa bei jeder Einstellungsänderung neu konfigurieren
+    // Reconfigure LoRa on every settings change
     if (!loraConfigured(settings.loraFrequency)) {
-        Serial.println("[LoRa] Keine Frequenz konfiguriert – HF deaktiviert.");
+        logPrintf(LOG_WARN, "LoRa", "Keine Frequenz konfiguriert – HF deaktiviert.");
         loraReady = false;
         return;
     }
 
-    // PCA9535: LoRa-Pins als Ausgänge/Eingänge konfigurieren (ergänzt LCD-Pins)
+    // PCA9535: configure LoRa pins as outputs/inputs (supplements LCD pins)
     // Bit0=LORA_CS(out), Bit1=LORA_RST(out), Bit2=LORA_BUSY(in), Bit3=LORA_DIO1(in)
     static bool pcaLoraInited = false;
     if (!pcaLoraInited) {
         pcaLoraInited = true;
         const uint8_t outputs = PCA9535_LCD_CS_BIT | PCA9535_LCD_RST_BIT |
                                 PCA9535_LORA_CS_BIT | PCA9535_LORA_RST_BIT |
-                                PCA9535_TP_RST_BIT;  // TP_RST bleibt HIGH (kein Re-Reset)
+                                PCA9535_TP_RST_BIT;  // TP_RST stays HIGH (no re-reset)
         Wire.beginTransmission(PCA9535_ADDR);
         Wire.write(0x06);
         Wire.write(~outputs);
         Wire.endTransmission();
-        // LORA_CS und LORA_RST high (inaktiv)
+        // LORA_CS and LORA_RST high (inactive)
         pca9535_write_bit(0, true);
         pca9535_write_bit(1, true);
     }
 
-    // SPI-Pins erst initialisieren wenn LoRa wirklich benötigt wird
-    // (loraSPI.begin rekonfiguriert GPIO41/48 die LovyanGFX für Display-Init nutzt)
+    // Only initialize SPI pins when LoRa is actually needed
+    // (loraSPI.begin reconfigures GPIO41/48 which LovyanGFX uses for display init)
     static bool spiInited = false;
     if (!spiInited) {
         spiInited = true;
@@ -152,7 +153,12 @@ void initHal() {
     radio.reset();
     delay(100);
 
-    printState(radio.begin());
+    int beginState = radio.begin();
+    if (beginState != RADIOLIB_ERR_NONE) {
+        logPrintf(LOG_ERROR, "LoRa", "radio.begin() failed (code %d)", beginState);
+        loraReady = false;
+        return;
+    }
     printState(radio.setDio2AsRfSwitch(true));
     printState(radio.setSyncWord(settings.loraSyncWord));
     printState(radio.setFrequency(settings.loraFrequency));
@@ -167,35 +173,35 @@ void initHal() {
     printState(radio.startReceive());
 
     loraReady = true;
-    Serial.println("[LoRa] SenseCAP Indicator D1L – SX1262 bereit.");
+    logPrintf(LOG_INFO, "LoRa", "SenseCAP Indicator D1L – SX1262 ready.");
 }
 
-// ─── Empfang (Polling über IRQ-Flags) ────────────────────────────────────────
+// ─── Reception (polling via IRQ flags) ───────────────────────────────────────
 bool checkReceive(Frame &f) {
     if (!loraReady) return false;
 
     uint16_t irqFlags = radio.getIrqFlags();
 
-    // RX-Busy-Flag für Status-Anzeige
+    // RX busy flag for status display
     if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
         if (!rxFlag) { rxFlag = true;  statusTimer = 0; }
     } else {
         if (rxFlag)  { rxFlag = false; statusTimer = 0; }
     }
 
-    // TX fertig → zurück in RX
+    // TX complete -> back to RX
     if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
         radio.startReceive();
         txFlag = false;
         statusTimer = 0;
     }
 
-    // Paket empfangen
+    // Packet received
     if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
         uint8_t rxBuffer[256];
         size_t  rxLen = radio.getPacketLength();
         int16_t state = radio.readData(rxBuffer, rxLen);
-        //RSSI/SNR VOR startReceive() lesen, da startReceive() die Register zurücksetzen kann
+        //Read RSSI/SNR BEFORE startReceive(), as startReceive() can reset the registers
         float rxRssi     = radio.getRSSI();
         float rxSnr      = radio.getSNR();
         float rxFrqError = radio.getFrequencyError();
@@ -214,11 +220,10 @@ bool checkReceive(Frame &f) {
     return false;
 }
 
-// ─── Senden ───────────────────────────────────────────────────────────────────
+// ─── Transmit ────────────────────────────────────────────────────────────────
 void transmitFrame(Frame &f) {
-    if (!loraReady) { Serial.println("[TX] loraReady=false, abgebrochen"); return; }
+    if (!loraReady) { logPrintf(LOG_WARN, "LoRa", "loraReady=false, TX aborted"); return; }
 
-    txFlag = true;
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx        = true;
@@ -226,33 +231,32 @@ void transmitFrame(Frame &f) {
     f.port      = 0;
 
     if (strlen(f.nodeCall) == 0) {
-        Serial.println("[TX] nodeCall leer (mycall nicht gesetzt), abgebrochen");
+        logPrintf(LOG_WARN, "LoRa", "nodeCall empty (mycall not set), TX aborted");
         return;
     }
 
     uint8_t txBuf[255];
     size_t  txLen = f.exportBinary(txBuf, sizeof(txBuf));
 
-    Serial.printf("[TX] Sende %s->%s type=%d len=%d freq=%.3f\n",
-                  f.nodeCall, f.dstCall, f.frameType, (int)txLen, settings.loraFrequency);
+    logPrintf(LOG_INFO, "LoRa", "Sending %s->%s type=%d len=%d freq=%.3f",
+              f.nodeCall, f.dstCall, f.frameType, (int)txLen, settings.loraFrequency);
 
-    // Duty-Cycle-Check für Public-Band (10 % / 60 s)
+    // Duty cycle check for public band (10% / 60s)
     if (isPublicBand(settings.loraFrequency)) {
         uint32_t toa = (uint32_t)(radio.getTimeOnAir(txLen) / 1000);
         if (!dutyCycleAllowed(toa)) {
-            Serial.println("[TX] Duty-Cycle-Limit erreicht, TX übersprungen.");
-            txFlag = false;
+            logPrintf(LOG_WARN, "LoRa", "Duty cycle limit reached, TX skipped.");
             return;
         }
-        dutyCycleTrackTx(toa);
     }
 
+    txFlag = true;
     int16_t state = radio.startTransmit(txBuf, txLen);
     if (state != RADIOLIB_ERR_NONE) {
-        Serial.printf("[TX] startTransmit FEHLER: %d\n", state);
+        logPrintf(LOG_ERROR, "LoRa", "startTransmit ERROR: %d", state);
         txFlag = false;
     } else {
-        Serial.println("[TX] startTransmit OK");
+        logPrintf(LOG_INFO, "LoRa", "startTransmit OK");
     }
     f.monitorJSON();
 }

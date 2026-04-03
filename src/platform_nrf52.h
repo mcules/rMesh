@@ -112,6 +112,7 @@ public:
     size_t putBytes(const char* key, const void* value, size_t len) {
         char path[80];
         _makePath(path, sizeof(path), key);
+        InternalFS.remove(path);  // remove stale data before writing
         File f(InternalFS);
         if (f.open(path, FILE_O_WRITE)) {
             f.seek(0);

@@ -5,11 +5,12 @@
 #include <Preferences.h>
 #include "mbedtls/md.h"
 #include <esp_random.h>
+#include "logging.h"
 
 AuthSession authSessions[MAX_AUTH_SESSIONS];
 String      webPasswordHash = "";
 
-// ── Passwort-Hash aus NVS laden ───────────────────────────────────────────────
+// ── Load password hash from NVS ───────────────────────────────────────────────
 void loadPasswordHash() {
     Preferences p;
     p.begin("rmesh_auth", true);
@@ -17,10 +18,10 @@ void loadPasswordHash() {
     p.getString("webPwdHash", buf, sizeof(buf));
     p.end();
     webPasswordHash = String(buf);
-    Serial.printf("[Auth] loadPasswordHash: '%s'\n", webPasswordHash.isEmpty() ? "(leer)" : "(gesetzt)");
+    logPrintf(LOG_INFO, "Auth", "loadPasswordHash: '%s'", webPasswordHash.isEmpty() ? "(empty)" : "(set)");
 }
 
-// ── Passwort-Hash in NVS speichern ────────────────────────────────────────────
+// ── Store password hash in NVS ────────────────────────────────────────────
 void savePasswordHash(const String& hash) {
     webPasswordHash = hash;
     Preferences p;
@@ -29,7 +30,7 @@ void savePasswordHash(const String& hash) {
     p.end();
 }
 
-// ── Zufällige Nonce erzeugen und in der Session speichern ────────────────────
+// ── Generate random nonce and store in session ────────────────────
 String generateNonce(uint32_t clientId) {
     uint8_t bytes[16];
     esp_fill_random(bytes, sizeof(bytes));
@@ -46,9 +47,9 @@ String generateNonce(uint32_t clientId) {
     return String(buf);
 }
 
-// ── Ist ein Client authentifiziert? ──────────────────────────────────────────
+// ── Is a client authenticated? ──────────────────────────────────────────
 bool isAuthenticated(uint32_t clientId) {
-    if (webPasswordHash.isEmpty()) return true;  // kein Passwort gesetzt
+    if (webPasswordHash.isEmpty()) return true;  // no password set
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId)
             return authSessions[i].authenticated;
@@ -56,16 +57,16 @@ bool isAuthenticated(uint32_t clientId) {
     return false;
 }
 
-// ── Session anlegen oder aktualisieren ────────────────────────────────────────
+// ── Create or update session ────────────────────────────────────────
 void setClientAuth(uint32_t clientId, bool auth) {
-    // vorhandene Session aktualisieren
+    // update existing session
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId) {
             authSessions[i].authenticated = auth;
             return;
         }
     }
-    // freien Slot belegen
+    // occupy free slot
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == 0) {
             authSessions[i].clientId      = clientId;
@@ -84,7 +85,7 @@ void setClientAuth(uint32_t clientId, bool auth) {
     memset(authSessions[evict].nonce, 0, sizeof(authSessions[evict].nonce));
 }
 
-// ── Session entfernen (bei Disconnect) ───────────────────────────────────────
+// ── Remove session (on disconnect) ───────────────────────────────────────
 void removeClientAuth(uint32_t clientId) {
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId) {
@@ -96,13 +97,13 @@ void removeClientAuth(uint32_t clientId) {
     }
 }
 
-// ── HMAC-Antwort prüfen ───────────────────────────────────────────────────────
-// Erwartet: HMAC-SHA256(key=SHA256(passwort), data=nonce) als 64-char Hex
+// ── Verify HMAC response ───────────────────────────────────────────────────────
+// Expected: HMAC-SHA256(key=SHA256(password), data=nonce) as 64-char hex
 bool verifyAuthResponse(uint32_t clientId, const String& response) {
     if (webPasswordHash.isEmpty()) return true;
     if (response.length() != 64)  return false;
 
-    // Nonce für diesen Client suchen
+    // Find nonce for this client
     char nonce[33] = {0};
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId) {
@@ -115,14 +116,14 @@ bool verifyAuthResponse(uint32_t clientId, const String& response) {
     // Validate hash length before accessing individual characters
     if (webPasswordHash.length() < 64) return false;
 
-    // gespeicherten Hash (Hex) → Bytes (= HMAC-Schlüssel)
+    // stored hash (hex) → bytes (= HMAC key)
     uint8_t keyBytes[32];
     for (int i = 0; i < 32; i++) {
         char hex[3] = {webPasswordHash[i * 2], webPasswordHash[i * 2 + 1], '\0'};
         keyBytes[i] = (uint8_t)strtoul(hex, nullptr, 16);
     }
 
-    // HMAC-SHA256(key=gespeicherterHash, data=nonce) berechnen
+    // compute HMAC-SHA256(key=storedHash, data=nonce)
     uint8_t hmacResult[32];
     mbedtls_md_context_t ctx;
     mbedtls_md_init(&ctx);
@@ -132,7 +133,7 @@ bool verifyAuthResponse(uint32_t clientId, const String& response) {
     mbedtls_md_hmac_finish(&ctx, hmacResult);
     mbedtls_md_free(&ctx);
 
-    // Ergebnis → Hex-String
+    // result → hex string
     char expected[65];
     for (int i = 0; i < 32; i++) sprintf(expected + 2 * i, "%02x", hmacResult[i]);
     expected[64] = '\0';

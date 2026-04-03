@@ -4,8 +4,8 @@
 #include "frame.h"
 
 
-#define PIN_WIFI_LED 2      //LED WiFi-Status (ein = AP-Mode, blinken = Client-Mode, aus = nicht verbunden)
-#define PIN_AP_MODE_SWITCH 0     //Taster Umschaltung WiFi CLient/AP
+#define PIN_WIFI_LED 2      //LED WiFi status (on = AP mode, blinking = client mode, off = not connected)
+#define PIN_AP_MODE_SWITCH 0     //Button WiFi Client/AP switch
 #define LORA_DEFAULT_TX_POWER 0
 #define WIFI_MAX_TX_POWER_DBM 20
 

@@ -10,6 +10,7 @@
 #include "settings.h"
 #include "hal.h"
 #include "webFunctions.h"
+#include "logging.h"
 
 // ── LovyanGFX panel configuration for ST7735S (80x160) ─────────────────────
 
@@ -97,7 +98,7 @@ bool initStatusDisplay() {
     tft.setTextWrap(true);
 
     displayDetected = true;
-    Serial.println("[TFT] ST7735 initialised (HT-Tracker V1.2)");
+    logPrintf(LOG_INFO, "Display", "ST7735 initialised (HT-Tracker V1.2)");
 
     if (oledEnabled) {
         tft.setBrightness(128);

@@ -100,7 +100,7 @@ inline uint8_t syncWordForFrequency(float f) {
 #define MAX_STORED_MESSAGES_RAM 100
 
 /** Maximum number of ACK frames stored in ack.json. */
-#define MAX_STORED_ACK 100
+#define MAX_STORED_ACK 300
 
 // ── UDP Timing ────────────────────────────────────────────────────────────────
 

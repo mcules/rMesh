@@ -832,6 +832,9 @@
         var url = '/ota?type=' + type + (noreboot ? '&noreboot=1' : '');
         var xhr = new XMLHttpRequest();
         xhr.open('POST', url, true);
+        if (settings && settings.otaToken) {
+          xhr.setRequestHeader('X-OTA-Token', settings.otaToken);
+        }
         xhr.upload.onprogress = function(e) {
           if (e.lengthComputable) msgBox(type + ' Upload: ' + Math.round(e.loaded / e.total * 100) + '%');
         };
@@ -849,8 +852,8 @@
       var fsFile = document.getElementById('otaFsFile').files[0];
       if (!fwFile && !fsFile) { msgBox('Firmware and LittleFS file missing.'); return; }
       try {
-        // Dateisystem zuerst (ohne Reboot), dann Firmware (mit Reboot)
-        // So startet der neue Code mit dem neuen Dateisystem
+        // Filesystem first (without reboot), then firmware (with reboot)
+        // This way the new code starts with the new filesystem
         if (fsFile) {
           msgBox('Uploading LittleFS (' + Math.round(fsFile.size / 1024) + ' KB)...');
           await uploadFile('spiffs', fsFile, fwFile ? true : false);

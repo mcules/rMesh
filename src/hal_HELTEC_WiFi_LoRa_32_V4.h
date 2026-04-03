@@ -3,7 +3,7 @@
 
 #include "frame.h"
 
-// Pin-Definitionen für HELTEC_WiFi_LoRa_32_V4
+// Pin definitions for HELTEC WiFi LoRa 32 V4
 #define LORA_NSS    8
 #define LORA_SCK    9
 #define LORA_MOSI   10
@@ -15,8 +15,8 @@
 #define LORA_DEFAULT_TX_POWER 22
 #define WIFI_MAX_TX_POWER_DBM 20
 
-#define PIN_AP_MODE_SWITCH 0     //Taster Umschaltung WiFi CLient/AP
-#define PIN_WIFI_LED 35      //LED WiFi-Status (ein = AP-Mode, blinken = Client-Mode, aus = nicht verbunden)
+#define PIN_AP_MODE_SWITCH 0     //Button WiFi Client/AP switch
+#define PIN_WIFI_LED 35      //LED WiFi status (on = AP mode, blinking = client mode, off = not connected)
 
 #define PIN_VEXT_CTRL 36 
 #define PIN_VGNSS_CTRL 34 

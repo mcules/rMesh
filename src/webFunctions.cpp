@@ -14,6 +14,7 @@
 #include "routing.h"
 #include "auth.h"
 #include "serial.h"
+#include "logging.h"
 
 #ifdef HELTEC_WIFI_LORA_32_V3
 #include "display_HELTEC_WiFi_LoRa_32_V3.h"
@@ -39,9 +40,10 @@ AsyncWebSocket ws("/socket", wsHandler.eventHandler());
  * Otherwise, sends only to authenticated clients.
  */
 void wsBroadcast(const char *buf, size_t len) {
-    // ws.textAll/text alloziert intern shared_ptr<vector> auf dem Heap.
-    // Bei Heap-Knappheit würde operator new std::terminate() auslösen.
-    if (ESP.getFreeHeap() < 20000) return;
+    // ws.textAll/text internally allocates shared_ptr<vector> on the heap.
+    // Under low heap conditions, operator new would trigger std::terminate().
+    // Check both free heap and largest contiguous block.
+    if (ESP.getFreeHeap() < 15000 || ESP.getMaxAllocHeap() < 8000) return;
 
     if (webPasswordHash.isEmpty()) {
         ws.textAll(buf, len);
@@ -75,9 +77,10 @@ void startWebServer() {
             snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
                      (uint8_t) (mac >> 40), (uint8_t) (mac >> 32), (uint8_t) (mac >> 24),
                      (uint8_t) (mac >> 16), (uint8_t) (mac >> 8), (uint8_t) (mac));
-            String challenge = "{\"auth\":{\"required\":true,\"nonce\":\"" + nonce
-                               + "\",\"mycall\":\"" + String(settings.mycall)
-                               + "\",\"chipId\":\"" + String(chipId) + "\"}}";
+            char challenge[256];
+            snprintf(challenge, sizeof(challenge),
+                     "{\"auth\":{\"required\":true,\"nonce\":\"%s\",\"mycall\":\"%s\",\"chipId\":\"%s\"}}",
+                     nonce.c_str(), settings.mycall, chipId);
             client->text(challenge);
         }
     });
@@ -89,7 +92,7 @@ void startWebServer() {
 
     wsHandler.onError([](AsyncWebSocket *server, AsyncWebSocketClient *client, uint16_t errorCode, const char *reason,
                          size_t len) {
-        Serial.printf("Client %" PRIu32 " error: %" PRIu16 ": %s\n", client->id(), errorCode, reason);
+        logPrintf(LOG_ERROR, "Web", "Client %" PRIu32 " error: %" PRIu16 ": %s", client->id(), errorCode, reason);
         ws.cleanupClients();
     });
 
@@ -110,7 +113,10 @@ void startWebServer() {
                     sendRoutingList();
                 } else {
                     String nonce = generateNonce(client->id());
-                    String msg = "{\"auth\":{\"error\":\"Wrong password\",\"nonce\":\"" + nonce + "\"}}";
+                    char msg[192];
+                    snprintf(msg, sizeof(msg),
+                             "{\"auth\":{\"error\":\"Wrong password\",\"nonce\":\"%s\"}}",
+                             nonce.c_str());
                     client->text(msg);
                 }
             }
@@ -127,15 +133,15 @@ void startWebServer() {
         // Set or clear the web password hash
         if (json["setPassword"].is<JsonVariant>()) {
             String hash = json["setPassword"].as<String>();
-            Serial.printf("[Auth] setPassword received, hash='%s'\n", hash.c_str());
+            logPrintf(LOG_INFO, "Auth", "setPassword received, hash='%s'", hash.c_str());
             savePasswordHash(hash);
             setClientAuth(client->id(), true);
-            Serial.printf("[Auth] webPasswordHash now: '%s'\n", webPasswordHash.c_str());
+            logPrintf(LOG_INFO, "Auth", "webPasswordHash now: '%s'", webPasswordHash.c_str());
 
             String resp = hash.isEmpty()
                               ? "{\"passwordSaved\":false}"
                               : "{\"passwordSaved\":true}";
-            Serial.printf("[Auth] Sending to client %u: %s\n", client->id(), resp.c_str());
+            logPrintf(LOG_INFO, "Auth", "Sending to client %u: %s", client->id(), resp.c_str());
             client->text(resp);
             return;
         }
@@ -144,7 +150,7 @@ void startWebServer() {
         if (json["settings"].is<JsonVariant>()) {
             if (json["settings"]["mycall"].is<JsonVariant>()) {
                 const char *mycallSrc = json["settings"]["mycall"] | "";
-                safeUtf8Copy(settings.mycall, (const uint8_t *) mycallSrc, sizeof(settings.mycall));
+                safeUtf8Copy(settings.mycall, (const uint8_t *) mycallSrc, sizeof(settings.mycall), sizeof(settings.mycall));
                 for (size_t i = 0; i < sizeof(settings.mycall); i++) {
                     settings.mycall[i] = toupper(settings.mycall[i]);
                 }
@@ -163,7 +169,10 @@ void startWebServer() {
                 strlcpy(settings.wifiSSID, json["settings"]["wifiSSID"] | "", sizeof(settings.wifiSSID));
             }
             if (json["settings"]["wifiPassword"].is<JsonVariant>()) {
-                strlcpy(settings.wifiPassword, json["settings"]["wifiPassword"] | "", sizeof(settings.wifiPassword));
+                const char* pw = json["settings"]["wifiPassword"] | "";
+                if (strcmp(pw, "***") != 0) {
+                    strlcpy(settings.wifiPassword, pw, sizeof(settings.wifiPassword));
+                }
             }
             if (json["settings"]["apMode"].is<JsonVariant>()) {
                 settings.apMode = json["settings"]["apMode"].as<bool>();
@@ -177,12 +186,23 @@ void startWebServer() {
             // Update WiFi network list
             if (json["settings"]["wifiNetworks"].is<JsonArray>()) {
                 JsonArray nets = json["settings"]["wifiNetworks"];
+                std::vector<WifiNetwork> oldNetworks = wifiNetworks;
                 wifiNetworks.clear();
                 for (JsonObject n : nets) {
                     WifiNetwork net;
                     memset(&net, 0, sizeof(net));
                     strlcpy(net.ssid,     n["ssid"] | "",     sizeof(net.ssid));
-                    strlcpy(net.password, n["password"] | "",  sizeof(net.password));
+                    const char* pw = n["password"] | "";
+                    if (strcmp(pw, "***") == 0) {
+                        for (auto& old : oldNetworks) {
+                            if (strcmp(old.ssid, net.ssid) == 0) {
+                                strlcpy(net.password, old.password, sizeof(net.password));
+                                break;
+                            }
+                        }
+                    } else {
+                        strlcpy(net.password, pw, sizeof(net.password));
+                    }
                     net.favorite = n["favorite"] | false;
                     if (net.ssid[0] != '\0') {
                         wifiNetworks.push_back(net);
@@ -297,7 +317,6 @@ void startWebServer() {
                 uint16_t freq = json["settings"]["cpuFrequency"].as<uint16_t>();
                 if (freq == 80 || freq == 160 || freq == 240) {
                     cpuFrequency = freq;
-                    setCpuFrequencyMhz(cpuFrequency);
                 }
             }
             if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
@@ -320,7 +339,7 @@ void startWebServer() {
                 }
                 saveGroupNames();
             }
-            saveSettings();
+            pendingSettingsSave = true;
             #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
             if (hasStatusDisplay()) {
                 if (oledEnabled) updateStatusDisplay();
@@ -352,14 +371,16 @@ void startWebServer() {
             }
             if (json["sendFrame"]["messageText"].is<JsonVariant>()) {
                 const char *tempText = json["sendFrame"]["messageText"];
-                memcpy((char *) f.message, tempText, sizeof(f.message));
-                f.messageLength = strlen(tempText);
+                size_t textLen = strlen(tempText);
+                if (textLen > sizeof(f.message)) textLen = sizeof(f.message);
+                memcpy((char *) f.message, tempText, textLen);
+                f.messageLength = textLen;
             }
             if (json["sendFrame"]["message"].is<JsonArray>()) {
                 JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
                 uint8_t i = 0;
                 for (uint8_t v: jsonMsg) {
-                    if (i < len && i < sizeof(f.message)) {
+                    if (i < sizeof(f.message)) {
                         f.message[i] = v;
                         i++;
                     }
@@ -369,11 +390,15 @@ void startWebServer() {
         }
 
         if (json["sendMessage"].is<JsonVariant>()) {
-            sendMessage(json["sendMessage"]["dst"].as<const char *>(), json["sendMessage"]["text"].as<const char *>());
+            const char* dst = json["sendMessage"]["dst"] | "";
+            const char* text = json["sendMessage"]["text"] | "";
+            sendMessage(dst, text);
         }
 
         if (json["sendGroup"].is<JsonVariant>()) {
-            sendGroup(json["sendGroup"]["dst"].as<const char *>(), json["sendGroup"]["text"].as<const char *>());
+            const char* dst = json["sendGroup"]["dst"] | "";
+            const char* text = json["sendGroup"]["text"] | "";
+            sendGroup(dst, text);
         }
 
         if (json["deleteMessages"].is<JsonVariant>()) {
@@ -395,36 +420,36 @@ void startWebServer() {
         }
 
         if (json["scanWifi"].is<JsonVariant>()) {
-            Serial.println("WiFi scan...");
+            logPrintf(LOG_INFO, "Web", "WiFi scan...");
             pendingReconnectScan = false;  // Don't treat this as a reconnect scan
             WiFi.scanNetworks(true);
         }
 
         if (json["announce"].is<JsonVariant>()) {
-            Serial.println("Send manual announce...");
+            logPrintf(LOG_INFO, "Web", "Send manual announce...");
             announceTimer = 0;
         }
 
         if (json["tune"].is<JsonVariant>()) {
-            Serial.println("Send tune...");
+            logPrintf(LOG_INFO, "Web", "Send tune...");
             Frame f;
             f.frameType = Frame::FrameTypes::TUNE_FRAME;
-            txBuffer.push_back(f);
+            sendFrame(f);
         }
 
         if (json["reboot"].is<JsonVariant>()) {
-            Serial.println("Reboot");
+            logPrintf(LOG_INFO, "Web", "Reboot");
             rebootTimer = millis(); rebootRequested = true;
         }
 
         if (json["shutdown"].is<JsonVariant>()) {
-            Serial.println("Shutdown");
+            logPrintf(LOG_INFO, "Web", "Shutdown");
             pendingShutdown = true;
         }
 
         // Deferred OTA update, handled in the main loop
         if (json["update"].is<JsonVariant>()) {
-            Serial.println("OTA update requested...");
+            logPrintf(LOG_INFO, "Web", "OTA update requested...");
             pendingManualUpdate = true;
         }
 
@@ -432,7 +457,7 @@ void startWebServer() {
         if (json["forceUpdate"].is<JsonVariant>()) {
             pendingForceChannel = json["forceUpdate"].as<uint8_t>(); // 0=release, 1=dev
             pendingForceUpdate = true;
-            Serial.printf("Force install requested (channel: %s)...\n", pendingForceChannel == 1 ? "dev" : "release");
+            logPrintf(LOG_INFO, "Web", "Force install requested (channel: %s)...", pendingForceChannel == 1 ? "dev" : "release");
         }
     });
 
@@ -481,6 +506,12 @@ void startWebServer() {
     // OTA upload endpoint
     webServer.on("/ota", HTTP_POST,
                  [](AsyncWebServerRequest *request) {
+                     if (!webPasswordHash.isEmpty()) {
+                         if (!request->hasHeader("X-OTA-Token") || request->getHeader("X-OTA-Token")->value() != webPasswordHash) {
+                             request->send(401, "text/plain", "Unauthorized");
+                             return;
+                         }
+                     }
                      bool ok = !Update.hasError();
                      String msg = ok ? "OK" : String(Update.errorString());
                      AsyncWebServerResponse *resp = request->beginResponse(200, "text/plain", msg);
@@ -510,22 +541,22 @@ void startWebServer() {
                          if (request->hasParam("type")) {
                              if (request->getParam("type")->value() == "spiffs") updateType = U_SPIFFS;
                          }
-                         Serial.printf("[OTA-Upload] Start: %s, type: %s\n", filename.c_str(),
+                         logPrintf(LOG_INFO, "Web", "OTA-Upload Start: %s, type: %s", filename.c_str(),
                                        updateType == U_SPIFFS ? "SPIFFS" : "Flash");
                          if (!Update.begin(UPDATE_SIZE_UNKNOWN, updateType)) {
-                             Serial.printf("[OTA-Upload] begin() error: %s\n", Update.errorString());
+                             logPrintf(LOG_ERROR, "Web", "OTA-Upload begin() error: %s", Update.errorString());
                          }
                          char buf[] = "{\"updateStatus\":\"Upload in progress...\"}";
                          wsBroadcast(buf, strlen(buf));
                      }
                      if (len && Update.write(data, len) != len) {
-                         Serial.printf("[OTA-Upload] write() error: %s\n", Update.errorString());
+                         logPrintf(LOG_ERROR, "Web", "OTA-Upload write() error: %s", Update.errorString());
                      }
                      if (final) {
                          if (Update.end(true)) {
-                             Serial.printf("[OTA-Upload] Done, %u bytes\n", index + len);
+                             logPrintf(LOG_INFO, "Web", "OTA-Upload Done, %u bytes", index + len);
                          } else {
-                             Serial.printf("[OTA-Upload] end() error: %s\n", Update.errorString());
+                             logPrintf(LOG_ERROR, "Web", "OTA-Upload end() error: %s", Update.errorString());
                          }
                      }
                  }

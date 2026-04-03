@@ -6,13 +6,13 @@
 #include "webFunctions.h"
 
 size_t Frame::exportBinary(uint8_t* data, size_t length) {
-    //Binär-Daten erzeugen
+    //Generate binary data
     size_t position = 0;
     if (length < 1) return 0;
-    //Frame-Typ + Hop-Count
+    //Frame type + hop count
     data[position] = (frameType & 0x0F) | ((hopCount & 0x0F) << 4);
     position ++;
-    //Absender hinzufügen
+    //Add sender
     size_t sLen = strlen(srcCall);
     if (sLen > 0) {
         if (position + 1 + sLen > length) return position;
@@ -21,7 +21,7 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
         memcpy(&data[position], srcCall, sLen);
         position += sLen;
     }
-    //Node hinzufügen
+    //Add node
     size_t nLen = strlen(nodeCall);
     if (nLen > 0) {
         if (position + 1 + nLen > length) return position;
@@ -30,7 +30,7 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
         memcpy(&data[position], nodeCall, nLen);
         position += nLen;
     }
-    //VIA-Call hinzufügen
+    //Add VIA call
     size_t vLen = strlen(viaCall);
     if (vLen > 0) {
         if (position + 1 + vLen > length) return position;
@@ -39,7 +39,7 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
         memcpy(&data[position], viaCall, vLen);
         position += vLen;
     }
-    //Destination hinzufügen
+    //Add destination
     size_t gLen = strlen(dstGroup);
     if (gLen > 0) {
         if (position + 1 + gLen > length) return position;
@@ -48,7 +48,7 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
         memcpy(&data[position], dstGroup, gLen);
         position += gLen;
     }
-    //Destination Call hinzufügen
+    //Add destination call
     size_t dLen = strlen(dstCall);
     if (dLen > 0) {
         if (position + 1 + dLen > length) return position;
@@ -57,19 +57,19 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
         memcpy(&data[position], dstCall, dLen);
         position += dLen;
     }
-    //Message hinzu (muss immer ganz hinten sein, weil keine Längenangabe)
+    //Add message (must always be at the end since there is no length field)
     switch (frameType) {
         case Frame::FrameTypes::MESSAGE_FRAME:
         case Frame::FrameTypes::MESSAGE_ACK_FRAME:
-            //Normale Message Frames
-            //TYP
+            //Normal message frames
+            //Type
             data[position] = Frame::HeaderTypes::MESSAGE_HEADER << 4;     
             data[position] = data[position] | messageType;               
             position ++;
             //ID
             memcpy(&data[position], &id, sizeof(id)); //Payload
             position += sizeof(id);
-            //Message kopieren
+            //Copy message
             if (messageLength > (length - position)) { messageLength = length - position; }
             memcpy(&data[position], &message, messageLength); //Payload
             position += messageLength;    
@@ -85,14 +85,14 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
 }
 
 void Frame::monitorJSON() {
-    //Schreibt Monitor-Daten in JSON-Buffer
+    //Write monitor data to JSON buffer
     JsonDocument doc;
     // for (size_t i = 0; i < messageLength; i++) {
     //     doc["monitor"]["message"][i] = message[i];
     // }    
     if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
         char text[messageLength + 1];
-        safeUtf8Copy(text, (uint8_t*)message, messageLength);
+        safeUtf8Copy(text, (uint8_t*)message, messageLength, messageLength + 1);
         doc["monitor"]["text"] = text;
     }
     doc["monitor"]["messageType"] = messageType;
@@ -168,7 +168,7 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
 
     if ((messageLength > 0) && (messageType == Frame::MessageTypes::TEXT_MESSAGE || messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
         char text[messageLength + 1];
-        safeUtf8Copy(text, (uint8_t*)message, messageLength);
+        safeUtf8Copy(text, (uint8_t*)message, messageLength, messageLength + 1);
         jsonEscape(escapedText, sizeof(escapedText), text);
         pos += snprintf(buffer + pos, length - pos, "\"text\":\"%s\",", escapedText);
     }
@@ -185,86 +185,87 @@ size_t Frame::messageJSON(char* buffer, size_t length) {
 
 
 void Frame::importBinary(uint8_t* data, size_t length) {
-    //Abbruch, wenn Frame zu kurz
+    //Abort if frame too short
     if (length <= 1) { return; }
 
-    //Frame-TYP
+    //Frame type
     frameType = data[0] & 0x0F;
     hopCount = (data[0] & 0xF0) >> 4;
 
-    //Frame druchlaufen und nach Headern suchen
+    //Iterate frame and search for headers
     uint8_t header = 0;
     uint8_t payloadLength = 0;
-    size_t i = 1;       //Position 1. Header
+    size_t i = 1;       //Position of 1st header
     while (i < length) {
-        //Header prüfen
+        //Check header
         header = data[i] >> 4;
         payloadLength = data[i] & 0x0F;
         switch (header) {
             case Frame::HeaderTypes::NODE_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(nodeCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(nodeCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(nodeCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::VIA_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(viaCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(viaCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(viaCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::SRC_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(srcCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(srcCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(srcCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::DST_GROUP_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(dstGroup, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(dstGroup, (const uint8_t*)(data + i + 1), payloadLength, sizeof(dstGroup));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::DST_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(dstCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(dstCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(dstCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::MESSAGE_HEADER:
                 if (i + sizeof(id) < length) {
                     //Message Type 
-                    messageType = payloadLength; //Wird dopplet verwendet 
+                    messageType = payloadLength; //Used for dual purpose
                     i++;
                     //Message ID
                     memcpy(&id, &data[i], sizeof(id));  
                     i = i + sizeof(id);
-                    //Message Länge
+                    //Message length
                     messageLength = length - i;
+                    if (messageLength > sizeof(message)) messageLength = sizeof(message);
                     //Message
                     memcpy(message, data + i, messageLength);
-                    //Frame Ende
+                    //End of frame
                     i = length;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
-            default: //Falscher Header
+            default: //Invalid header
                 i = length;
                 break;
         }      

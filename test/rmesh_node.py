@@ -45,7 +45,7 @@ class RMeshNode:
         debug events vs. plain output."""
         while self._running:
             try:
-                if self._ser.in_waiting > 0 or True:
+                if self._ser.in_waiting > 0:
                     raw = self._ser.readline()
                     if not raw:
                         continue
@@ -70,6 +70,8 @@ class RMeshNode:
                                 self._lines.append(line)
                         else:
                             self._lines.append(line)
+                else:
+                    time.sleep(0.01)
             except serial.SerialException:
                 break
             except Exception:

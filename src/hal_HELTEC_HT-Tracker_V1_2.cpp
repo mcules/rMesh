@@ -8,6 +8,7 @@
 #include "helperFunctions.h"
 #include "webFunctions.h"
 #include "dutycycle.h"
+#include "logging.h"
 
 
 SX1262 radio = new Module( LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY );
@@ -21,7 +22,7 @@ bool txFlag = false;
 bool rxFlag = false;
 
 void printState(int state) {
-    if (state != RADIOLIB_ERR_NONE) {Serial.printf("FAILED! code %d\n", state);}
+    if (state != RADIOLIB_ERR_NONE) {logPrintf(LOG_ERROR, "LoRa", "FAILED! code %d", state);}
 }
 
 void setWiFiLED(bool value) {
@@ -34,11 +35,10 @@ bool getKeyApMode() {
 
 float getBatteryVoltage() {
     analogSetPinAttenuation(PIN_VBAT_ADC, ADC_11db);
-    digitalWrite(PIN_VBAT_CTRL, HIGH);  // Spannungsteiler aktivieren (HIGH aktiv)
-    delay(10);
+    digitalWrite(PIN_VBAT_CTRL, HIGH);  // Enable voltage divider (HIGH active)
     int sum = 0;
     for (int i = 0; i < 8; i++) sum += analogRead(PIN_VBAT_ADC);
-    digitalWrite(PIN_VBAT_CTRL, LOW);   // Spannungsteiler deaktivieren
+    digitalWrite(PIN_VBAT_CTRL, LOW);   // Disable voltage divider
     return (sum / 8.0f / 4095.0f) * 3.3f * 4.9f;
 }
 
@@ -46,36 +46,41 @@ void initHal() {
     txFlag = false;
     rxFlag = false;
 
-    //SPI Init
+    //SPI init
     SPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
 
-    //Vext einschalten (TFT + GNSS Stromversorgung)
+    //Enable Vext (TFT + GNSS power supply)
     pinMode(PIN_VEXT_CTRL, OUTPUT);
-    digitalWrite(PIN_VEXT_CTRL, HIGH);  // HIGH = Vext an
+    digitalWrite(PIN_VEXT_CTRL, HIGH);  // HIGH = Vext on
 
-    //Ausgaenge
+    //Outputs
     pinMode(PIN_WIFI_LED, OUTPUT);
     digitalWrite(PIN_WIFI_LED, 0);
     pinMode(PIN_VBAT_CTRL, OUTPUT);
-    digitalWrite(PIN_VBAT_CTRL, LOW);   // Spannungsteiler standardmaessig aus
+    digitalWrite(PIN_VBAT_CTRL, LOW);   // Voltage divider off by default
 
-    //Eingaenge
+    //Inputs
     pinMode(PIN_AP_MODE_SWITCH, INPUT);
 
-    // HF-Modul nur initialisieren wenn Frequenz konfiguriert ist
+    // Only initialize RF module if frequency is configured
     if (!loraConfigured(settings.loraFrequency)) {
-        Serial.println("[LoRa] Keine Frequenz konfiguriert – HF deaktiviert.");
+        logPrintf(LOG_WARN, "LoRa", "Keine Frequenz konfiguriert – HF deaktiviert.");
         loraReady = false;
         return;
     }
 
-    //Flags zuruecksetzen
+    //Reset flags
     int state;
 
     //Init
     radio.reset();
     delay(100);
-    printState(radio.begin());
+    int beginState = radio.begin();
+    if (beginState != RADIOLIB_ERR_NONE) {
+        logPrintf(LOG_ERROR, "LoRa", "radio.begin() failed (code %d)", beginState);
+        loraReady = false;
+        return;
+    }
     printState(radio.setDio2AsRfSwitch(true));
     printState(radio.setSyncWord(settings.loraSyncWord));
     printState(radio.setFrequency(settings.loraFrequency));
@@ -88,7 +93,7 @@ void initHal() {
     printState(radio.setCurrentLimit(140));
     printState(radio.setRxBoostedGainMode(true));
 
-    //RX einschalten
+    //Enable RX
     printState(radio.startReceive());
     loraReady = true;
 
@@ -98,9 +103,9 @@ void initHal() {
 
 bool checkReceive(Frame &f) {
     if (!loraReady) return false;
-    //IRQ-Flags auslesen
+    //Read IRQ flags
     uint16_t irqFlags = radio.getIrqFlags();
-    //Pruefen ob Kanal belegt
+    //Check if channel is busy
     if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
         if (rxFlag == false) {
             rxFlag = true;
@@ -112,24 +117,24 @@ bool checkReceive(Frame &f) {
             statusTimer = 0;
         }
     }
-    //Senden fertig
+    //Transmit complete
     if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
         radio.startReceive();
         txFlag = false;
         statusTimer = 0;
     }
-    //Daten Empfangen -> rxBuffer
+    //Data received -> rxBuffer
     if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
-        //Pruefen, ob was empfangen wurde
+        //Check if data was received
         uint8_t rxBuffer[256];
         size_t rxBufferLength;
         rxBufferLength = radio.getPacketLength();
         int16_t state = radio.readData(rxBuffer, rxBufferLength);
-        //RSSI/SNR VOR startReceive() lesen, da startReceive() die Register zuruecksetzen kann
+        //Read RSSI/SNR BEFORE startReceive(), as startReceive() can reset the registers
         float rxRssi = radio.getRSSI();
         float rxSnr = radio.getSNR();
         float rxFrqError = radio.getFrequencyError();
-        //Empfang wieder starten
+        //Restart reception
         radio.startReceive();
         if (state == RADIOLIB_ERR_NONE) {
             f.importBinary(rxBuffer, rxBufferLength);
@@ -151,31 +156,30 @@ void transmitFrame(Frame &f) {
     uint8_t txBuffer[255];
     size_t txBufferLength;
 
-    //Frame ergaenzen
-    txFlag = 1;
+    //Populate frame
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx = true;
     f.timestamp = time(NULL);
     f.port = 0;
 
-    //Senden
+    //Transmit
     if (strlen(f.nodeCall) == 0) {return;}
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
 
-    // Duty-Cycle-Check fuer Public-Band (10 % in 60 s)
+    // Duty cycle check for public band (10% in 60s)
     if (isPublicBand(settings.loraFrequency)) {
         uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
         if (!dutyCycleAllowed(toa)) {
-            Serial.println("[LoRa] Duty-Cycle-Limit erreicht, TX uebersprungen.");
+            logPrintf(LOG_WARN, "LoRa", "Duty cycle limit reached, TX skipped.");
             return;
         }
-        dutyCycleTrackTx(toa);
     }
 
+    txFlag = 1;
     radio.startTransmit(txBuffer, txBufferLength);
 
-    //Frame monitoren
+    //Monitor frame
     f.monitorJSON();
 
 }

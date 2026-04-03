@@ -68,6 +68,7 @@
   {
     "name": "LILYGO_T-Echo",
     "chip": "nRF52840",
-    "image": "lilygo_t-echo.svg"
+    "image": "lilygo_t-echo.svg",
+    "flashable": false
   }
 ]

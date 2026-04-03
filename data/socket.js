@@ -5,6 +5,11 @@ var baseURL = "";
 var gateway = "";
 var init = false;
 
+function esc(s) {
+    if (!s) return '';
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 // --- Message Cache (localStorage) ---
 var MSG_CACHE_KEY = "rmesh_messages";
 var MSG_CACHE_SAVE_INTERVAL = 60000; // save every 60s
@@ -192,7 +197,8 @@ var authNonce    = "";
 
 
 function onMessage(event) {
-    var d = JSON.parse(event.data);
+    var d;
+    try { d = JSON.parse(event.data); } catch(e) { console.error("Invalid JSON:", e); return; }
     if (d.status === undefined) {console.log("RX: " + event.data);}
 
     // ── Auth-Flow ─────────────────────────────────────────────────────────────
@@ -207,13 +213,13 @@ function onMessage(event) {
             hideAuthOverlay();
         }
         if (d.auth.error) {
-            authNonce = d.auth.nonce;  // neue Nonce für nächsten Versuch
+            authNonce = d.auth.nonce;  // new nonce for next attempt
             showAuthError(d.auth.error);
         }
         return;
     }
 
-    // ── Passwort gespeichert ──────────────────────────────────────────────────
+    // ── Password saved ──────────────────────────────────────────────────
     if (d.passwordSaved !== undefined) {
         if (d.passwordSaved) {
             msgBox("Password saved. Reloading page...");
@@ -224,7 +230,7 @@ function onMessage(event) {
         return;
     }
 
-    // Nachrichten ignorieren solange Auth aussteht
+    // Ignore messages while auth is pending
     if (authRequired) return;
 
     //RAW-RX
@@ -235,10 +241,10 @@ function onMessage(event) {
         if (d.monitor.tx == true) { msg += "<span class='monitor-tx'>→ "; } else { msg += "<span>← "; }
         //Port
         if (f.port == 0) {msg += "LoRa";} else {msg += "Wifi";}
-        //Zeit
+        //Time
         const date = new Date(d.monitor.timestamp * 1000);
         msg += " " + date.toLocaleString("de-DE", {hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "");		
-        //Lesbar anzeigen
+        //Display readable
         if (typeof f.nodeCall !== "undefined") { msg += " " + f.nodeCall ; }
         if (typeof f.viaCall !== "undefined") { msg += " > " + f.viaCall ; }
         if (typeof f.hopCount !== "undefined") { 
@@ -252,14 +258,14 @@ function onMessage(event) {
             case 0x02: msg += " Tuning"; break;
             case 0x03: 
             case 0x05: 
-                if (f.id) { msg += " ID: " + f.id ; }
-                if (f.srcCall) { msg += " SRC: " + f.srcCall; }
-                if (f.dstCall) { msg += " DST: " + f.dstCall; }
-                if (f.dstGroup) { msg += " GRP: " + f.dstGroup; }
+                if (f.id) { msg += " ID: " + esc(f.id) ; }
+                if (f.srcCall) { msg += " SRC: " + esc(f.srcCall); }
+                if (f.dstCall) { msg += " DST: " + esc(f.dstCall); }
+                if (f.dstGroup) { msg += " GRP: " + esc(f.dstGroup); }
                 if (f.messageType == 0) {msg += " TEXT: ";}
                 if (f.messageType == 1) {msg += " TRACE: ";}
                 if (f.messageType == 15) {msg += " COMMAND: ";}
-                if (f.text) { msg += f.text; }
+                if (f.text) { msg += esc(f.text); }
                 break;
             case 0x04: 
                 msg += " Message ACK "; 
@@ -267,11 +273,13 @@ function onMessage(event) {
                 break;
         }
         msg += "</span>";
-        document.getElementById("monitor").innerHTML += msg;
-        document.getElementById('monitor').scrollTop = document.getElementById("monitor").scrollHeight;
+        var monitorEl = document.getElementById("monitor");
+        monitorEl.insertAdjacentHTML('beforeend', msg);
+        while (monitorEl.children.length > 200) { monitorEl.removeChild(monitorEl.firstChild); }
+        monitorEl.scrollTop = monitorEl.scrollHeight;
     }
 
-    //Message empfangen
+    //Message received
     if (d.message) {
         d.message.parsed = false;
         messages.push(d.message);
@@ -294,7 +302,7 @@ function onMessage(event) {
                 if (p.preferred === true) peers += " <span class='badge-preferred' title='" + t('peer.preferred') + "'>&#9733;</span>";
                 peers += "</td>";
                 var cls = p.available ? 'green' : (p.preferred === false ? 'suppressed' : 'red');
-                peers += "<td class='" + cls + "'>" + p.call + "</td>";
+                peers += "<td class='" + cls + "'>" + esc(p.call) + "</td>";
                 peers += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
                 peers += "<td>" + p.rssi + "</td>";
                 peers += "<td>" + p.snr + "</td>";
@@ -306,7 +314,7 @@ function onMessage(event) {
         document.getElementById("peer").innerHTML = peers;
     }
 
-    //Routing Liste
+    //Routing list
     if (d.routingList) {
         var routing = "";
         routing += "<table class='mesh-table'>";
@@ -316,8 +324,8 @@ function onMessage(event) {
             d.routingList.routes.forEach(function(r, index) {
                 const lastRX = new Date(r.timestamp * 1000);
                 routing += "<tr>";
-                routing += "<td>" + r.srcCall + "</td>";
-                routing += "<td>" + r.viaCall + "</td>";
+                routing += "<td>" + esc(r.srcCall) + "</td>";
+                routing += "<td>" + esc(r.viaCall) + "</td>";
                 routing += "<td>" + r.hopCount + "</td>";
                 routing += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit",  month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "")  + "</td>";
                 routing += "</tr>";
@@ -327,7 +335,7 @@ function onMessage(event) {
         document.getElementById("routing").innerHTML = routing;
     }    
 
-    //Einstellungen
+    //Settings
     if (d.settings) {
         settings = d.settings;
         function fmtIP(a) { return (a && a[0] !== undefined) ? a[0]+'.'+a[1]+'.'+a[2]+'.'+a[3] : '-'; }
@@ -406,7 +414,7 @@ function onMessage(event) {
 
         if (init == false) {
             init = true;
-            //messages.json laden (geht erst jetzt, weil sonst mycall nicht bekannt)
+            //Load messages.json (only now possible, because mycall wasn't known before)
             fetch(baseURL + "messages.json?" + Math.random())
                 .then(function(response) {
                     if (!response.ok) throw new Error("HTTP " + response.status);
@@ -428,11 +436,11 @@ function onMessage(event) {
                     messages = mergeWithCache(loaded);
                     saveCachedMessages();
 
-                    //"Trennzeichen" zwischen gespeicherten und neuen Nachrichten
+                    //"Separator" between stored and new messages
                     messages.push({"delimiter": true});
                     showMessages(true);
 
-                    //Alles als gelesen markieren
+                    //Mark everything as read
                     for (let i = 0; i <= 10; i++) {channels[i] = false;}
                     setUI(ui);
                 })
@@ -490,7 +498,7 @@ function onMessage(event) {
         }
     }
 
-    //Update verfügbar
+    //Update available
     if (d.update) {
         var el = document.getElementById("updateInfo");
         if (el) {
@@ -520,11 +528,11 @@ function onMessage(event) {
 
 }		
 
-//Nachricht senden
+//Send message
 async function sendMessage(text, channel) {
     // Collection groups are receive-only
     if (channel >= 3 && channelSammel[channel]) return;
-    //Zielrufzeichen zusammenbasteln
+    //Build destination callsign
     var dstCall = document.getElementById('dstCall').innerHTML;
     if (channel == 2) {
         dstCall = (await inputBox("Destination Call?", Cookie.get("channel2"), document.getElementById('messageText' + channel) )).toUpperCase();
@@ -532,20 +540,20 @@ async function sendMessage(text, channel) {
     }
     if (dstCall == "") {return;}
     if (dstCall == "all") dstCall = "";
-    //Nachricht vorbereiten und über Websocket senden
+    //Prepare message and send via WebSocket
     var message = {};
     message["text"] = text;
     message["dst"] = dstCall;
     if (channel == 2) {
-        //Private Nachricht
+        //Private message
         sendWS(JSON.stringify({sendMessage: message}));                    
     } else {
-        //Gruppe
+        //Group
         sendWS(JSON.stringify({sendGroup: message}));                    
     }
 }
 
-// ── LoRa-Frequenz-Presets ─────────────────────────────────────────────────────
+// ── LoRa frequency presets ─────────────────────────────────────────────────────
 const LORA_PRESETS = {
     '433': {
         frequency:       434.850,
@@ -592,7 +600,7 @@ function onFrequencyChange() {
     const currentBand = document.getElementById('loraPreset').value;
     if (newBand !== currentBand) {
         applyLoraPreset(newBand);
-        // Eingetippte Frequenz beibehalten, nur Restparameter aus Preset laden
+        // Keep the entered frequency, only load remaining parameters from preset
         document.getElementById('settingsLoraFrequency').value = newFreq;
     }
 }
@@ -823,7 +831,7 @@ function fillSettingsForm(s) {
 }
 
 function saveSettings() {
-    // ── Passwort-Felder prüfen ────────────────────────────────────────────────
+    // ── Check password fields ────────────────────────────────────────────────
     var pw1 = document.getElementById("settingsWebPassword").value;
     var pw2 = document.getElementById("settingsWebPasswordConfirm").value;
     if (pw1 !== pw2) {
@@ -890,17 +898,17 @@ function saveSettings() {
     captureSettingsSnapshot();
     settingsDirty = false;
 
-    // ── Passwort setzen (nur wenn Felder ausgefüllt) ──────────────────────────
+    // ── Set password (only if fields are filled) ──────────────────────────
     if (pw1 !== "") {
         console.log("[PW] Sende setPassword...");
         var hash = hashPassword(pw1);
         console.log("[PW] Hash berechnet:", hash.substring(0, 8) + "...");
         sendWS(JSON.stringify({ setPassword: hash }));
     } else {
-        console.log("[PW] Kein Passwort eingegeben, kein setPassword gesendet");
+        console.log("[PW] No password entered, no setPassword sent");
     }
 
-    // Felder nach dem Speichern leeren
+    // Clear fields after saving
     document.getElementById("settingsWebPassword").value = "";
     document.getElementById("settingsWebPasswordConfirm").value = "";
 
@@ -909,62 +917,62 @@ function saveSettings() {
 
 function showMessages(parseAll = false) {
     if (parseAll) {
-        //Alles löschen
+        //Delete everything
         for (let i = 1; i <= 10; i++) { document.getElementById("channel" + i).innerHTML = ""; }
     }
     
     var sound = false;
 
     messages.forEach(function(m) {
-        //Abbruch, wenn Nachricht schon angezeigt wurde
+        //Abort if message was already displayed
         if ((m.parsed == true) && (parseAll == false)) {return;}
         m.parsed = true;
         var msg = "";
 
-        //Nachricht aufbereiten
-        if ((m.messageType == 0) || (m.messageType == 1)) { //nur TEXT & TRACE Nachrichten
+        //Process message
+        if ((m.messageType == 0) || (m.messageType == 1)) { //only TEXT & TRACE messages
             var txClass = m.tx ? ' msg-tx' : '';
             const date = new Date(m.timestamp * 1000);
             var timeStr = date.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "");
             var prefix = "";
-            if (m.dstCall)  { prefix += m.dstCall + ": "; }
-            if (m.dstGroup) { prefix += m.dstGroup + ": "; }
+            if (m.dstCall)  { prefix += esc(m.dstCall) + ": "; }
+            if (m.dstGroup) { prefix += esc(m.dstGroup) + ": "; }
             if (m.messageType == 1) { prefix += "[TRACE] "; }
             msg += "<div class='msg-bubble" + txClass + "'>";
             msg += "<span class='msg-time'>" + timeStr + "</span>";
-            msg += "<span class='msg-call' onclick='insertCallsign(\"" + m.srcCall.replace(/"/g, '') + "\")'>" + m.srcCall + "</span>";
-            msg += "<span class='msg-text'>" + prefix + (m.text || '') + "</span>";
+            msg += "<span class='msg-call' onclick='insertCallsign(\"" + esc(m.srcCall).replace(/"/g, '') + "\")'>" + esc(m.srcCall) + "</span>";
+            msg += "<span class='msg-text'>" + prefix + esc(m.text || '') + "</span>";
             msg += "</div>";
         }
         
-        //Auf verschiedene Kanäle aufteilen
+        //Split into different channels
         var found = false;
-        //Nachricht an alle -> Channel 1
+        //Message to all -> Channel 1
         if ((m.dstCall == "") && (m.dstGroup == "") && (found == false)) {
             found = true;
-            document.getElementById("channel1").innerHTML += msg;
+            document.getElementById("channel1").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[1] = true;}
         }
 
-        //Nachrichten an mich -> Channel 2
+        //Messages to me -> Channel 2
         if ((m.dstCall == document.getElementById("settingsMycall").value) && (found == false)) {
             found = true;
-            document.getElementById("channel2").innerHTML += msg;
+            document.getElementById("channel2").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[2] = true;}
             sound = 1;
         }
 
         for (let i = 1; i <= 10; i++) {
-            //Trennung
+            //Separator
             if (m.delimiter == true) {
                 found = true;
-                document.getElementById("channel" + i).innerHTML += "<span></span>";
+                document.getElementById("channel" + i).insertAdjacentHTML('beforeend', "<span></span>");
             }
 
-            //Nachricht an Gruppe -> Channel 3...10
+            //Message to group -> Channel 3...10
             if ((m.dstGroup == Cookie.get("channel" + i)) && (m.dstCall == "") && (found == false)) {
                 found = true;
-                document.getElementById("channel" + i).innerHTML += msg;
+                document.getElementById("channel" + i).insertAdjacentHTML('beforeend', msg);
                 if (!parseAll && !channelMuted[i]) { channels[i] = true; sound = 1; }
             }
         }
@@ -974,29 +982,29 @@ function showMessages(parseAll = false) {
             for (let s = 3; s <= 10; s++) {
                 if (channelSammel[s] && sammelGroups[s] && sammelGroups[s].includes(m.dstGroup)) {
                     found = true;
-                    document.getElementById("channel" + s).innerHTML += msg;
+                    document.getElementById("channel" + s).insertAdjacentHTML('beforeend', msg);
                     break;
                 }
             }
         }
 
-        //Nachrichten, die ich gesendet habe -> Channel 2
+        //Messages that I sent -> Channel 2
         if ((m.srcCall == document.getElementById("settingsMycall").value) && (m.dstGroup == "") && (found == false)) {
             found = true;
-            document.getElementById("channel2").innerHTML += msg;
+            document.getElementById("channel2").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[2] = true;}
         }
 
         //Rest -> Channel 1
         if (found == false) {
             found = true;
-            document.getElementById("channel1").innerHTML += msg;
+            document.getElementById("channel1").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[1] = true;}
         }
 
     });
 
-    //UI Anpassen wegen nach unten scrollen und ungelesenen Nachrichten
+    //Adjust UI for auto-scroll and unread messages
     setUI(ui);
      if ((parseAll == false) && (sound == true)) {okSound.play(); console.log("SOUND!!!");}
 
@@ -1016,7 +1024,7 @@ function initWebSocket() {
 
     if (typeof setAntennaColor === 'function') setAntennaColor('#525252');
 
-    //Websocket init
+    //WebSocket init
     websocket = new WebSocket(gateway);
     websocket.onopen = onOpen;
     websocket.onclose = onClose;
@@ -1026,9 +1034,12 @@ function initWebSocket() {
 function onOpen(event) {
     init = false;
     authRequired = false;
+    _wsReconnectDelay = 500; // Reset backoff on successful connect
     if (typeof setAntennaColor === 'function') setAntennaColor('#4ecca3');
     keepAlive();
 }
+
+var _wsReconnectDelay = 500;
 
 function onClose(event) {
     init = false;
@@ -1036,19 +1047,24 @@ function onClose(event) {
     clearTimeout(timeout);
     // save cache before reconnect so messages survive reload
     if (_msgCacheDirty) saveCachedMessages();
-    setTimeout(initWebSocket, 500);
+    setTimeout(initWebSocket, _wsReconnectDelay);
+    // Exponential backoff: 500ms → 1s → 2s → 4s → … → 30s max
+    _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, 30000);
 }
 
 function sendWS(text) {
-    websocket.send(text);
-    console.log("TX: " + text);
+    try {
+        if (websocket.readyState !== WebSocket.OPEN) return;
+        websocket.send(text);
+        console.log("TX: " + text);
+    } catch(e) { console.warn('WS send failed:', e); }
 }
 
 function keepAlive() {
     if (websocket.readyState == websocket.OPEN) {
         websocket.send(JSON.stringify({ping: new Date() }));
     }
-    timeout = setTimeout(keepAlive, 1000);
+    timeout = setTimeout(keepAlive, 20000);
 }
 
 // save message cache when leaving page
@@ -1056,7 +1072,7 @@ window.addEventListener("beforeunload", function() {
     if (_msgCacheDirty) saveCachedMessages();
 });
 
-// ── Pure JS SHA-256 / HMAC-SHA256 (kein SubtleCrypto nötig, funktioniert über HTTP) ──
+// ── Pure JS SHA-256 / HMAC-SHA256 (no SubtleCrypto needed, works over HTTP) ──
 function _sha256bytes(input) {
     function rr(v,n){return(v>>>n)|(v<<(32-n));}
     const K=new Uint32Array([0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2]);
@@ -1093,7 +1109,7 @@ function _hmacSha256hex(keyHex, msg) {
     return Array.from(outerH).map(v => v.toString(16).padStart(8,'0')).join('');
 }
 
-// ── Auth-Overlay anzeigen / verstecken ────────────────────────────────────────
+// ── Show / hide auth overlay ────────────────────────────────────────
 function showAuthOverlay(mycall, chipId) {
     document.getElementById("auth-overlay").style.display = "flex";
     document.getElementById("auth-password").value = "";
@@ -1117,14 +1133,14 @@ function showAuthError(msg) {
     document.getElementById("auth-password").focus();
 }
 
-// ── HMAC-SHA256 Challenge-Response senden ─────────────────────────────────────
+// ── Send HMAC-SHA256 challenge-response ─────────────────────────────────────
 function sendAuthResponse(password) {
     const pwHash = _sha256hex(password);
     const response = _hmacSha256hex(pwHash, authNonce);
     sendWS(JSON.stringify({ auth: { response: response } }));
 }
 
-// ── SHA-256 eines Passworts berechnen (für setPassword) ───────────────────────
+// ── Compute SHA-256 of a password (for setPassword) ───────────────────────
 function hashPassword(password) {
     if (password === "") return "";
     return _sha256hex(password);

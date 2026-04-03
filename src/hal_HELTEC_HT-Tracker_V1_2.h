@@ -3,7 +3,7 @@
 
 #include "frame.h"
 
-// Pin-Definitionen für HELTEC HT-Tracker V1.2 (Wireless Tracker)
+// Pin definitions for HELTEC HT-Tracker V1.2 (Wireless Tracker)
 // ESP32-S3 + SX1262 + ST7735 TFT (80x160) + UC6580 GNSS
 
 // ── LoRa SPI (SX1262) ──────────────────────────────────────────────────────
@@ -30,12 +30,12 @@
 #define PIN_VEXT_CTRL 3
 
 // ── User button & LED ───────────────────────────────────────────────────────
-#define PIN_AP_MODE_SWITCH 0     //Taster Umschaltung WiFi Client/AP
-#define PIN_WIFI_LED 18          //LED WiFi-Status
+#define PIN_AP_MODE_SWITCH 0     //Button WiFi Client/AP switch
+#define PIN_WIFI_LED 18          //LED WiFi status
 
 // ── Battery ADC ─────────────────────────────────────────────────────────────
-#define PIN_VBAT_CTRL 37     //Akku-ADC aktivieren (HIGH = Messung aktiv)
-#define PIN_VBAT_ADC  1      //Akku-Spannungsmessung (ADC)
+#define PIN_VBAT_CTRL 37     //Enable battery ADC (HIGH = measurement active)
+#define PIN_VBAT_ADC  1      //Battery voltage measurement (ADC)
 #define HAS_BATTERY_ADC
 
 

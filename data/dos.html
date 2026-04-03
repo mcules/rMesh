@@ -15,7 +15,7 @@
         }
         #dos { width: 100vw; height: 100vh; }
         
-        /* Versteckt das js-dos Logo und zusätzliche UI-Elemente radikal */
+        /* Radically hides the js-dos logo and additional UI elements */
         .jd-canvas-container canvas { cursor: default !important; }
     </style>
 </head>
@@ -27,11 +27,11 @@
         Dos(document.getElementById("dos"), {
             url: "https://v8.js-dos.com/bundles/doom.jsdos", 
             autoStart: true,
-            kiosk: true,              // Aktiviert den Kiosk-Modus (entfernt fast alle UI-Elemente)
-            noSideBar: true,          // Entfernt die Seitenleiste
-            noFooter: true,           // Entfernt die Statusleiste unten
-            noFullscreen: true,       // Versteckt den Fullscreen-Button
-            mouseCapture: false,      // Verhindert, dass die Maus im Fenster "gefangen" wird
+            kiosk: true,              // Enables kiosk mode (removes almost all UI elements)
+            noSideBar: true,          // Removes the sidebar
+            noFooter: true,           // Removes the status bar at the bottom
+            noFullscreen: true,       // Hides the fullscreen button
+            mouseCapture: false,      // Prevents the mouse from being captured in the window
         });
     </script>
 </body>

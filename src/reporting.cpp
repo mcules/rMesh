@@ -7,16 +7,18 @@
 #include "reporting.h"
 #include "serial.h"
 #include "settings.h"
+#include "logging.h"
 #include "peer.h"
 #include "routing.h"
 #include "config.h"
+#include "main.h"
 
-bool topologyChanged = false;
-static uint32_t changeDebounceTimer = 0xFFFFFFFF;
+volatile bool topologyChanged = false;
+static volatile uint32_t changeDebounceTimer = 0xFFFFFFFF;
 static volatile bool reportingInProgress = false;
 
-// Gibt true zurück, wenn der Node Internet-Uplink hat
-// (WiFi-Client verbunden, nicht im AP-Mode)
+// Returns true if the node has internet uplink
+// (WiFi client connected, not in AP mode)
 static bool hasInternetUplink() {
     if (settings.apMode) return false;
     return (WiFi.status() == WL_CONNECTED);
@@ -33,7 +35,7 @@ static void reportTopologyTask(void* pvParameters) {
     }
     http.addHeader("Content-Type", "application/json");
 
-    // JSON aufbauen
+    // Build JSON
     JsonDocument doc;
     doc["call"]      = settings.mycall;
     doc["position"]  = settings.position;
@@ -49,29 +51,37 @@ static void reportTopologyTask(void* pvParameters) {
         doc["chip_id"] = chipId;
     }
 
-    // AFU-Flag und Band aus der eingestellten Frequenz ableiten
+    // Derive amateur radio flag and band from the configured frequency
     doc["is_afu"] = isAmateurBand(settings.loraFrequency);
     doc["band"]   = isPublicBand(settings.loraFrequency) ? "868" : "433";
 
-    // Peer-Liste (Snapshot, da peerList sich ändern kann)
-    JsonArray peers = doc["peers"].to<JsonArray>();
-    for (size_t i = 0; i < peerList.size(); i++) {
-        if (!peerList[i].available) continue;
-        JsonObject o = peers.add<JsonObject>();
-        o["call"]      = peerList[i].nodeCall;
-        o["rssi"]      = peerList[i].rssi;
-        o["snr"]       = peerList[i].snr;
-        o["port"]      = peerList[i].port;
-        o["available"] = peerList[i].available;
+    // Snapshot lists under listMutex to avoid data races with the main loop
+    std::vector<Peer> peerSnap;
+    std::vector<Route> routeSnap;
+    if (xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
+        peerSnap = peerList;
+        routeSnap = routingList;
+        xSemaphoreGive(listMutex);
     }
 
-    // Routing-Tabelle
+    JsonArray peers = doc["peers"].to<JsonArray>();
+    for (size_t i = 0; i < peerSnap.size(); i++) {
+        if (!peerSnap[i].available) continue;
+        JsonObject o = peers.add<JsonObject>();
+        o["call"]      = peerSnap[i].nodeCall;
+        o["rssi"]      = peerSnap[i].rssi;
+        o["snr"]       = peerSnap[i].snr;
+        o["port"]      = peerSnap[i].port;
+        o["available"] = peerSnap[i].available;
+    }
+
+    // Routing table
     JsonArray routes = doc["routes"].to<JsonArray>();
-    for (size_t i = 0; i < routingList.size(); i++) {
+    for (size_t i = 0; i < routeSnap.size(); i++) {
         JsonObject o = routes.add<JsonObject>();
-        o["src"]  = routingList[i].srcCall;
-        o["via"]  = routingList[i].viaCall;
-        o["hops"] = routingList[i].hopCount;
+        o["src"]  = routeSnap[i].srcCall;
+        o["via"]  = routeSnap[i].viaCall;
+        o["hops"] = routeSnap[i].hopCount;
     }
 
     char* buf = (char*)malloc(4096);
@@ -84,7 +94,7 @@ static void reportTopologyTask(void* pvParameters) {
     if (code == 200) {
         topologyChanged = false;
     }
-    if (serialDebug) Serial.printf("DBG:{\"event\":\"reporting\",\"action\":\"topology\",\"http_code\":%d}\n", code);
+    logPrintf(LOG_DEBUG, "Report", "topology report http_code=%d", code);
     reportingInProgress = false;
     vTaskDelete(NULL);
 }
@@ -94,7 +104,7 @@ void reportTopology() {
     if (strlen(settings.mycall) == 0) return;
     if (reportingInProgress) return;
     if (ESP.getFreeHeap() < 40000) {
-        if (serialDebug) Serial.printf("DBG:{\"event\":\"reporting\",\"action\":\"skipped\",\"reason\":\"low_heap\",\"heap\":%u}\n", ESP.getFreeHeap());
+        logPrintf(LOG_DEBUG, "Report", "topology skipped, low heap=%u", ESP.getFreeHeap());
         return;
     }
     reportingInProgress = true;
@@ -102,7 +112,7 @@ void reportTopology() {
     xTaskCreate(reportTopologyTask, "ReportTopo", 4096, NULL, 1, NULL);
 }
 
-// Muss regelmäßig aus dem main loop aufgerufen werden
+// Must be called regularly from the main loop
 void reportTopologyIfChanged() {
     if (topologyChanged && (int32_t)(millis() - changeDebounceTimer) >= 0) {
         changeDebounceTimer = millis() + 0x7FFFFFFF; // effectively disabled
@@ -110,11 +120,35 @@ void reportTopologyIfChanged() {
     }
 }
 
-// Wird aus peer.cpp / routing.cpp aufgerufen wenn sich etwas ändert
+// Called from peer.cpp / routing.cpp when something changes
 void markTopologyChanged() {
     topologyChanged = true;
-    // Debounce: frühestens 30s nach der letzten Änderung reporten
+    // Debounce: report at earliest 30 s after the last change
     changeDebounceTimer = millis() + 30000;
+}
+
+bool logRemoteCommand(const char* sender, const char* command) {
+    if (!hasInternetUplink()) return false;
+    if (strlen(settings.mycall) == 0) return false;
+
+    WiFiClient client;
+    HTTPClient http;
+    http.setTimeout(5000);
+    if (!http.begin(client, "http://www.rMesh.de:8082/command_log.php")) return false;
+    http.addHeader("Content-Type", "application/json");
+
+    JsonDocument doc;
+    doc["call"]    = settings.mycall;
+    doc["sender"]  = sender;
+    doc["command"] = command;
+
+    String body;
+    serializeJson(doc, body);
+    int code = http.POST(body);
+    http.end();
+
+    logPrintf(LOG_DEBUG, "Report", "command_log sender=%s command=%s http_code=%d", sender, command, code);
+    return (code == 200);
 }
 
 #endif // HAS_WIFI

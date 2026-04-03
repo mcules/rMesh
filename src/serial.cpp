@@ -20,6 +20,7 @@
 
 #include "serial.h"
 #include "config.h"
+#include "logging.h"
 #include "settings.h"
 #include "main.h"
 #include "helperFunctions.h"
@@ -37,61 +38,63 @@ void checkSerialRX() {
         //Echo
         Serial.write(rx);
         if ((rx == 13) || (rx == 10)) {
-            //Auswerten
+            //Process
             if (strlen(serialRxBuffer) > 0 ) {
 
-                //Parameter kopieren
+                //Copy parameters
                 char parameter[200] = {0};
                 char* pos = strchr(serialRxBuffer, ' ');
                 if (pos != nullptr) {
-                    pos++; // hinter das Leerzeichen
-                    strncpy(parameter, pos, sizeof(parameter) - 1); // sicheren Copy
-                    Serial.println(parameter);
+                    pos++; // past the space
+                    strncpy(parameter, pos, sizeof(parameter) - 1); // safe copy
+                    logPrintf(LOG_INFO, "CLI", "%s", parameter);
                 }
 
-                //Puffer nach Kleinbuchstaben
+                //Convert buffer to lowercase
                 for (int i = 0; serialRxBuffer[i] != '\0'; i++) {
                     serialRxBuffer[i] = tolower(serialRxBuffer[i]);
                 }
                 
-                //Befehle auswerten
+                //Process commands
 
-                //Testfunktionen
-                if (strncmp(serialRxBuffer, "t", 1) == 0) {
-                    struct tm tm;
-                    tm.tm_year = 2024 - 1900; // Jahr seit 1900
-                    tm.tm_mon = 1;            // Februar (0-11, also 1 = Februar)
-                    tm.tm_mday = 14;          // Tag
-                    tm.tm_hour = 4;           // Stunde
-                    tm.tm_min = 59;           // Minute
-                    tm.tm_sec = 0;            // Sekunde
+                //Test functions
+                // BUG-S20: Hardcoded time-set removed
+                // if (strncmp(serialRxBuffer, "t", 1) == 0) {
+                //     struct tm tm;
+                //     tm.tm_year = 2024 - 1900;
+                //     tm.tm_mon = 1;
+                //     tm.tm_mday = 14;
+                //     tm.tm_hour = 4;
+                //     tm.tm_min = 59;
+                //     tm.tm_sec = 0;
+                //     time_t t = mktime(&tm);
+                //     struct timeval now = { .tv_sec = t };
+                //     settimeofday(&now, NULL);
+                //     Serial.println("Uhrzeit manuell auf 03:59:00 gesetzt!");
+                // }
 
-                    time_t t = mktime(&tm);
-                    struct timeval now = { .tv_sec = t };
-                    settimeofday(&now, NULL);
-
-                    Serial.println("Uhrzeit manuell auf 03:59:00 gesetzt!");         
-                }
-
-                //Hilfe
+                //Help
                 if (strncmp(serialRxBuffer, "h", 1) == 0) {
                     File file = LittleFS.open("/help.txt", "r");
                     if (file) {
                         while (file.available()) {
                             String line = file.readStringUntil('\n');
                             line.replace("\r", "");
-                            Serial.println(line);
+                            logPrintf(LOG_INFO, "CLI", "%s", line.c_str());
                         }
                         file.close();
                     } else {
-                        Serial.println("Fehler: /help.txt nicht gefunden. Filesystem neu flashen?");
+                        logPrintf(LOG_ERROR, "CLI", "Error: /help.txt not found. Reflash filesystem?");
                     }
                 }
 
                 //Version
                 if (strncmp(serialRxBuffer, "v", 1) == 0) {
                     //+ BOARD TYPE
-                    Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);   
+                    logPrintf(LOG_INFO, "System", "");
+                    logPrintf(LOG_INFO, "System", "%s", PIO_ENV_NAME);
+                    logPrintf(LOG_INFO, "System", "%s %s", NAME, VERSION);
+                    logPrintf(LOG_INFO, "System", "READY.");
                 }
 
                 //Settings
@@ -101,36 +104,36 @@ void checkSerialRX() {
 
                 //Reboot
                 if (strncmp(serialRxBuffer, "reb", 3) == 0) {
-                    Serial.println("Reboot...");
+                    logPrintf(LOG_INFO, "CLI", "Reboot...");
                     rebootTimer = millis(); rebootRequested = true;
                 }
 
                 #ifdef HAS_WIFI
                 //OTA Update
                 if (strncmp(serialRxBuffer, "upd", 3) == 0 && strncmp(serialRxBuffer, "updf", 4) != 0) {
-                    Serial.println("OTA Update gestartet...");
+                    logPrintf(LOG_INFO, "CLI", "OTA update started...");
                     checkForUpdates();
                 }
 
-                // Update-Kanal setzen: "uc 0" = Release, "uc 1" = Dev
+                // Set update channel: "uc 0" = Release, "uc 1" = Dev
                 if (strncmp(serialRxBuffer, "uc", 2) == 0 && (serialRxBuffer[2] == ' ' || serialRxBuffer[2] == '\0')) {
                     if (strlen(parameter) > 0) {
                         updateChannel = (uint8_t)atoi(parameter);
                         saveSettings();
                     }
-                    Serial.printf("updateChannel: %d (%s)\n", updateChannel, updateChannel == 1 ? "dev" : "release");
+                    logPrintf(LOG_INFO, "Config", "updateChannel: %d (%s)", updateChannel, updateChannel == 1 ? "dev" : "release");
                 }
 
                 // Force-Install: "updf 0" = Release, "updf 1" = Dev
                 if (strncmp(serialRxBuffer, "updf", 4) == 0) {
                     pendingForceChannel = (strlen(parameter) > 0) ? (uint8_t)atoi(parameter) : updateChannel;
                     pendingForceUpdate = true;
-                    Serial.printf("Force-Install gestartet (Kanal: %s)...\n", pendingForceChannel == 1 ? "dev" : "release");
+                    logPrintf(LOG_INFO, "CLI", "Force install started (channel: %s)...", pendingForceChannel == 1 ? "dev" : "release");
                 }
 
-                //Wifi Scannen
+                //WiFi scan
                 if (strncmp(serialRxBuffer, "sc", 2) == 0) {
-                    Serial.println("WiFi scan.....");
+                    logPrintf(LOG_INFO, "WiFi", "WiFi scan.....");
                     pendingReconnectScan = false;
                     WiFi.scanNetworks(true);
                 }
@@ -147,10 +150,10 @@ void checkSerialRX() {
                     if (parameter[0] == '\0') {
                         // List all networks
                         if (wifiNetworks.empty()) {
-                            Serial.println("WiFi networks: none");
+                            logPrintf(LOG_INFO, "WiFi", "WiFi networks: none");
                         } else {
                             for (size_t i = 0; i < wifiNetworks.size(); i++) {
-                                Serial.printf("WiFi %zu: %s%s (pw: %s)\n", i + 1,
+                                logPrintf(LOG_INFO, "WiFi", "WiFi %zu: %s%s (pw: %s)", i + 1,
                                     wifiNetworks[i].ssid,
                                     wifiNetworks[i].favorite ? " [favorite]" : "",
                                     (wifiNetworks[i].password[0] != '\0') ? "set" : "none");
@@ -161,7 +164,7 @@ void checkSerialRX() {
                         settings.wifiSSID[0] = '\0';
                         settings.wifiPassword[0] = '\0';
                         saveWifiNetworks();
-                        Serial.println("All WiFi networks deleted.");
+                        logPrintf(LOG_INFO, "WiFi", "All WiFi networks deleted.");
                     } else if (strncmp(parameter, "add ", 4) == 0) {
                         const char* rest = parameter + 4;
                         // SSID = first word, password = rest (or empty)
@@ -181,17 +184,17 @@ void checkSerialRX() {
                         wifiNetworks.push_back(net);
                         saveSettings();
                         wifiInit();
-                        Serial.printf("WiFi %zu added: %s%s\n", wifiNetworks.size(),
+                        logPrintf(LOG_INFO, "WiFi", "WiFi %zu added: %s%s", wifiNetworks.size(),
                             net.ssid, net.favorite ? " [favorite]" : "");
                     } else if (strncmp(parameter, "del ", 4) == 0) {
                         int idx = atoi(parameter + 4) - 1;
                         if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
-                            Serial.printf("WiFi %d deleted: %s\n", idx + 1, wifiNetworks[idx].ssid);
+                            logPrintf(LOG_INFO, "WiFi", "WiFi %d deleted: %s", idx + 1, wifiNetworks[idx].ssid);
                             wifiNetworks.erase(wifiNetworks.begin() + idx);
                             saveSettings();
                             wifiInit();
                         } else {
-                            Serial.printf("Error: index 1-%zu expected!\n", wifiNetworks.size());
+                            logPrintf(LOG_ERROR, "WiFi", "Error: index 1-%zu expected!", wifiNetworks.size());
                         }
                     } else if (strncmp(parameter, "fav ", 4) == 0) {
                         int idx = atoi(parameter + 4) - 1;
@@ -200,9 +203,9 @@ void checkSerialRX() {
                             wifiNetworks[idx].favorite = true;
                             saveSettings();
                             wifiInit();
-                            Serial.printf("WiFi %d set as favorite: %s\n", idx + 1, wifiNetworks[idx].ssid);
+                            logPrintf(LOG_INFO, "WiFi", "WiFi %d set as favorite: %s", idx + 1, wifiNetworks[idx].ssid);
                         } else {
-                            Serial.printf("Error: index 1-%zu expected!\n", wifiNetworks.size());
+                            logPrintf(LOG_ERROR, "WiFi", "Error: index 1-%zu expected!", wifiNetworks.size());
                         }
                     } else if (strncmp(parameter, "pw ", 3) == 0) {
                         const char* rest = parameter + 3;
@@ -212,15 +215,15 @@ void checkSerialRX() {
                             if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
                                 strlcpy(wifiNetworks[idx].password, sp + 1, sizeof(wifiNetworks[idx].password));
                                 saveSettings();
-                                Serial.printf("WiFi %d password updated.\n", idx + 1);
+                                logPrintf(LOG_INFO, "WiFi", "WiFi %d password updated.", idx + 1);
                             } else {
-                                Serial.printf("Error: index 1-%zu expected!\n", wifiNetworks.size());
+                                logPrintf(LOG_ERROR, "WiFi", "Error: index 1-%zu expected!", wifiNetworks.size());
                             }
                         } else {
-                            Serial.println("Usage: wifi pw <N> <PASSWORD>");
+                            logPrintf(LOG_INFO, "WiFi", "Usage: wifi pw <N> <PASSWORD>");
                         }
                     } else {
-                        Serial.println("Commands: wifi | wifi add <SSID> [<PW>] | wifi del <N> | wifi fav <N> | wifi pw <N> <PW> | wifi clear");
+                        logPrintf(LOG_INFO, "WiFi", "Commands: wifi | wifi add <SSID> [<PW>] | wifi del <N> | wifi fav <N> | wifi pw <N> <PW> | wifi clear");
                     }
                 }
 
@@ -231,30 +234,30 @@ void checkSerialRX() {
                 // "ap pw -"          → clear AP password
                 if (strncmp(serialRxBuffer, "ap", 2) == 0 && (serialRxBuffer[2] == ' ' || serialRxBuffer[2] == '\0')) {
                     if (parameter[0] == '\0') {
-                        Serial.printf("AP Name: %s\n", apName.c_str());
-                        Serial.printf("AP Password: %s\n", apPassword.isEmpty() ? "(none)" : "set");
+                        logPrintf(LOG_INFO, "WiFi", "AP Name: %s", apName.c_str());
+                        logPrintf(LOG_INFO, "WiFi", "AP Password: %s", apPassword.isEmpty() ? "(none)" : "set");
                     } else if (strncmp(parameter, "name ", 5) == 0) {
                         apName = String(parameter + 5);
                         saveSettings();
                         if (settings.apMode) wifiInit();
-                        Serial.printf("AP Name: %s\n", apName.c_str());
+                        logPrintf(LOG_INFO, "WiFi", "AP Name: %s", apName.c_str());
                     } else if (strncmp(parameter, "pw ", 3) == 0) {
                         const char* pw = parameter + 3;
                         if (strcmp(pw, "-") == 0) {
                             apPassword = "";
-                            Serial.println("AP password cleared.");
+                            logPrintf(LOG_INFO, "WiFi", "AP password cleared.");
                             saveSettings();
                             if (settings.apMode) wifiInit();
                         } else if (strlen(pw) < 8) {
-                            Serial.println("Error: AP password must be at least 8 characters!");
+                            logPrintf(LOG_ERROR, "WiFi", "Error: AP password must be at least 8 characters!");
                         } else {
                             apPassword = String(pw);
-                            Serial.println("AP password set.");
+                            logPrintf(LOG_INFO, "WiFi", "AP password set.");
                             saveSettings();
                             if (settings.apMode) wifiInit();
                         }
                     } else {
-                        Serial.println("Commands: ap | ap name <NAME> | ap pw <PASSWORD> | ap pw -");
+                        logPrintf(LOG_INFO, "WiFi", "Commands: ap | ap name <NAME> | ap pw <PASSWORD> | ap pw -");
                     }
                 }
 
@@ -267,7 +270,7 @@ void checkSerialRX() {
                         saveSettings();
                         wifiInit();
                     }
-                    Serial.printf("WiFi SSID: %s\n", settings.wifiSSID);
+                    logPrintf(LOG_INFO, "WiFi", "WiFi SSID: %s", settings.wifiSSID);
                 }
 
                 // Legacy: WiFi Password (still works, updates network in list)
@@ -279,10 +282,10 @@ void checkSerialRX() {
                         saveSettings();
                         wifiInit();
                     }
-                    Serial.printf("WiFi Password: %s\n", (settings.wifiPassword[0] != '\0') ? "set" : "none");
+                    logPrintf(LOG_INFO, "WiFi", "WiFi Password: %s", (settings.wifiPassword[0] != '\0') ? "set" : "none");
                 }            
                 
-                //IP-Adresse
+                //IP address
                 if (strncmp(serialRxBuffer, "i", 1) == 0) {
                     if (strlen(parameter) > 0) {
                         IPAddress tempIP;
@@ -291,10 +294,10 @@ void checkSerialRX() {
                             saveSettings();
                             wifiInit();
                         } else {
-                            Serial.println("Fehler: Ungültiges IP-Format!");
-                        }                    
+                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
+                        }
                     }
-                    Serial.printf("IP: %d.%d.%d.%d\n", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
+                    logPrintf(LOG_INFO, "Config", "IP: %d.%d.%d.%d", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
                 }       
                 
                 //Gateway
@@ -306,13 +309,13 @@ void checkSerialRX() {
                             saveSettings();
                             wifiInit();
                         } else {
-                            Serial.println("Fehler: Ungültiges IP-Format!");
-                        }                    
+                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
+                        }
                     }
-                    Serial.printf("Gateway: %d.%d.%d.%d\n", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
+                    logPrintf(LOG_INFO, "Config", "Gateway: %d.%d.%d.%d", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
                 }
 
-                //DNS-Adresse
+                //DNS address
                 if (strncmp(serialRxBuffer, "dn", 2) == 0) {
                     if (strlen(parameter) > 0) {
                         IPAddress tempIP;
@@ -321,10 +324,10 @@ void checkSerialRX() {
                             saveSettings();
                             wifiInit();
                         } else {
-                            Serial.println("Fehler: Ungültiges IP-Format!");
-                        }                    
+                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
+                        }
                     }
-                    Serial.printf("DNS: %d.%d.%d.%d\n", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
+                    logPrintf(LOG_INFO, "Config", "DNS: %d.%d.%d.%d", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
                 }
 
                 //Netmask
@@ -336,10 +339,10 @@ void checkSerialRX() {
                             saveSettings();
                             wifiInit();
                         } else {
-                            Serial.println("Fehler: Ungültiges IP-Format!");
-                        }                    
+                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
+                        }
                     }
-                    Serial.printf("Netmask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
+                    logPrintf(LOG_INFO, "Config", "Netmask: %d.%d.%d.%d", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
                 }
 
                 //AP-Mode toggle (legacy: "a 1" / "a 0")
@@ -353,10 +356,10 @@ void checkSerialRX() {
                         saveSettings();
                         wifiInit();
                     }
-                    Serial.printf("AP-Mode: %s\n", settings.apMode ? "true" : "false");
+                    logPrintf(LOG_INFO, "Config", "AP-Mode: %s", settings.apMode ? "true" : "false");
                 }
 
-                //DHCP-Mode
+                //DHCP mode
                 if (strncmp(serialRxBuffer, "dh", 2) == 0) {
                     if (strlen(parameter) > 0) {
                         bool value = false;
@@ -367,7 +370,7 @@ void checkSerialRX() {
                         saveSettings();
                         wifiInit();
                     }
-                    Serial.printf("DHCP: %s\n", settings.dhcpActive ? "true" : "false");
+                    logPrintf(LOG_INFO, "Config", "DHCP: %s", settings.dhcpActive ? "true" : "false");
                 }
                 #endif // HAS_WIFI
 
@@ -384,9 +387,9 @@ void checkSerialRX() {
                     rebootTimer = millis(); rebootRequested = true;
                 }
 
-                // Frequenz-Preset
-                // "freq 433" → 433-MHz-Amateurfunk-Preset
-                // "freq 868" → 868-MHz-Public-Preset (Sub-Band P, 500 mW)
+                // Frequency preset
+                // "freq 433" → 433 MHz amateur radio preset
+                // "freq 868" → 868 MHz public preset (sub-band P, 500 mW)
                 if (strncmp(serialRxBuffer, "fr", 2) == 0) {
                     if (strncmp(parameter, "433", 3) == 0) {
                         settings.loraFrequency       = 434.850f;
@@ -397,7 +400,7 @@ void checkSerialRX() {
                         settings.loraPreambleLength  = 10;
                         settings.loraSyncWord        = syncWordForFrequency(settings.loraFrequency);
                         saveSettings();
-                        Serial.println("Preset 433 MHz (Amateurfunk) gesetzt.");
+                        logPrintf(LOG_INFO, "Config", "Preset 433 MHz (amateur radio) applied.");
                     } else if (strncmp(parameter, "868", 3) == 0) {
                         settings.loraFrequency       = 869.525f;
                         settings.loraBandwidth       = 125.0f;
@@ -407,16 +410,16 @@ void checkSerialRX() {
                         settings.loraPreambleLength  = 10;
                         settings.loraSyncWord        = syncWordForFrequency(settings.loraFrequency);
                         saveSettings();
-                        Serial.println("Preset 868 MHz (Public, 500 mW) gesetzt.");
+                        logPrintf(LOG_INFO, "Config", "Preset 868 MHz (public, 500 mW) applied.");
                     } else {
-                        Serial.printf("Aktuelle Frequenz: %.3f MHz\n", settings.loraFrequency);
-                        Serial.println("Verwendung: freq 433  oder  freq 868");
+                        logPrintf(LOG_INFO, "Config", "Current frequency: %.3f MHz", settings.loraFrequency);
+                        logPrintf(LOG_INFO, "Config", "Usage: freq 433  or  freq 868");
                     }
                 }
 
 
                 // Callsign
-                // "call DL1ABC-1" → Callsign setzen
+                // "call DL1ABC-1" → Set callsign
                 if (strncmp(serialRxBuffer, "call", 4) == 0) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.mycall, parameter, sizeof(settings.mycall) - 1);
@@ -424,18 +427,18 @@ void checkSerialRX() {
                         for (size_t i = 0; settings.mycall[i]; i++) settings.mycall[i] = toupper(settings.mycall[i]);
                         saveSettings();
                     }
-                    Serial.printf("Callsign: %s\n", settings.mycall);
+                    logPrintf(LOG_INFO, "Config", "Callsign: %s", settings.mycall);
                 }
 
                 // Position
-                // "pos JN48mw" oder "pos 48.1234,11.5678"
+                // "pos JN48mw" or "pos 48.1234,11.5678"
                 if (strncmp(serialRxBuffer, "pos", 3) == 0) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.position, parameter, sizeof(settings.position) - 1);
                         settings.position[sizeof(settings.position) - 1] = '\0';
                         saveSettings();
                     }
-                    Serial.printf("Position: %s\n", settings.position);
+                    logPrintf(LOG_INFO, "Config", "Position: %s", settings.position);
                 }
 
                 // NTP-Server
@@ -445,7 +448,7 @@ void checkSerialRX() {
                         settings.ntpServer[sizeof(settings.ntpServer) - 1] = '\0';
                         saveSettings();
                     }
-                    Serial.printf("NTP: %s\n", settings.ntpServer);
+                    logPrintf(LOG_INFO, "Config", "NTP: %s", settings.ntpServer);
                 }
 
                 // TX-Power (Output Power in dBm)
@@ -457,7 +460,7 @@ void checkSerialRX() {
                         settings.loraOutputPower = txp;
                         saveSettings();
                     }
-                    Serial.printf("TX Power: %d dBm\n", settings.loraOutputPower);
+                    logPrintf(LOG_INFO, "Config", "TX Power: %d dBm", settings.loraOutputPower);
                 }
 
                 // Bandwidth in kHz
@@ -467,7 +470,7 @@ void checkSerialRX() {
                         settings.loraBandwidth = atof(parameter);
                         saveSettings();
                     }
-                    Serial.printf("Bandwidth: %.2f kHz\n", settings.loraBandwidth);
+                    logPrintf(LOG_INFO, "Config", "Bandwidth: %.2f kHz", settings.loraBandwidth);
                 }
 
                 // Spreading Factor (6–12)
@@ -476,7 +479,7 @@ void checkSerialRX() {
                         settings.loraSpreadingFactor = (uint8_t)atoi(parameter);
                         saveSettings();
                     }
-                    Serial.printf("Spreading Factor: %d\n", settings.loraSpreadingFactor);
+                    logPrintf(LOG_INFO, "Config", "Spreading Factor: %d", settings.loraSpreadingFactor);
                 }
 
                 // Coding Rate (5–8)
@@ -485,7 +488,7 @@ void checkSerialRX() {
                         settings.loraCodingRate = (uint8_t)atoi(parameter);
                         saveSettings();
                     }
-                    Serial.printf("Coding Rate: %d\n", settings.loraCodingRate);
+                    logPrintf(LOG_INFO, "Config", "Coding Rate: %d", settings.loraCodingRate);
                 }
 
                 // Preamble Length
@@ -495,27 +498,27 @@ void checkSerialRX() {
                         settings.loraPreambleLength = (int16_t)atoi(parameter);
                         saveSettings();
                     }
-                    Serial.printf("Preamble Length: %d\n", settings.loraPreambleLength);
+                    logPrintf(LOG_INFO, "Config", "Preamble Length: %d", settings.loraPreambleLength);
                 }
 
-                // Sync Word (hexadezimal, z.B. "sw 2B")
+                // Sync Word (hexadecimal, e.g. "sw 2B")
                 if (strncmp(serialRxBuffer, "sw", 2) == 0) {
                     if (strlen(parameter) > 0) {
                         settings.loraSyncWord = (uint8_t)strtol(parameter, nullptr, 16);
                         saveSettings();
                     }
-                    Serial.printf("SyncWord: %02X\n", settings.loraSyncWord);
+                    logPrintf(LOG_INFO, "Config", "SyncWord: %02X", settings.loraSyncWord);
                 }
 
                 // Repeat / Relay
-                // "rep 1" oder "rep 0"
+                // "rep 1" or "rep 0"
                 if (strncmp(serialRxBuffer, "rep", 3) == 0) {
                     if (strlen(parameter) > 0) {
                         bool value = (parameter[0] == '1' || parameter[0] == 'e' || parameter[0] == 't');
                         settings.loraRepeat = value;
                         saveSettings();
                     }
-                    Serial.printf("Repeat: %s\n", settings.loraRepeat ? "true" : "false");
+                    logPrintf(LOG_INFO, "Config", "Repeat: %s", settings.loraRepeat ? "true" : "false");
                 }
 
                 // Max Hop Message
@@ -524,7 +527,7 @@ void checkSerialRX() {
                         extSettings.maxHopMessage = (uint8_t)atoi(parameter);
                         saveSettings();
                     }
-                    Serial.printf("MaxHopMessage: %d\n", extSettings.maxHopMessage);
+                    logPrintf(LOG_INFO, "Config", "MaxHopMessage: %d", extSettings.maxHopMessage);
                 }
 
                 // Max Hop Position
@@ -533,7 +536,7 @@ void checkSerialRX() {
                         extSettings.maxHopPosition = (uint8_t)atoi(parameter);
                         saveSettings();
                     }
-                    Serial.printf("MaxHopPosition: %d\n", extSettings.maxHopPosition);
+                    logPrintf(LOG_INFO, "Config", "MaxHopPosition: %d", extSettings.maxHopPosition);
                 }
 
                 // Max Hop Telemetry
@@ -542,18 +545,18 @@ void checkSerialRX() {
                         extSettings.maxHopTelemetry = (uint8_t)atoi(parameter);
                         saveSettings();
                     }
-                    Serial.printf("MaxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
+                    logPrintf(LOG_INFO, "Config", "MaxHopTelemetry: %d", extSettings.maxHopTelemetry);
                 }
 
                 #ifdef HAS_WIFI
-                // WebUI-Passwort
-                // "webpw <passwort>" → Passwort setzen (wird als SHA256 gespeichert)
-                // "webpw -"          → Passwort loeschen
+                // WebUI password
+                // "webpw <password>" → Set password (stored as SHA256)
+                // "webpw -"          → Clear password
                 if (strncmp(serialRxBuffer, "webp", 4) == 0) {
                     if (strlen(parameter) > 0) {
                         if (strcmp(parameter, "-") == 0) {
                             savePasswordHash("");
-                            Serial.println("WebUI-Passwort geloescht.");
+                            logPrintf(LOG_INFO, "Config", "WebUI password cleared.");
                         } else {
                             uint8_t hash[32];
                             mbedtls_md_context_t ctx;
@@ -567,30 +570,30 @@ void checkSerialRX() {
                             for (int i = 0; i < 32; i++) sprintf(hexHash + 2 * i, "%02x", hash[i]);
                             hexHash[64] = '\0';
                             savePasswordHash(String(hexHash));
-                            Serial.println("WebUI-Passwort gesetzt.");
+                            logPrintf(LOG_INFO, "Config", "WebUI password set.");
                         }
                     } else {
-                        Serial.printf("WebUI-Passwort: %s\n", webPasswordHash.isEmpty() ? "nicht gesetzt" : "gesetzt");
+                        logPrintf(LOG_INFO, "Config", "WebUI password: %s", webPasswordHash.isEmpty() ? "not set" : "set");
                     }
                 }
 
-                // UDP-Peer-Verwaltung
-                // "udp"                  → alle Peers auflisten
-                // "udp add <IP>"         → Peer anhängen
-                // "udp add <IP> legacy"  → Legacy-Peer anhängen
-                // "udp del <N>"          → Peer N löschen (1-basiert)
-                // "udp <N> <IP>"         → IP von Peer N setzen
-                // "udp <N> legacy"       → Legacy-Flag von Peer N umschalten
-                // "udp <N> enabled"      → Enabled-Flag von Peer N umschalten
-                // "udp clear"            → alle Peers löschen
+                // UDP peer management
+                // "udp"                  → list all peers
+                // "udp add <IP>"         → add peer
+                // "udp add <IP> legacy"  → add legacy peer
+                // "udp del <N>"          → delete peer N (1-based)
+                // "udp <N> <IP>"         → set IP of peer N
+                // "udp <N> legacy"       → toggle legacy flag of peer N
+                // "udp <N> enabled"      → toggle enabled flag of peer N
+                // "udp clear"            → delete all peers
                 if (strncmp(serialRxBuffer, "udp", 3) == 0) {
                     if (parameter == nullptr || parameter[0] == '\0') {
-                        // Alle Peers auflisten
+                        // List all peers
                         if (udpPeers.empty()) {
-                            Serial.println("UDP Peers: keine");
+                            logPrintf(LOG_INFO, "UDP", "UDP Peers: none");
                         } else {
                             for (size_t i = 0; i < udpPeers.size(); i++) {
-                                Serial.printf("UDP-Peer %zu: %d.%d.%d.%d%s%s\n", i + 1,
+                                logPrintf(LOG_INFO, "UDP", "UDP-Peer %zu: %d.%d.%d.%d%s%s", i + 1,
                                     udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
                                     udpPeerLegacy[i] ? " [legacy]" : "",
                                     (bool)udpPeerEnabled[i] ? "" : " [disabled]");
@@ -600,10 +603,10 @@ void checkSerialRX() {
                         udpPeers.clear();
                         udpPeerLegacy.clear();
                         saveUdpPeers();
-                        Serial.println("Alle UDP-Peers gelöscht.");
+                        logPrintf(LOG_INFO, "UDP", "All UDP peers deleted.");
                     } else if (strncmp(parameter, "add ", 4) == 0) {
                         const char* rest = parameter + 4;
-                        // IP extrahieren (bis Leerzeichen oder Ende)
+                        // Extract IP (until space or end)
                         char ipStr[20];
                         const char* sp = strchr(rest, ' ');
                         if (sp) {
@@ -623,26 +626,26 @@ void checkSerialRX() {
                             udpPeerLegacy.push_back(legacy);
                             udpPeerEnabled.push_back(true);
                             saveUdpPeers();
-                            Serial.printf("UDP-Peer %zu hinzugefügt: %d.%d.%d.%d%s\n",
+                            logPrintf(LOG_INFO, "UDP", "UDP peer %zu added: %d.%d.%d.%d%s",
                                 udpPeers.size(), tempIP[0], tempIP[1], tempIP[2], tempIP[3],
                                 legacy ? " [legacy]" : "");
                         } else {
-                            Serial.println("Fehler: Ungültiges IP-Format!");
+                            logPrintf(LOG_ERROR, "UDP", "Error: Invalid IP format!");
                         }
                     } else if (strncmp(parameter, "del ", 4) == 0) {
                         int idx = atoi(parameter + 4) - 1;
                         if (idx >= 0 && (size_t)idx < udpPeers.size()) {
-                            Serial.printf("UDP-Peer %d gelöscht: %d.%d.%d.%d\n", idx + 1,
+                            logPrintf(LOG_INFO, "UDP", "UDP peer %d deleted: %d.%d.%d.%d", idx + 1,
                                 udpPeers[idx][0], udpPeers[idx][1], udpPeers[idx][2], udpPeers[idx][3]);
                             udpPeers.erase(udpPeers.begin() + idx);
                             udpPeerLegacy.erase(udpPeerLegacy.begin() + idx);
                             udpPeerEnabled.erase(udpPeerEnabled.begin() + idx);
                             saveUdpPeers();
                         } else {
-                            Serial.printf("Fehler: Index 1–%zu erwartet!\n", udpPeers.size());
+                            logPrintf(LOG_ERROR, "UDP", "Error: Index 1-%zu expected!", udpPeers.size());
                         }
                     } else {
-                        // "udp <N> <IP>", "udp <N> legacy" oder "udp <N> enabled"
+                        // "udp <N> <IP>", "udp <N> legacy" or "udp <N> enabled"
                         char* spacePos = strchr(parameter, ' ');
                         if (spacePos != nullptr) {
                             int idx = atoi(parameter) - 1;
@@ -651,26 +654,26 @@ void checkSerialRX() {
                                 if (strncmp(spacePos, "legacy", 6) == 0) {
                                     udpPeerLegacy[idx] = !udpPeerLegacy[idx];
                                     saveUdpPeers();
-                                    Serial.printf("UDP-Peer %d legacy: %s\n", idx + 1, (bool)udpPeerLegacy[idx] ? "an" : "aus");
+                                    logPrintf(LOG_INFO, "UDP", "UDP peer %d legacy: %s", idx + 1, (bool)udpPeerLegacy[idx] ? "on" : "off");
                                 } else if (strncmp(spacePos, "enabled", 7) == 0) {
                                     udpPeerEnabled[idx] = !(bool)udpPeerEnabled[idx];
                                     saveUdpPeers();
-                                    Serial.printf("UDP-Peer %d enabled: %s\n", idx + 1, (bool)udpPeerEnabled[idx] ? "an" : "aus");
+                                    logPrintf(LOG_INFO, "UDP", "UDP peer %d enabled: %s", idx + 1, (bool)udpPeerEnabled[idx] ? "on" : "off");
                                 } else {
                                     IPAddress tempIP;
                                     if (tempIP.fromString(spacePos)) {
                                         udpPeers[idx] = tempIP;
                                         saveUdpPeers();
-                                        Serial.printf("UDP-Peer %d: %d.%d.%d.%d\n", idx + 1, tempIP[0], tempIP[1], tempIP[2], tempIP[3]);
+                                        logPrintf(LOG_INFO, "UDP", "UDP-Peer %d: %d.%d.%d.%d", idx + 1, tempIP[0], tempIP[1], tempIP[2], tempIP[3]);
                                     } else {
-                                        Serial.println("Fehler: Ungültiges IP-Format!");
+                                        logPrintf(LOG_ERROR, "UDP", "Error: Invalid IP format!");
                                     }
                                 }
                             } else {
-                                Serial.printf("Fehler: Index 1–%zu erwartet!\n", udpPeers.size());
+                                logPrintf(LOG_ERROR, "UDP", "Error: Index 1-%zu expected!", udpPeers.size());
                             }
                         } else {
-                            Serial.println("Befehle: udp | udp add <IP> [legacy] | udp del <N> | udp <N> <IP> | udp <N> legacy | udp <N> enabled | udp clear");
+                            logPrintf(LOG_INFO, "UDP", "Commands: udp | udp add <IP> [legacy] | udp del <N> | udp <N> <IP> | udp <N> legacy | udp <N> enabled | udp clear");
                         }
                     }
                 }
@@ -687,7 +690,7 @@ void checkSerialRX() {
                         #endif
                         saveSettings();
                     }
-                    Serial.printf("DBG:{\"event\":\"debug\",\"enabled\":%s}\n", serialDebug ? "true" : "false");
+                    logPrintf(LOG_INFO, "Debug", "serialDebug: %s", serialDebug ? "true" : "false");
                 }
 
                 // Send direct message: "msg <CALL> <TEXT>"
@@ -699,9 +702,9 @@ void checkSerialRX() {
                         strncpy(dst, parameter, MAX_CALLSIGN_LENGTH);
                         for (size_t ci = 0; dst[ci]; ci++) dst[ci] = toupper(dst[ci]);
                         sendMessage(dst, sp + 1);
-                        Serial.printf("Message sent to %s\n", dst);
+                        logPrintf(LOG_INFO, "Msg", "Message sent to %s", dst);
                     } else {
-                        Serial.println("Usage: msg <CALL> <TEXT>");
+                        logPrintf(LOG_INFO, "Msg", "Usage: msg <CALL> <TEXT>");
                     }
                 }
 
@@ -715,9 +718,9 @@ void checkSerialRX() {
                         strncpy(dst, parameter, MAX_CALLSIGN_LENGTH);
                         for (size_t ci = 0; dst[ci]; ci++) dst[ci] = toupper(dst[ci]);
                         sendGroup(dst, sp + 1);
-                        Serial.printf("Group message sent to %s\n", dst);
+                        logPrintf(LOG_INFO, "Msg", "Group message sent to %s", dst);
                     } else {
-                        Serial.println("Usage: xgrp <GROUP> <TEXT>");
+                        logPrintf(LOG_INFO, "Msg", "Usage: xgrp <GROUP> <TEXT>");
                     }
                 }
 
@@ -731,16 +734,16 @@ void checkSerialRX() {
                         char timeStr[16];
                         getFormattedTime("%H:%M:%S", timeStr, sizeof(timeStr));
                         sendMessage(dst, timeStr, Frame::MessageTypes::TRACE_MESSAGE);
-                        Serial.printf("Trace sent to %s\n", dst);
+                        logPrintf(LOG_INFO, "Msg", "Trace sent to %s", dst);
                     } else {
-                        Serial.println("Usage: xtrace <CALL>");
+                        logPrintf(LOG_INFO, "Msg", "Usage: xtrace <CALL>");
                     }
                 }
 
                 // Trigger manual announce
                 if (strncmp(serialRxBuffer, "announce", 8) == 0) {
                     announceTimer = 0;
-                    Serial.println("Announce triggered.");
+                    logPrintf(LOG_INFO, "CLI", "Announce triggered.");
                 }
 
                 // Query: peer list as JSON
@@ -756,9 +759,7 @@ void checkSerialRX() {
                         p["available"] = peerList[i].available;
                         p["port"] = peerList[i].port;
                     }
-                    Serial.print("DBG:");
-                    serializeJson(doc, Serial);
-                    Serial.println();
+                    logJson(doc);
                 }
 
                 // Query: routing table as JSON
@@ -772,9 +773,7 @@ void checkSerialRX() {
                         r["via"] = routingList[i].viaCall;
                         r["hops"] = routingList[i].hopCount;
                     }
-                    Serial.print("DBG:");
-                    serializeJson(doc, Serial);
-                    Serial.println();
+                    logJson(doc);
                 }
 
                 // Query: ACK list as JSON
@@ -790,9 +789,7 @@ void checkSerialRX() {
                             a["id"] = acks[i].id;
                         }
                     }
-                    Serial.print("DBG:");
-                    serializeJson(doc, Serial);
-                    Serial.println();
+                    logJson(doc);
                 }
 
                 // Query: TX buffer status as JSON
@@ -809,16 +806,14 @@ void checkSerialRX() {
                         t["id"] = txBuffer[i].id;
                         t["retry"] = txBuffer[i].retry;
                     }
-                    Serial.print("DBG:");
-                    serializeJson(doc, Serial);
-                    Serial.println();
+                    logJson(doc);
                 }
 
             }
-            //Puffer löschen
+            //Clear buffer
             serialRxBuffer[0] = '\0';
         } else {
-            //RX-Byte in Puffer
+            //RX byte into buffer
             size_t len = strlen(serialRxBuffer);
             if (len < sizeof(serialRxBuffer) - 1) {
                 serialRxBuffer[len] = rx;

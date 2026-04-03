@@ -21,6 +21,8 @@
 #include "settings.h"
 #include "serial.h"
 #include "persistence.h"
+#include "routing.h"
+#include "logging.h"
 
 /** Runtime peer table; extern-declared in peer.h. */
 std::vector<Peer> peerList;
@@ -46,11 +48,11 @@ void checkPeerList() {
     bool update = false;
     time_t now = time(NULL);
 
-    // Zeitsprung nach NTP-Sync: Peer-Timestamps aus der Vor-NTP-Phase
-    // (nahe 0) auf jetzt korrigieren, statt sie sofort ablaufen zu lassen.
-    // Ohne NTP liefert time(NULL) auf ESP32 Werte nahe 0 (Sekunden seit Boot).
-    // Nach NTP-Sync springt der Wert auf die reale Unixzeit (>1e9).
-    const time_t NTP_PLAUSIBLE = 1000000000;  // Sep 2001 – jeder NTP-Sync liefert mehr
+    // Time jump after NTP sync: correct peer timestamps from the pre-NTP phase
+    // (near 0) to now, instead of letting them expire immediately.
+    // Without NTP, time(NULL) on ESP32 returns values near 0 (seconds since boot).
+    // After NTP sync, the value jumps to real Unix time (>1e9).
+    const time_t NTP_PLAUSIBLE = 1000000000;  // Sep 2001 – any NTP sync yields more
     if (now > NTP_PLAUSIBLE) {
         for (auto& peer : peerList) {
             if (peer.timestamp < NTP_PLAUSIBLE) {
@@ -58,9 +60,16 @@ void checkPeerList() {
                 update = true;
             }
         }
+        // Also correct route timestamps so entries from the
+        // pre-NTP phase (timestamp ≈ 0) are not immediately evicted as "oldest".
+        for (auto& route : routingList) {
+            if (route.timestamp < NTP_PLAUSIBLE) {
+                route.timestamp = now;
+            }
+        }
     }
 
-    // Vor NTP-Sync keine Timeouts auswerten (Zeitbasis unzuverlässig)
+    // Don't evaluate timeouts before NTP sync (time base unreliable)
     if (now < NTP_PLAUSIBLE) {
         if (update) { sendPeerList(); markTopologyChanged(); }
         return;
@@ -71,18 +80,14 @@ void checkPeerList() {
         if (peer.available && (now - peer.timestamp) > PEER_INACTIVE_TIMEOUT) {
             peer.available = false;
             update = true;
-            if (serialDebug) {
-                Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"inactivity\"}\n", peer.nodeCall, peer.port);
-            }
+            logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"inactivity\"}", peer.nodeCall, peer.port);
         }
     }
 
     // Remove peers after full timeout
     for (auto it = peerList.begin(); it != peerList.end();) {
         if ((now - it->timestamp) > PEER_TIMEOUT) {
-            if (serialDebug) {
-                Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"removed\",\"call\":\"%s\",\"port\":%d,\"reason\":\"timeout\"}\n", it->nodeCall, it->port);
-            }
+            logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"removed\",\"call\":\"%s\",\"port\":%d,\"reason\":\"timeout\"}", it->nodeCall, it->port);
             it = peerList.erase(it);
             update = true;
             peersDirty = true;
@@ -97,10 +102,8 @@ void checkPeerList() {
             if (peer.available && peer.port == 0 && peer.snr < extSettings.minSnr) {
                 peer.available = false;
                 update = true;
-                if (serialDebug) {
-                    Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"snr\",\"snr\":%.1f,\"min_snr\":%d}\n",
+                logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"snr\",\"snr\":%.1f,\"min_snr\":%d}",
                         peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
-                }
             }
         }
     }
@@ -164,7 +167,7 @@ void sendPeerList() {
     if (bufSize < 256) bufSize = 256;
     char* jsonBuffer = (char*)malloc(bufSize);
     if (jsonBuffer == nullptr) {
-        Serial.println(F("[OOM] sendPeerList: malloc failed"));
+        logPrintf(LOG_WARN, "Peer", "sendPeerList: malloc failed");
         return;
     }
     size_t pos = 0;
@@ -229,11 +232,12 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
         }
 
         // Reject availability while cooldown is active (retry exhaustion)
-        if (effectiveAvailable && it->cooldownUntil != 0 && millis() < it->cooldownUntil) {
+        // Use overflow-safe comparison: (int32_t)(now - deadline) >= 0 means expired
+        if (effectiveAvailable && it->cooldownUntil != 0 && (int32_t)(millis() - it->cooldownUntil) < 0) {
             effectiveAvailable = false;
         }
         // Clear expired cooldown
-        if (it->cooldownUntil != 0 && millis() >= it->cooldownUntil) {
+        if (it->cooldownUntil != 0 && (int32_t)(millis() - it->cooldownUntil) >= 0) {
             it->cooldownUntil = 0;
         }
 
@@ -260,9 +264,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
         dbgPeer["call"] = call;
         dbgPeer["available"] = (it != peerList.end()) ? it->available : false;
         dbgPeer["port"] = port;
-        Serial.print("DBG:");
-        serializeJson(dbgPeer, Serial);
-        Serial.println();
+        logJson(dbgPeer);
     }
 
     if (update) {
@@ -291,7 +293,7 @@ void addPeerList(Frame &f) {
     }
 
     if (strcmp(f.nodeCall, settings.mycall) == 0) {
-        if (serialDebug) Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"ignore\",\"call\":\"%s\",\"reason\":\"own_call\"}\n", f.nodeCall);
+        logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"ignore\",\"call\":\"%s\",\"reason\":\"own_call\"}", f.nodeCall);
         return;
     }
 
@@ -302,13 +304,13 @@ void addPeerList(Frame &f) {
     });
 
     bool isNew = (it == peerList.end());
-    if (serialDebug) Serial.printf("DBG:{\"event\":\"peer\",\"action\":\"lookup\",\"call\":\"%s\",\"port\":%d,\"isNew\":%s,\"listSize\":%d}\n",
+    logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"lookup\",\"call\":\"%s\",\"port\":%d,\"isNew\":%s,\"listSize\":%d}",
         f.nodeCall, f.port, isNew ? "true" : "false", (int)peerList.size());
 
     if (!isNew) {
         // Update existing peer, but keep current availability state
         it->timestamp = now;
-        // Nur überschreiben wenn neue Werte vorhanden (RSSI ist bei LoRa immer negativ)
+        // Only overwrite if new values are present (RSSI is always negative for LoRa)
         if (f.rssi != 0 || f.snr != 0 || f.frqError != 0) {
             it->rssi = f.rssi;
             it->snr = f.snr;
@@ -318,7 +320,7 @@ void addPeerList(Frame &f) {
     } else {
         // Add new peer (enforce capacity limit)
         if (peerList.size() >= PEER_LIST_SIZE) {
-            Serial.printf("[Peer] List full (%d), ignoring new peer %s\n", PEER_LIST_SIZE, f.nodeCall);
+            logPrintf(LOG_WARN, "Peer", "List full (%d), ignoring new peer %s", PEER_LIST_SIZE, f.nodeCall);
             return;
         }
         Peer p;
@@ -341,9 +343,7 @@ void addPeerList(Frame &f) {
             dbgPeer["port"] = f.port;
             dbgPeer["rssi"] = f.rssi;
             dbgPeer["snr"] = f.snr;
-            Serial.print("DBG:");
-            serializeJson(dbgPeer, Serial);
-            Serial.println();
+            logJson(dbgPeer);
         }
     }
 

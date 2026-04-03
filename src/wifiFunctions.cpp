@@ -10,6 +10,7 @@
 #include "wifiFunctions.h"
 #include "serial.h"
 #include "settings.h"
+#include "logging.h"
 #include "hal.h"
 #include "config.h"
 #include "webFunctions.h"
@@ -31,12 +32,16 @@
 #endif
 
 
-uint64_t ledTimer = 0;
-uint64_t reconnectTimer = 0;
+uint32_t ledTimer = 0;
+uint32_t reconnectTimer = 0;
 byte wifiStatus = 0xff;
 bool wiFiLED = false;
 bool apModeKey = false;
 bool pendingReconnectScan = false;
+static volatile bool pendingWifiReconnect = false;
+static volatile int  pendingReconnectIdx  = -1;
+static volatile bool pendingScanBroadcast = false;
+static void processDeferredScanActions();
 
 static void sendOtaLog(const char* event, const char* versionFrom, const char* versionTo, const char* errorMsg) {
     WiFiClient logClient;
@@ -61,21 +66,21 @@ static void sendUpdateStatus(const char* msg) {
     char buf[128];
     snprintf(buf, sizeof(buf), "{\"updateStatus\":\"%s\"}", msg);
     wsBroadcast(buf, strlen(buf));
-    Serial.printf("[OTA] %s\n", msg);
+    logPrintf(LOG_INFO, "OTA", "%s", msg);
 }
 
 void checkForUpdates(bool force, uint8_t forceChannel) {
     if (WiFi.status() != WL_CONNECTED) return;
     if (strcmp(VERSION, "unknown") == 0) {
-        sendUpdateStatus("Kein Update: Dev-Build (unknown).");
+        sendUpdateStatus("No update: dev build (unknown).");
         return;
     }
-    // Manuell gebaute/geflashte Version (git describe: "v1.0.25a-3-gb480c38"):
-    // Muster: -<Ziffern>-g<Hex> – kein automatisches Update außer bei force=true
+    // Manually built/flashed version (git describe: "v1.0.25a-3-gb480c38"):
+    // Pattern: -<digits>-g<hex> – no automatic update unless force=true
     bool isGitDescribe = false;
     const char* dashG = strstr(VERSION, "-g");
     if (dashG != nullptr && dashG > VERSION) {
-        // Prüfe ob vor "-g" Ziffern und ein weiteres "-" stehen (Commit-Zähler)
+        // Check if there are digits and another "-" before "-g" (commit counter)
         const char* p = dashG - 1;
         while (p > VERSION && isdigit((unsigned char)*p)) p--;
         if (*p == '-' && p < dashG - 1 && isxdigit((unsigned char)*(dashG + 2))) {
@@ -83,17 +88,17 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         }
     }
     if (!force && isGitDescribe) {
-        sendUpdateStatus("Kein automatisches Update: lokaler Dev-Build.");
+        sendUpdateStatus("No automatic update: local dev build.");
         return;
     }
-    // Nightly-Builds sollen sich nie automatisch updaten
+    // Nightly builds should never auto-update
     if (!force && strncmp(VERSION, "nightly-", 8) == 0) {
-        sendUpdateStatus("Kein automatisches Update: Nightly-Build.");
+        sendUpdateStatus("No automatic update: nightly build.");
         return;
     }
 
-    // Version prüfen
-    sendUpdateStatus("Suche nach Updates...");
+    // Check version
+    sendUpdateStatus("Checking for updates...");
     WiFiClient client;
     HTTPClient http;
     http.setTimeout(10000);  // 10s HTTP timeout
@@ -107,46 +112,46 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     latestUrl += "&channel=";
     latestUrl += (activeChannel == 1) ? "dev" : "release";
     if (!http.begin(client, latestUrl)) {
-        sendUpdateStatus("Update-Server nicht erreichbar.");
+        sendUpdateStatus("Update server unreachable.");
         return;
     }
     if (http.GET() != 200) {
         http.end();
-        sendUpdateStatus("Update-Server nicht erreichbar.");
+        sendUpdateStatus("Update server unreachable.");
         return;
     }
     JsonDocument doc;
     if (deserializeJson(doc, http.getStream()) != DeserializationError::Ok) {
         http.end();
-        sendUpdateStatus("Antwort des Update-Servers ungültig.");
+        sendUpdateStatus("Invalid update server response.");
         return;
     }
     const char* latestTag = doc["version"];
     if (!latestTag) {
         http.end();
-        sendUpdateStatus("Kein Update gefunden.");
+        sendUpdateStatus("No update found.");
         return;
     }
-    // Gleiche Version (bei force trotzdem installieren)
+    // Same version (install anyway if force is set)
     if (!force && strcmp(latestTag, VERSION) == 0) {
         http.end();
-        sendUpdateStatus("Bereits aktuell.");
+        sendUpdateStatus("Already up to date.");
         return;
     }
-    // Aktuelle Version ist ein Dev-Build ahead des Tags (git describe: "v1.0.25a-3-gb480c38")
-    // → installierte Version ist neuer, kein Update nötig (bei force trotzdem installieren)
+    // Current version is a dev build ahead of the tag (git describe: "v1.0.25a-3-gb480c38")
+    // → installed version is newer, no update needed (install anyway if force is set)
     if (!force && String(VERSION).startsWith(String(latestTag) + "-")) {
         http.end();
-        sendUpdateStatus("Bereits aktuell (Dev-Build).");
+        sendUpdateStatus("Already up to date (dev build).");
         return;
     }
     http.end();
 
-    // Neues Update gefunden
+    // New update found
     String newVersion = latestTag;
     {
         char msg[64];
-        snprintf(msg, sizeof(msg), "Update %s wird installiert...", newVersion.c_str());
+        snprintf(msg, sizeof(msg), "Installing update %s...", newVersion.c_str());
         sendUpdateStatus(msg);
     }
     String callParam = "&call=";
@@ -157,13 +162,13 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     callParam += newVersion;
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
 
-    // LittleFS – bis zu 3 Versuche
+    // LittleFS – up to 3 attempts
     String spiffsUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_littlefs.bin" + callParam;
     t_httpUpdate_return spiffsResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
             char retryMsg[64];
-            snprintf(retryMsg, sizeof(retryMsg), "LittleFS-Update Versuch %d/3...", attempt);
+            snprintf(retryMsg, sizeof(retryMsg), "LittleFS update attempt %d/3...", attempt);
             sendUpdateStatus(retryMsg);
             delay(3000);
         }
@@ -174,23 +179,23 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         if (spiffsResult != HTTP_UPDATE_FAILED) break;
     }
     if (spiffsResult == HTTP_UPDATE_FAILED) {
-        // LittleFS nicht verfügbar (z.B. kein Release-Asset) – Firmware-Update trotzdem fortsetzen
-        String warnMsg = "LittleFS nicht aktualisiert: " + httpUpdate.getLastErrorString() + " – fahre mit Firmware fort";
+        // LittleFS not available (e.g. no release asset) – continue with firmware update anyway
+        String warnMsg = "LittleFS not updated: " + httpUpdate.getLastErrorString() + " – continuing with firmware";
         sendUpdateStatus(warnMsg.c_str());
     }
 
-    // Firmware – bei Erfolg startet der Node neu, onEnd feuert kurz davor
+    // Firmware – on success the node reboots, onEnd fires shortly before
     httpUpdate.onEnd([newVersion]() {
         sendOtaLog("update_success", VERSION, newVersion.c_str(), "");
     });
 
-    // Firmware – bis zu 3 Versuche
+    // Firmware – up to 3 attempts
     String fwUrl = "http://www.rMesh.de:8082/update.php?file=" PIO_ENV_NAME "_firmware.bin" + callParam;
     t_httpUpdate_return fwResult = HTTP_UPDATE_FAILED;
     for (int attempt = 1; attempt <= 3; attempt++) {
         if (attempt > 1) {
             char retryMsg[64];
-            snprintf(retryMsg, sizeof(retryMsg), "Firmware-Update Versuch %d/3...", attempt);
+            snprintf(retryMsg, sizeof(retryMsg), "Firmware update attempt %d/3...", attempt);
             sendUpdateStatus(retryMsg);
             delay(3000);
         }
@@ -200,9 +205,9 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         fwResult = httpUpdate.update(fwClient, fwUrl);
         if (fwResult != HTTP_UPDATE_FAILED) break;
     }
-    // Nur erreicht wenn fehlgeschlagen (Erfolg = Neustart)
+    // Only reached if failed (success = reboot)
     if (fwResult == HTTP_UPDATE_FAILED) {
-        String errMsg = "Update fehlgeschlagen (Firmware): " + httpUpdate.getLastErrorString();
+        String errMsg = "Update failed (firmware): " + httpUpdate.getLastErrorString();
         sendUpdateStatus(errMsg.c_str());
         sendOtaLog("update_failed", VERSION, newVersion.c_str(),
             ("Firmware: " + httpUpdate.getLastErrorString()).c_str());
@@ -210,6 +215,8 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
 }
 
 void showWiFiStatus() {
+    // Process deferred WiFi scan actions from event callback
+    processDeferredScanActions();
 
 #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
     // Long press (>=2s): toggle AP/Client mode + reboot
@@ -279,32 +286,30 @@ void showWiFiStatus() {
     }
 #endif
 
-    //Status-LED
+    //Status LED
     if (settings.apMode) {
-        //AP-Mode
-        if (millis() > ledTimer) {
+        //AP mode
+        if ((int32_t)(millis() - ledTimer) >= 0) {
             wiFiLED = !wiFiLED;
             setWiFiLED (wiFiLED);
             ledTimer = millis() + 750;
         }
     } else {
-        //CLient-Mode
+        //Client mode
         if (wifiStatus != WiFi.status()) {
             uint8_t newStatus = WiFi.status();
-            if (serialDebug) {
-                Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"status_change\",\"from\":%d,\"to\":%d,\"rssi\":%d,\"heap\":%u,\"uptime\":%lu}\n",
+            logPrintf(LOG_DEBUG, "WiFi", "status_change from=%d to=%d rssi=%d heap=%u uptime=%lu",
                     wifiStatus, newStatus, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
-            }
             wifiStatus = newStatus;
             if (newStatus == WL_CONNECTED) {
                 initUDP();
-                checkForUpdates();
+                pendingManualUpdate = true;
             }
         }
 
         if (WiFi.status() == WL_CONNECTED) {
-        //Verbunden -> kurz blinken
-            if (millis() > ledTimer) {
+        //Connected -> short blink
+            if ((int32_t)(millis() - ledTimer) >= 0) {
                 if (wiFiLED == true) {
                     wiFiLED = false;
                     ledTimer = millis() + 950;
@@ -317,12 +322,10 @@ void showWiFiStatus() {
         } else {
             // Not connected -> LED off + attempt reconnect
             setWiFiLED(false);
-            if (millis() > reconnectTimer && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
+            if ((int32_t)(millis() - reconnectTimer) >= 0 && WiFi.scanComplete() != WIFI_SCAN_RUNNING) {
                 reconnectTimer = millis() + 30000;
-                if (serialDebug) {
-                    Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"reconnect_attempt\",\"status\":%d,\"networks\":%d,\"heap\":%u}\n",
+                logPrintf(LOG_DEBUG, "WiFi", "reconnect_attempt status=%d networks=%d heap=%u",
                         WiFi.status(), (int)wifiNetworks.size(), ESP.getFreeHeap());
-                }
                 if (wifiNetworks.size() > 1) {
                     // Multiple networks: scan and connect to best available
                     pendingReconnectScan = true;
@@ -336,11 +339,9 @@ void showWiFiStatus() {
 }
 
 void onWiFiDisconnected(WiFiEvent_t event, WiFiEventInfo_t info) {
-    if (serialDebug) {
-        uint8_t reason = info.wifi_sta_disconnected.reason;
-        Serial.printf("DBG:{\"event\":\"wifi\",\"action\":\"disconnected\",\"reason\":%d,\"rssi\":%d,\"heap\":%u,\"uptime\":%lu}\n",
-            reason, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
-    }
+    uint8_t reason = info.wifi_sta_disconnected.reason;
+    logPrintf(LOG_DEBUG, "WiFi", "disconnected reason=%d rssi=%d heap=%u uptime=%lu",
+        reason, WiFi.RSSI(), ESP.getFreeHeap(), millis() / 1000);
 }
 
 void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -349,9 +350,9 @@ void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
     mdnsName.toLowerCase();
     if (MDNS.begin(mdnsName.c_str())) {
         MDNS.addService("http", "tcp", 80);
-        Serial.printf("mDNS started: %s.local\n", mdnsName.c_str());
+        logPrintf(LOG_INFO, "mDNS", "started: %s.local", mdnsName.c_str());
     } else {
-        Serial.println("mDNS failed to start");
+        logPrintf(LOG_ERROR, "mDNS", "failed to start");
     }
 }
 
@@ -387,39 +388,71 @@ void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
             }
         }
         if (bestIdx >= 0) {
-            Serial.printf("Reconnecting to %s (RSSI: %d)\n", wifiNetworks[bestIdx].ssid, bestRSSI);
-            WiFi.disconnect();
-            if (!settings.dhcpActive) {
-                WiFi.config(settings.wifiIP, settings.wifiGateway, settings.wifiNetMask, settings.wifiDNS);
-            }
-            WiFi.begin(wifiNetworks[bestIdx].ssid, wifiNetworks[bestIdx].password);
+            // Defer WiFi reconnect to loop context to avoid deadlock
+            pendingReconnectIdx = bestIdx;
+            pendingWifiReconnect = true;
         }
     } else {
         pendingReconnectScan = false;
     }
 
-    // Send scan results to WebUI
-    JsonDocument doc;
-    for (int i = 0; i < n; ++i) {
-        doc["wifiScan"][i]["ssid"] = WiFi.SSID(i).c_str();
-        doc["wifiScan"][i]["rssi"] = WiFi.RSSI(i);
-        doc["wifiScan"][i]["channel"] = WiFi.channel(i);
-        switch (WiFi.encryptionType(i)){
-            case WIFI_AUTH_OPEN: doc["wifiScan"][i]["encryption"] = "open"; break;
-            case WIFI_AUTH_WEP: doc["wifiScan"][i]["encryption"] = "WEP"; break;
-            case WIFI_AUTH_WPA_PSK: doc["wifiScan"][i]["encryption"] = "WPA"; break;
-            case WIFI_AUTH_WPA2_PSK: doc["wifiScan"][i]["encryption"] = "WPA2"; break;
-            case WIFI_AUTH_WPA_WPA2_PSK: doc["wifiScan"][i]["encryption"] = "WPA+WPA2"; break;
-            case WIFI_AUTH_WPA2_ENTERPRISE: doc["wifiScan"][i]["encryption"] = "WPA2-EAP"; break;
-            case WIFI_AUTH_WPA3_PSK: doc["wifiScan"][i]["encryption"] = "WPA3"; break;
-            case WIFI_AUTH_WPA2_WPA3_PSK: doc["wifiScan"][i]["encryption"] = "WPA2+WPA3"; break;
-            case WIFI_AUTH_WAPI_PSK: doc["wifiScan"][i]["encryption"] = "WAPI"; break;
-            default: doc["wifiScan"][i]["encryption"] = "unknown";
+    // Defer scan broadcast to loop context
+    pendingScanBroadcast = true;
+}
+
+/**
+ * Called from showWiFiStatus() (loop context) to process deferred scan results.
+ */
+static void processDeferredScanActions() {
+    if (pendingWifiReconnect) {
+        pendingWifiReconnect = false;
+        int idx = pendingReconnectIdx;
+        // Copy credentials before use — wifiNetworks can be modified concurrently
+        // by the WebSocket settings handler on the async server task.
+        char ssid[WIFI_NETWORK_SSID_LEN] = {0};
+        char password[WIFI_NETWORK_PW_LEN] = {0};
+        bool valid = false;
+        if (idx >= 0 && idx < (int)wifiNetworks.size()) {
+            strlcpy(ssid, wifiNetworks[idx].ssid, sizeof(ssid));
+            strlcpy(password, wifiNetworks[idx].password, sizeof(password));
+            valid = (ssid[0] != '\0');
+        }
+        if (valid) {
+            logPrintf(LOG_INFO, "WiFi", "Reconnecting to %s", ssid);
+            WiFi.disconnect();
+            if (!settings.dhcpActive) {
+                WiFi.config(settings.wifiIP, settings.wifiGateway, settings.wifiNetMask, settings.wifiDNS);
+            }
+            WiFi.begin(ssid, password);
         }
     }
-    String jsonOutput;
-    serializeJson(doc, jsonOutput);
-    wsBroadcast(jsonOutput.c_str(), jsonOutput.length());
+    if (pendingScanBroadcast) {
+        pendingScanBroadcast = false;
+        int n = WiFi.scanComplete();
+        if (n > 0) {
+            JsonDocument doc;
+            for (int i = 0; i < n; ++i) {
+                doc["wifiScan"][i]["ssid"] = WiFi.SSID(i).c_str();
+                doc["wifiScan"][i]["rssi"] = WiFi.RSSI(i);
+                doc["wifiScan"][i]["channel"] = WiFi.channel(i);
+                switch (WiFi.encryptionType(i)){
+                    case WIFI_AUTH_OPEN: doc["wifiScan"][i]["encryption"] = "open"; break;
+                    case WIFI_AUTH_WEP: doc["wifiScan"][i]["encryption"] = "WEP"; break;
+                    case WIFI_AUTH_WPA_PSK: doc["wifiScan"][i]["encryption"] = "WPA"; break;
+                    case WIFI_AUTH_WPA2_PSK: doc["wifiScan"][i]["encryption"] = "WPA2"; break;
+                    case WIFI_AUTH_WPA_WPA2_PSK: doc["wifiScan"][i]["encryption"] = "WPA+WPA2"; break;
+                    case WIFI_AUTH_WPA2_ENTERPRISE: doc["wifiScan"][i]["encryption"] = "WPA2-EAP"; break;
+                    case WIFI_AUTH_WPA3_PSK: doc["wifiScan"][i]["encryption"] = "WPA3"; break;
+                    case WIFI_AUTH_WPA2_WPA3_PSK: doc["wifiScan"][i]["encryption"] = "WPA2+WPA3"; break;
+                    case WIFI_AUTH_WAPI_PSK: doc["wifiScan"][i]["encryption"] = "WAPI"; break;
+                    default: doc["wifiScan"][i]["encryption"] = "unknown";
+                }
+            }
+            String jsonOutput;
+            serializeJson(doc, jsonOutput);
+            wsBroadcast(jsonOutput.c_str(), jsonOutput.length());
+        }
+    }
 }
 
 

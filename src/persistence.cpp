@@ -34,6 +34,7 @@
 #include "main.h"
 #include "config.h"
 #include "settings.h"
+#include "logging.h"
 
 static const char* ROUTES_FILE = "/routes.bin";
 static const char* PEERS_FILE  = "/peers.bin";
@@ -55,21 +56,21 @@ struct __attribute__((packed)) RouteEntry {
 
 void loadRoutes() {
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
-        Serial.println(F("[Persistence] fsMutex timeout in loadRoutes"));
+        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in loadRoutes");
         return;
     }
 
     File f = LittleFS.open(ROUTES_FILE, "r");
     if (!f) {
         xSemaphoreGive(fsMutex);
-        Serial.println(F("[Persistence] No routes file found — starting fresh"));
+        logPrintf(LOG_INFO, "FS", "No routes file found — starting fresh");
         return;
     }
 
     uint8_t version = 0;
     f.read(&version, 1);
     if (version != FILE_VERSION && version != PEER_FILE_VERSION_V1) {
-        Serial.printf("[Persistence] Unknown routes file version %d — skipping\n", version);
+        logPrintf(LOG_WARN, "FS", "Unknown routes file version %d — skipping", version);
         f.close();
         xSemaphoreGive(fsMutex);
         return;
@@ -112,31 +113,40 @@ void loadRoutes() {
         return a.timestamp > b.timestamp;
     });
 
-    Serial.printf("[Persistence] Loaded %d routes from %s\n", loaded, ROUTES_FILE);
+    logPrintf(LOG_INFO, "FS", "Loaded %d routes from %s", loaded, ROUTES_FILE);
 }
 
 static void saveRoutesTask(void* pvParameters) {
+    // Snapshot routing list under listMutex to avoid data races
+    if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
+        logPrintf(LOG_ERROR, "FS", "listMutex timeout in saveRoutesTask");
+        vTaskDelete(NULL);
+        return;
+    }
+    std::vector<Route> snap(routingList);
+    xSemaphoreGive(listMutex);
+
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-        Serial.println(F("[Persistence] fsMutex timeout in saveRoutesTask"));
+        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in saveRoutesTask");
         vTaskDelete(NULL);
         return;
     }
 
     File f = LittleFS.open(ROUTES_FILE, "w");
     if (!f) {
-        Serial.println(F("[Persistence] Failed to open routes file for writing"));
+        logPrintf(LOG_ERROR, "FS", "Failed to open routes file for writing");
         xSemaphoreGive(fsMutex);
         vTaskDelete(NULL);
         return;
     }
 
     f.write(&FILE_VERSION, 1);
-    uint16_t count = routingList.size();
+    uint16_t count = snap.size();
     f.write((uint8_t*)&count, 2);
 
     RouteEntry entry;
     memset(&entry, 0, sizeof(entry));
-    for (const auto& r : routingList) {
+    for (const auto& r : snap) {
         memcpy(entry.srcCall, r.srcCall, sizeof(entry.srcCall));
         memcpy(entry.viaCall, r.viaCall, sizeof(entry.viaCall));
         entry.hopCount = r.hopCount;
@@ -148,7 +158,7 @@ static void saveRoutesTask(void* pvParameters) {
     xSemaphoreGive(fsMutex);
 
     routesDirty = false;
-    Serial.printf("[Persistence] Saved %d routes to %s\n", count, ROUTES_FILE);
+    logPrintf(LOG_INFO, "FS", "Saved %d routes to %s", count, ROUTES_FILE);
     vTaskDelete(NULL);
 }
 
@@ -177,21 +187,21 @@ struct __attribute__((packed)) PeerEntry {
 
 void loadPeers() {
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
-        Serial.println(F("[Persistence] fsMutex timeout in loadPeers"));
+        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in loadPeers");
         return;
     }
 
     File f = LittleFS.open(PEERS_FILE, "r");
     if (!f) {
         xSemaphoreGive(fsMutex);
-        Serial.println(F("[Persistence] No peers file found — starting fresh"));
+        logPrintf(LOG_INFO, "FS", "No peers file found — starting fresh");
         return;
     }
 
     uint8_t version = 0;
     f.read(&version, 1);
     if (version != FILE_VERSION && version != PEER_FILE_VERSION_V1) {
-        Serial.printf("[Persistence] Unknown peers file version %d — skipping\n", version);
+        logPrintf(LOG_WARN, "FS", "Unknown peers file version %d — skipping", version);
         f.close();
         xSemaphoreGive(fsMutex);
         return;
@@ -243,32 +253,41 @@ void loadPeers() {
     f.close();
     xSemaphoreGive(fsMutex);
 
-    Serial.printf("[Persistence] Loaded %d peers from %s (grace %ds)\n",
+    logPrintf(LOG_INFO, "FS", "Loaded %d peers from %s (grace %ds)",
                   loaded, PEERS_FILE, PEER_INITIAL_TIMEOUT);
 }
 
 static void savePeersTask(void* pvParameters) {
+    // Snapshot peer list under listMutex to avoid data races
+    if (!xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
+        logPrintf(LOG_ERROR, "FS", "listMutex timeout in savePeersTask");
+        vTaskDelete(NULL);
+        return;
+    }
+    std::vector<Peer> snap(peerList);
+    xSemaphoreGive(listMutex);
+
     if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-        Serial.println(F("[Persistence] fsMutex timeout in savePeersTask"));
+        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in savePeersTask");
         vTaskDelete(NULL);
         return;
     }
 
     File f = LittleFS.open(PEERS_FILE, "w");
     if (!f) {
-        Serial.println(F("[Persistence] Failed to open peers file for writing"));
+        logPrintf(LOG_ERROR, "FS", "Failed to open peers file for writing");
         xSemaphoreGive(fsMutex);
         vTaskDelete(NULL);
         return;
     }
 
     f.write(&FILE_VERSION, 1);
-    uint16_t count = peerList.size();
+    uint16_t count = snap.size();
     f.write((uint8_t*)&count, 2);
 
     PeerEntry entry;
     memset(&entry, 0, sizeof(entry));
-    for (const auto& p : peerList) {
+    for (const auto& p : snap) {
         memcpy(entry.nodeCall, p.nodeCall, sizeof(entry.nodeCall));
         entry.port = p.port;
         entry.available = p.available ? 1 : 0;
@@ -282,7 +301,7 @@ static void savePeersTask(void* pvParameters) {
     xSemaphoreGive(fsMutex);
 
     peersDirty = false;
-    Serial.printf("[Persistence] Saved %d peers to %s\n", count, PEERS_FILE);
+    logPrintf(LOG_INFO, "FS", "Saved %d peers to %s", count, PEERS_FILE);
     vTaskDelete(NULL);
 }
 

@@ -13,6 +13,8 @@
 #include "webFunctions.h"
 #include "hal.h"
 #include "serial.h"
+#include "main.h"
+#include "logging.h"
 
 Settings settings;
 ExtSettings extSettings;
@@ -63,82 +65,82 @@ void loadGroupNames() {
 }
 
 void showSettings() {
-    Serial.println();
-    Serial.println("Settings:");
+    logPrintf(LOG_INFO, "Settings", "");
+    logPrintf(LOG_INFO, "Settings", "Settings:");
 #ifdef HAS_WIFI
-    Serial.printf("AP Mode: %s\n", settings.apMode ? "true" : "false");
-    Serial.printf("AP Name: %s\n", apName.c_str());
-    Serial.printf("AP Password set: %s\n", apPassword.isEmpty() ? "false" : "true");
+    logPrintf(LOG_INFO, "Settings", "AP Mode: %s", settings.apMode ? "true" : "false");
+    logPrintf(LOG_INFO, "Settings", "AP Name: %s", apName.c_str());
+    logPrintf(LOG_INFO, "Settings", "AP Password set: %s", apPassword.isEmpty() ? "false" : "true");
     if (wifiNetworks.empty()) {
-        Serial.println("WiFi Networks: none");
+        logPrintf(LOG_INFO, "Settings", "WiFi Networks: none");
     } else {
         for (size_t i = 0; i < wifiNetworks.size(); i++) {
-            Serial.printf("WiFi %zu: %s%s (pw: %s)\n", i + 1,
+            logPrintf(LOG_INFO, "Settings", "WiFi %zu: %s%s (pw: %s)", i + 1,
                 wifiNetworks[i].ssid,
                 wifiNetworks[i].favorite ? " [favorite]" : "",
                 (wifiNetworks[i].password[0] != '\0') ? "set" : "none");
         }
     }
-    Serial.printf("DHCP: %s\n", settings.dhcpActive ? "true" : "false");
+    logPrintf(LOG_INFO, "Settings", "DHCP: %s", settings.dhcpActive ? "true" : "false");
     if (!settings.dhcpActive) {
-        Serial.printf("IP: %d.%d.%d.%d\n", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
-        Serial.printf("Netmask: %d.%d.%d.%d\n", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
-        Serial.printf("DNS: %d.%d.%d.%d\n", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
-        Serial.printf("Gateway: %d.%d.%d.%d\n", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
+        logPrintf(LOG_INFO, "Settings", "IP: %d.%d.%d.%d", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
+        logPrintf(LOG_INFO, "Settings", "Netmask: %d.%d.%d.%d", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
+        logPrintf(LOG_INFO, "Settings", "DNS: %d.%d.%d.%d", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
+        logPrintf(LOG_INFO, "Settings", "Gateway: %d.%d.%d.%d", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
     }
-    Serial.printf("NTP Server: %s\n", settings.ntpServer);
+    logPrintf(LOG_INFO, "Settings", "NTP Server: %s", settings.ntpServer);
     if (udpPeers.empty()) {
-        Serial.println("UDP Peers: none");
+        logPrintf(LOG_INFO, "Settings", "UDP Peers: none");
     } else {
         for (size_t i = 0; i < udpPeers.size(); i++) {
-            Serial.printf("UDP Peer %zu: %d.%d.%d.%d%s%s\n", i + 1,
+            logPrintf(LOG_INFO, "Settings", "UDP Peer %zu: %d.%d.%d.%d%s%s", i + 1,
                 udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
                 udpPeerLegacy[i] ? " [legacy]" : "",
                 (bool)udpPeerEnabled[i] ? "" : " [disabled]");
         }
     }
 #endif
-    Serial.println();
-    Serial.printf("myCall: %s\n", settings.mycall);
-    Serial.printf("position: %s\n", settings.position);
-    Serial.printf("loraFrequency: %f\n", settings.loraFrequency);
-    Serial.printf("loraOutputPower: %d\n", settings.loraOutputPower);
-    Serial.printf("loraBandwidth: %f\n", settings.loraBandwidth);
-    Serial.printf("loraSyncWord: %X\n", settings.loraSyncWord);
-    Serial.printf("loraCodingRate: %d\n", settings.loraCodingRate);
-    Serial.printf("loraSpreadingFactor: %d\n", settings.loraSpreadingFactor);
-    Serial.printf("loraPreambleLength: %d\n", settings.loraPreambleLength);
-    Serial.printf("loraRepeat: %d\n", settings.loraRepeat);
-    Serial.printf("version: %s\n", VERSION);
-    Serial.printf("updateChannel: %d\n", updateChannel);
-    Serial.printf("maxHopMessage: %d\n", extSettings.maxHopMessage);
-    Serial.printf("maxHopPosition: %d\n", extSettings.maxHopPosition);
-    Serial.printf("maxHopTelemetry: %d\n", extSettings.maxHopTelemetry);
-    Serial.printf("minSnr: %d dB\n", extSettings.minSnr);
-    Serial.println();
+    logPrintf(LOG_INFO, "Settings", "");
+    logPrintf(LOG_INFO, "Settings", "myCall: %s", settings.mycall);
+    logPrintf(LOG_INFO, "Settings", "position: %s", settings.position);
+    logPrintf(LOG_INFO, "Settings", "loraFrequency: %f", settings.loraFrequency);
+    logPrintf(LOG_INFO, "Settings", "loraOutputPower: %d", settings.loraOutputPower);
+    logPrintf(LOG_INFO, "Settings", "loraBandwidth: %f", settings.loraBandwidth);
+    logPrintf(LOG_INFO, "Settings", "loraSyncWord: %X", settings.loraSyncWord);
+    logPrintf(LOG_INFO, "Settings", "loraCodingRate: %d", settings.loraCodingRate);
+    logPrintf(LOG_INFO, "Settings", "loraSpreadingFactor: %d", settings.loraSpreadingFactor);
+    logPrintf(LOG_INFO, "Settings", "loraPreambleLength: %d", settings.loraPreambleLength);
+    logPrintf(LOG_INFO, "Settings", "loraRepeat: %d", settings.loraRepeat);
+    logPrintf(LOG_INFO, "Settings", "version: %s", VERSION);
+    logPrintf(LOG_INFO, "Settings", "updateChannel: %d", updateChannel);
+    logPrintf(LOG_INFO, "Settings", "maxHopMessage: %d", extSettings.maxHopMessage);
+    logPrintf(LOG_INFO, "Settings", "maxHopPosition: %d", extSettings.maxHopPosition);
+    logPrintf(LOG_INFO, "Settings", "maxHopTelemetry: %d", extSettings.maxHopTelemetry);
+    logPrintf(LOG_INFO, "Settings", "minSnr: %d dB", extSettings.minSnr);
+    logPrintf(LOG_INFO, "Settings", "");
 #ifdef HAS_WIFI
-    Serial.println("WiFi Status:");
+    logPrintf(LOG_INFO, "Settings", "WiFi Status:");
     switch(WiFi.status()) {
-    case 0: Serial.println("WL_IDLE_STATUS"); break;
-    case 1: Serial.println("WL_NO_SSID_AVAIL"); break;
-    case 2: Serial.println("WL_SCAN_COMPLETED"); break;
+    case 0: logPrintf(LOG_INFO, "Settings", "WL_IDLE_STATUS"); break;
+    case 1: logPrintf(LOG_INFO, "Settings", "WL_NO_SSID_AVAIL"); break;
+    case 2: logPrintf(LOG_INFO, "Settings", "WL_SCAN_COMPLETED"); break;
     case 3:
-        Serial.println("WL_CONNECTED");
-        Serial.printf("IP: %d.%d.%d.%d\n", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
-        Serial.printf("Netmask: %d.%d.%d.%d\n", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]);
-        Serial.printf("Gateway: %d.%d.%d.%d\n", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
-        Serial.printf("DNS: %d.%d.%d.%d\n", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
+        logPrintf(LOG_INFO, "Settings", "WL_CONNECTED");
+        logPrintf(LOG_INFO, "Settings", "IP: %d.%d.%d.%d", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
+        logPrintf(LOG_INFO, "Settings", "Netmask: %d.%d.%d.%d", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]);
+        logPrintf(LOG_INFO, "Settings", "Gateway: %d.%d.%d.%d", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
+        logPrintf(LOG_INFO, "Settings", "DNS: %d.%d.%d.%d", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
         break;
-    case 4: Serial.println("WL_CONNECT_FAILED"); break;
-    case 5: Serial.println("WL_CONNECTION_LOST"); break;
-    case 6: Serial.println("WL_DISCONNECTED"); break;
-    case 255: Serial.println("WL_NO_SHIELD"); break;
-    default: Serial.println("WL_AP_MODE");
+    case 4: logPrintf(LOG_INFO, "Settings", "WL_CONNECT_FAILED"); break;
+    case 5: logPrintf(LOG_INFO, "Settings", "WL_CONNECTION_LOST"); break;
+    case 6: logPrintf(LOG_INFO, "Settings", "WL_DISCONNECTED"); break;
+    case 255: logPrintf(LOG_INFO, "Settings", "WL_NO_SHIELD"); break;
+    default: logPrintf(LOG_INFO, "Settings", "WL_AP_MODE");
     }
 #else
-    Serial.println("WiFi: not available (nRF52)");
+    logPrintf(LOG_INFO, "Settings", "WiFi: not available (nRF52)");
 #endif
-    Serial.println();
+    logPrintf(LOG_INFO, "Settings", "");
 }
 
 void sendSettings() {
@@ -150,14 +152,14 @@ void sendSettings() {
     doc["settings"]["ntp"] = settings.ntpServer;
     doc["settings"]["dhcpActive"] = settings.dhcpActive;
     doc["settings"]["wifiSSID"] = settings.wifiSSID;
-    doc["settings"]["wifiPassword"] = settings.wifiPassword;
+    doc["settings"]["wifiPassword"] = (settings.wifiPassword[0] != '\0') ? "***" : "";
     doc["settings"]["apMode"] = settings.apMode;
     doc["settings"]["apName"] = apName;
     doc["settings"]["apPassword"] = apPassword;
     for (size_t i = 0; i < wifiNetworks.size(); i++) {
         JsonObject net = doc["settings"]["wifiNetworks"].add<JsonObject>();
         net["ssid"]     = wifiNetworks[i].ssid;
-        net["password"] = wifiNetworks[i].password;
+        net["password"] = (wifiNetworks[i].password[0] != '\0') ? "***" : "";
         net["favorite"] = wifiNetworks[i].favorite;
     }
     doc["settings"]["wifiIP"][0] = settings.wifiIP[0];
@@ -249,13 +251,16 @@ void sendSettings() {
     doc["settings"]["oledEnabled"]        = oledEnabled;
     doc["settings"]["serialDebug"]        = serialDebug;
     doc["settings"]["oledDisplayGroup"]   = oledDisplayGroup;
+    if (!webPasswordHash.isEmpty()) {
+        doc["settings"]["otaToken"] = webPasswordHash;
+    }
     for (int i = 3; i <= MAX_CHANNELS; i++) {
         doc["settings"]["groupNames"][String(i)] = groupNames[i];
     }
-    size_t bufSize = 4096 + wifiNetworks.size() * 160;
+    size_t bufSize = 4096 + wifiNetworks.size() * 160 + udpPeers.size() * 100;
     char* jsonBuffer = (char*)malloc(bufSize);
     if (jsonBuffer == nullptr) {
-        Serial.println("[OOM] sendSettings: malloc failed");
+        logPrintf(LOG_ERROR, "Settings", "sendSettings: malloc failed");
         return;
     }
     size_t len = serializeJson(doc, jsonBuffer, bufSize);
@@ -269,7 +274,7 @@ void sendSettings() {
 }
 
 void loadSettings() {
-    Serial.println("Loading settings...");
+    logPrintf(LOG_INFO, "Settings", "Loading settings...");
     prefs.begin("custom_settings", false);
 #ifdef HAS_WIFI
     loadPasswordHash();
@@ -458,18 +463,22 @@ void loadSettings() {
     }
 #endif
 
-    // Reinitialize hardware
-    initHal();
+    pendingLoraReinit = true;
 }
 
 #ifdef HAS_WIFI
 void saveWifiNetworks() {
+    // Limit stored networks to prevent NVS overflow
+    const size_t MAX_WIFI_NETWORKS = 20;
+    if (wifiNetworks.size() > MAX_WIFI_NETWORKS) {
+        wifiNetworks.resize(MAX_WIFI_NETWORKS);
+    }
     uint8_t count = (uint8_t)wifiNetworks.size();
     const size_t WNET_STRIDE = WIFI_NETWORK_SSID_LEN + WIFI_NETWORK_PW_LEN + 1;
     size_t bufLen = 1 + (size_t)count * WNET_STRIDE;
     uint8_t* buf = new uint8_t[bufLen];
     if (buf == nullptr) {
-        Serial.println("[OOM] saveWifiNetworks: allocation failed");
+        logPrintf(LOG_ERROR, "Settings", "saveWifiNetworks: allocation failed");
         return;
     }
     memset(buf, 0, bufLen);
@@ -492,7 +501,7 @@ void saveUdpPeers() {
     size_t bufLen = 1 + (size_t)count * 6;
     uint8_t* buf = new uint8_t[bufLen];
     if (buf == nullptr) {
-        Serial.println("[OOM] saveUdpPeers: allocation failed");
+        logPrintf(LOG_ERROR, "Settings", "saveUdpPeers: allocation failed");
         return;
     }
     buf[0] = count;
@@ -516,7 +525,7 @@ void saveOledSettings() {
 }
 
 void saveSettings() {
-    Serial.println("Saving settings...");
+    logPrintf(LOG_INFO, "Settings", "Saving settings...");
 
 #ifdef HAS_WIFI
     // Sync settings.wifiSSID <-> wifiNetworks
@@ -559,7 +568,11 @@ void saveSettings() {
     }
 #endif
 
-    prefs.putBytes("config", &settings, sizeof(settings));
+    size_t written = prefs.putBytes("config", &settings, sizeof(settings));
+    if (written != sizeof(settings)) {
+        logPrintf(LOG_ERROR, "Settings", "saveSettings: putBytes(\"config\") wrote %u of %u bytes",
+                       (unsigned)written, (unsigned)sizeof(settings));
+    }
     prefs.putBytes("extSettings", &extSettings, sizeof(extSettings));
     prefs.putUChar("updateChannel", updateChannel);
     prefs.putBool("loraEnabled", loraEnabled);
@@ -574,5 +587,5 @@ void saveSettings() {
     saveWifiNetworks();
     saveUdpPeers();
 #endif
-    initHal();
+    pendingLoraReinit = true;
 }

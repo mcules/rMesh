@@ -55,7 +55,7 @@ function setUI(value) {
     }
     ui = value;
     Cookie.set("ui", ui);
-    //Alles ausblenden
+    //Hide everything
     for (let i = 1; i <= 10; i++) {
         document.getElementById("channel" + i).style.display = "none";
         document.getElementById("messageText" + i).style.display = "none";
@@ -178,7 +178,7 @@ function setUI(value) {
     var globalUnread = false;
     for (let i = 1; i <= 10; i++) {
         document.getElementById('channel' + i).scrollTop = document.getElementById("channel" + i).scrollHeight;
-        //Ungelesene Nachrichten anzeigen (nur wenn nicht muted)
+        //Show unread messages (only if not muted)
         if ((channels[i] != false) && (document.hidden) && !channelMuted[i]) {globalUnread = true;}
         if ((channels[i] != false) && (activeChannel != i) && !channelMuted[i]) {document.getElementById("channelButton" + i).classList.add('unread');}
         if (activeChannel == i) {channels[i] = false;}
@@ -211,7 +211,7 @@ function setUI(value) {
         }
     }      
 
-    //Fenstertitel
+    //Window title
     if (globalUnread) {
         if (settings) {document.title = settings.altTitel; }
     } else {
@@ -261,7 +261,7 @@ function settingsVisibility() {
 }
 
 
-// Gruppen-Einstellungsdialog (Doppelklick auf Channel-Button)
+// Group settings dialog (double-click on channel button)
 function showChannelSettings(channelIdx) {
     document.querySelectorAll('.ch-settings-overlay').forEach(e => e.remove());
 
@@ -445,7 +445,7 @@ function initSettingsDirtyTracking() {
 
 function initUI() {
     initSettingsDirtyTracking();
-    //Aktionen für Channel Buttons
+    //Actions for channel buttons
     for (let i = 1; i <= 10; i++) {
         document.getElementById("channelButton" + i).addEventListener("dblclick", function() {
             showChannelSettings(i);
