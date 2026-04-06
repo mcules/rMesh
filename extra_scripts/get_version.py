@@ -55,32 +55,31 @@ def hash_sources():
             pass
     return h.hexdigest()
 
-current_hash = hash_sources()
+# Build counter only exists when building via the external flashtool
+if os.path.isdir(dev_dir):
+    current_hash = hash_sources()
 
-# Read previous hash
-prev_hash = ""
-try:
-    with open(source_hash_file, "r") as f:
-        prev_hash = f.read().strip()
-except FileNotFoundError:
-    pass
+    prev_hash = ""
+    try:
+        with open(source_hash_file, "r") as f:
+            prev_hash = f.read().strip()
+    except FileNotFoundError:
+        pass
 
-# Read counter
-try:
-    with open(build_counter_file, "r") as f:
-        counter = int(f.read().strip())
-except (FileNotFoundError, ValueError):
-    counter = 0
+    try:
+        with open(build_counter_file, "r") as f:
+            counter = int(f.read().strip())
+    except (FileNotFoundError, ValueError):
+        counter = 0
 
-# Only increment if sources changed
-if current_hash != prev_hash:
-    counter += 1
-    with open(build_counter_file, "w") as f:
-        f.write(str(counter))
-    with open(source_hash_file, "w") as f:
-        f.write(current_hash)
+    if current_hash != prev_hash:
+        counter += 1
+        with open(build_counter_file, "w") as f:
+            f.write(str(counter))
+        with open(source_hash_file, "w") as f:
+            f.write(current_hash)
 
-version = f"{version}+b{counter}"
+    version = f"{version}+b{counter}"
 
 print(f"get_version.py: VERSION = {version} (env={pio_env})")
 
@@ -97,6 +96,7 @@ except (FileNotFoundError, ValueError, json.JSONDecodeError):
 
 versions[pio_env] = version
 
-with open(build_versions_file, "w") as f:
-    json.dump(versions, f, indent=2)
-    f.write("\n")
+if os.path.isdir(dev_dir):
+    with open(build_versions_file, "w") as f:
+        json.dump(versions, f, indent=2)
+        f.write("\n")
