@@ -17,6 +17,9 @@
 #include "logging.h"
 #include "heapdbg.h"
 #include "api.h"
+#ifdef ESP32_E22_V1
+#include "display_ESP32_E22_V1.h"
+#endif
 
 #ifdef HELTEC_WIFI_LORA_32_V3
 #include "display_HELTEC_WiFi_LoRa_32_V3.h"
@@ -633,6 +636,9 @@ void startWebServer() {
                          }
                          logPrintf(LOG_INFO, "Web", "OTA-Upload Start: %s, type: %s", filename.c_str(),
                                        updateType == U_SPIFFS ? "SPIFFS" : "Flash");
+                         #ifdef ESP32_E22_V1
+                         showStatusDisplayFlashing();
+                         #endif
                          if (!Update.begin(UPDATE_SIZE_UNKNOWN, updateType)) {
                              logPrintf(LOG_ERROR, "Web", "OTA-Upload begin() error: %s", Update.errorString());
                          }

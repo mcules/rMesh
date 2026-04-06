@@ -26,5 +26,7 @@ void onStatusDisplayMessage(const char* srcCall, const char* text, const char* d
 void displayNextPage();
 void displayForcePage(DisplayPage p, uint32_t holdMs);
 void displayButtonPoll();
+void showStatusDisplaySplash(uint32_t holdMs);
+void showStatusDisplayFlashing();
 
 #endif // ESP32_E22_V1

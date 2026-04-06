@@ -11,6 +11,7 @@
 #include "webFunctions.h"
 #include "logging.h"
 #include "peer.h"
+#include "routing.h"
 #include "main.h"
 #include "version.h"
 #include <esp_system.h>
@@ -30,6 +31,8 @@ static char lastMsgText[128] = {0};
 static DisplayPage currentPage = PAGE_IDENTITY;
 static uint32_t pageSwitchAt  = 0;
 static uint32_t pageHoldUntil = 0;
+static uint32_t splashUntil   = 0;
+static bool     flashingLock  = false;
 
 static int8_t   btnPinConfigured = -1;
 static bool     btnLastLevel     = true;   // pullup idle = HIGH
@@ -122,11 +125,10 @@ bool initStatusDisplay() {
     displayDetected = true;
     logPrintf(LOG_INFO, "Display", "SSD1306 detected (ESP32 E22 Multimodul)");
 
-    if (oledEnabled) {
-        updateStatusDisplay();
-    } else {
-        u8g2.setPowerSave(1);
-    }
+    // Always show the boot splash if a display is present, even when the
+    // OLED is disabled in settings — the splash powers on briefly and the
+    // regular update path will put it back to sleep afterwards.
+    showStatusDisplaySplash(5000);
 
     // Optional page-next button
     btnPinConfigured = -1;
@@ -141,6 +143,16 @@ bool initStatusDisplay() {
 }
 
 void displayButtonPoll() {
+    // If the boot splash has expired and the display is disabled in settings,
+    // clear the panel and put it to sleep (the main loop only calls
+    // updateStatusDisplay when oledEnabled=true, so we handle it here).
+    if (displayDetected && !oledEnabled && splashUntil != 0 && millis() >= splashUntil) {
+        splashUntil = 0;
+        u8g2.clearBuffer();
+        u8g2.sendBuffer();
+        u8g2.setPowerSave(1);
+    }
+
     // Re-configure on pin change from WebUI
     if (oledButtonPin != btnPinConfigured) {
         btnPinConfigured = oledButtonPin;
@@ -185,14 +197,10 @@ static void drawNetworkPage() {
         u8g2.drawStr(0, 22, "WiFi: disconnected");
     }
 
-    if (!settings.apMode && WiFi.status() == WL_CONNECTED) {
-        // host on line 5 already used — add mDNS below via smaller font
-    } else {
-        u8g2.setFont(u8g2_font_5x7_tf);
-        char host[32];
-        snprintf(host, sizeof(host), "Host: %s-rmesh", settings.mycall);
-        u8g2.drawStr(0, 64, host);
-    }
+    u8g2.setFont(u8g2_font_5x7_tf);
+    char host[40];
+    snprintf(host, sizeof(host), "%s-rmesh.local", settings.mycall);
+    u8g2.drawStr(0, 64, host);
 }
 
 static void drawLoraMeshPage() {
@@ -211,22 +219,14 @@ static void drawLoraMeshPage() {
     u8g2.drawStr(0, 46, buf);
 
     size_t nPeers = 0;
-    float lastRssi = 0;
-    float lastSnr  = 0;
-    bool haveLast = false;
+    size_t nRoutes = 0;
     if (listMutex && xSemaphoreTake(listMutex, pdMS_TO_TICKS(20)) == pdTRUE) {
         nPeers = peerList.size();
-        for (const auto& p : peerList) {
-            if (p.port == 0) { lastRssi = p.rssi; lastSnr = p.snr; haveLast = true; break; }
-        }
+        nRoutes = routingList.size();
         xSemaphoreGive(listMutex);
     }
-    if (haveLast) {
-        snprintf(buf, sizeof(buf), "Peers:%u  %d/%d",
-                 (unsigned)nPeers, (int)lastRssi, (int)lastSnr);
-    } else {
-        snprintf(buf, sizeof(buf), "Peers: %u", (unsigned)nPeers);
-    }
+    snprintf(buf, sizeof(buf), "Peers:%u Routes:%u",
+             (unsigned)nPeers, (unsigned)nRoutes);
     u8g2.drawStr(0, 58, buf);
 }
 
@@ -292,8 +292,63 @@ static bool pageAvailable(DisplayPage p) {
     return true;
 }
 
+void showStatusDisplaySplash(uint32_t holdMs) {
+    if (!displayDetected) return;
+    u8g2.setPowerSave(0);
+    u8g2.setContrast(displayBrightness);
+    u8g2.clearBuffer();
+
+    // Big "rMesh" heading centered
+    u8g2.setFont(u8g2_font_logisoso22_tr);
+    const char* title = "rMesh";
+    uint8_t tw = u8g2.getStrWidth(title);
+    u8g2.drawStr((128 - tw) / 2, 28, title);
+
+    // Version line (wrap if needed)
+    u8g2.setFont(u8g2_font_5x7_tf);
+    char v1[26] = {0};
+    char v2[26] = {0};
+    const char* v = VERSION;
+    strlcpy(v1, v, sizeof(v1));
+    if (strlen(v) > 25) strlcpy(v2, v + 25, sizeof(v2));
+    uint8_t w1 = u8g2.getStrWidth(v1);
+    u8g2.drawStr((128 - w1) / 2, 42, v1);
+    if (v2[0]) {
+        uint8_t w2 = u8g2.getStrWidth(v2);
+        u8g2.drawStr((128 - w2) / 2, 50, v2);
+    }
+
+    // Node name (if set)
+    if (settings.mycall[0] != '\0') {
+        u8g2.setFont(u8g2_font_6x10_tf);
+        uint8_t cw = u8g2.getStrWidth(settings.mycall);
+        u8g2.drawStr((128 - cw) / 2, 63, settings.mycall);
+    }
+
+    u8g2.sendBuffer();
+    splashUntil = millis() + holdMs;
+}
+
+void showStatusDisplayFlashing() {
+    if (!displayDetected) return;
+    flashingLock = true;
+    u8g2.setPowerSave(0);
+    u8g2.setContrast(displayBrightness);
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_logisoso22_tr);
+    const char* txt = "Flashing";
+    uint8_t tw = u8g2.getStrWidth(txt);
+    u8g2.drawStr((128 - tw) / 2, 32, txt);
+    u8g2.setFont(u8g2_font_6x10_tf);
+    u8g2.drawStr((128 - u8g2.getStrWidth("...")) / 2, 50, "...");
+    u8g2.drawStr((128 - u8g2.getStrWidth("do not power off")) / 2, 62, "do not power off");
+    u8g2.sendBuffer();
+}
+
 void updateStatusDisplay() {
     if (!displayDetected || !oledEnabled) return;
+    if (flashingLock) return;
+    if (millis() < splashUntil) return;
 
     // Auto-advance to next page unless a hold is active (e.g. after new message).
     // Skip pages that are masked out via oledPageMask.
