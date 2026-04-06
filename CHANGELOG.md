@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.31a]
+
+- NEU: Routing ignoriert direkte Peers, deren SNR unter dem konfigurierten `minSnr`-Schwellwert liegt — der direkte Routen-Eintrag wird entfernt, sodass eine Mehrhop-Alternative über einen stärker empfangenen Nachbar-Node übernehmen kann
+- NEU: Filterung und Sortierung in der Peer- und Routing-Tabelle der WebUI
+- FIX: `addRoutingList` akzeptiert wieder 0-Hop-Einträge für direkte Nachbarn (war fälschlich als Loop verworfen worden)
+- FIX: Heap-Statistik-Aufrufe für nRF52 abgesichert (kein ESP-spezifischer Heap-Code mehr auf nRF52-Plattformen)
+- FIX: `bgWorker` nutzt den plattformkorrekten FreeRTOS-Include-Pfad für nRF52
+
 ## [v1.0.31]
 
 - FIX: Heap- und Langzeitstabilität grundlegend verbessert — deutlich weniger kurzlebige Allokationen in den Hot-Paths (Topologie-Report, Status-/Peer-/Routing-Broadcasts, Auth, WiFi-Scan, Frame-Verarbeitung, UDP-Peer-Verwaltung). Behebt u. a. ein Memory-Leak in `sendPeerList()`, das nach ~3,5 h zum OOM-Crash führte, sowie eine Task-Stack-Fragmentierung, die nach längerer Laufzeit AsyncTCP zum Hängen brachte
