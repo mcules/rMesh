@@ -867,6 +867,32 @@ function fillSettingsForm(s) {
         }
     }
 
+    // OLED rotation interval (ms → s)
+    var oledIvEl = document.getElementById("settingsOledPageInterval");
+    if (oledIvEl && typeof s.oledPageInterval === "number") {
+        oledIvEl.value = Math.round(s.oledPageInterval / 1000);
+    }
+
+    // OLED page mask → 5 checkboxes
+    var oledMask = (typeof s.oledPageMask === "number") ? s.oledPageMask : 0xFF;
+    var pageEls = [
+        ["settingsOledPageIdentity", 0],
+        ["settingsOledPageNetwork",  1],
+        ["settingsOledPageLora",     2],
+        ["settingsOledPageMessages", 3],
+        ["settingsOledPageSystem",   4]
+    ];
+    pageEls.forEach(function(p) {
+        var el = document.getElementById(p[0]);
+        if (el) el.checked = (oledMask & (1 << p[1])) !== 0;
+    });
+
+    // OLED button GPIO
+    var oledBtnEl = document.getElementById("settingsOledButtonPin");
+    if (oledBtnEl && typeof s.oledButtonPin === "number") {
+        oledBtnEl.value = s.oledButtonPin;
+    }
+
     settingsVisibility();
 }
 
@@ -931,6 +957,30 @@ function saveSettings() {
     if (heapDebugEl) s["heapDebug"] = heapDebugEl.checked;
     var oledGroupEl = document.getElementById("settingsOledDisplayGroup");
     if (oledGroupEl) s["oledDisplayGroup"] = oledGroupEl.value;
+    var oledIvEl = document.getElementById("settingsOledPageInterval");
+    if (oledIvEl) {
+        var iv = parseInt(oledIvEl.value);
+        if (!isNaN(iv)) s["oledPageInterval"] = Math.max(1, Math.min(60, iv)) * 1000;
+    }
+    var pageBits = [
+        ["settingsOledPageIdentity", 0],
+        ["settingsOledPageNetwork",  1],
+        ["settingsOledPageLora",     2],
+        ["settingsOledPageMessages", 3],
+        ["settingsOledPageSystem",   4]
+    ];
+    var mask = 0;
+    pageBits.forEach(function(p) {
+        var el = document.getElementById(p[0]);
+        if (el && el.checked) mask |= (1 << p[1]);
+    });
+    if (mask === 0) mask = 0xFF;
+    s["oledPageMask"] = mask;
+    var oledBtnEl = document.getElementById("settingsOledButtonPin");
+    if (oledBtnEl) {
+        var pin = parseInt(oledBtnEl.value);
+        if (!isNaN(pin)) s["oledButtonPin"] = Math.max(-1, Math.min(48, pin));
+    }
     s["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";

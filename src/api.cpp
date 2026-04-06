@@ -662,6 +662,8 @@ static void handleSettings(AsyncWebServerRequest *request) {
             serialDebug ? "true" : "false",
             heapDebugEnabled ? "true" : "false");
     jPrintf(",\"oledDisplayGroup\":"); jStr(oledDisplayGroup);
+    jPrintf(",\"oledPageInterval\":%u,\"oledPageMask\":%u,\"oledButtonPin\":%d",
+            (unsigned)oledPageInterval, (unsigned)oledPageMask, (int)oledButtonPin);
 
     // Group names
     jPrintf(",\"groupNames\":{");

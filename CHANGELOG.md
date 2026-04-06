@@ -10,6 +10,8 @@
 - FIX: Heap-Watchdog — automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
 - FIX: File-Serving-Mutex-Timeout von 10 s auf 2 s reduziert — schnellerer Recovery bei laufenden Trim-Operationen
 - NEU: SSD1306-OLED-Support für das ESP32 E22 Multimodul (Rentner Gang) — Statusanzeige analog zu den anderen Nodes (Call, WiFi/IP, SSID, letzte Nachricht) per HW-I²C auf GPIO21/22, automatische Erkennung am Bus
+- NEU: Multi-Screen-UI für das ESP32-E22-Display — rotierende Seiten `ID` / `NET` / `LoRa` / `MSG` / `SYS` mit invertierter Header-Zeile; neue Nachrichten springen automatisch auf die MSG-Seite und halten 10 s. SYS-Seite zeigt Heap free/min, Uptime, CPU-Frequenz und vollständigen Versions-String. LoRa-Seite zeigt Frequenz, SF, BW, CR, TX-Power, Peer-Count und letzten LoRa-Peer mit RSSI/SNR (unter `listMutex`)
+- NEU: Seiten-Rotation, sichtbare Seiten (Bitmaske) und optionaler Taster-GPIO für manuellen Seitenwechsel sind in der WebUI unter „OLED Display" einstellbar und werden in NVS persistiert (`oledPageInterval`, `oledPageMask`, `oledButtonPin`); Pin-Änderungen greifen zur Laufzeit ohne Reboot, der Taster arbeitet active-low mit 40 ms Debounce. Die MSG-Seite wird nur dann in die Rotation aufgenommen, wenn ein Channel-Filter gesetzt ist und eine Nachricht vorliegt
 
 - NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt
 - NEU: Mehrsprachigkeit (Deutsch/Englisch), Uptime-Anzeige, einheitliches Stylesheet, SVG-Icons, einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts in der WebUI

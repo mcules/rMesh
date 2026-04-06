@@ -894,6 +894,9 @@ void loop() {
             oledRefreshTimer = millis() + 5000;
             updateStatusDisplay();
         }
+        #ifdef ESP32_E22_V1
+        displayButtonPoll();
+        #endif
     }
     #endif
     #ifdef LILYGO_T_ECHO

@@ -279,48 +279,48 @@
     </div>
 
     <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_battery">Akku</div>
+      <div class="section-header" data-i18n="setup.section_system">System</div>
       <div class="section-body">
         <table>
           <tr>
-            <td data-i18n="setup.bat_show">Akkustand anzeigen:</td>
+            <td data-i18n="setup.language">Sprache:</td>
             <td>
-              <label class="toggle-switch">
-                <input type="checkbox" id="settingsBatteryEnabled">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </label>
+              <select id="langSelect" class="input-box" onchange="setLanguage(this.value)">
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+              </select>
             </td>
           </tr>
           <tr>
-            <td data-i18n="setup.bat_full">Spannung bei 100%:</td>
-            <td><input class="input-box" id="settingsBatteryFullVoltage" type="number" step="0.05" min="3.5" max="4.4" style="width:5em"> V</td>
-          </tr>
-        </table>
-      </div>
-    </div>
-
-    <div id="oledSettingsSection" class="settings-section">
-      <div class="section-header" data-i18n="setup.section_oled">OLED Display</div>
-      <div class="section-body">
-        <table>
-          <tr>
-            <td data-i18n="setup.oled_enabled">Display enabled:</td>
+            <td data-i18n="setup.chat_fontsize">Chat-Schriftgröße:</td>
             <td>
-              <label class="toggle-switch">
-                <input type="checkbox" id="settingsOledEnabled">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </label>
+              <select id="chatFontSize" class="input-box" onchange="setChatFontSize(this.value)">
+                <option value="12">12px</option>
+                <option value="14">14px</option>
+                <option value="16">16px</option>
+                <option value="18">18px</option>
+                <option value="20">20px</option>
+                <option value="22">22px</option>
+                <option value="24">24px</option>
+              </select>
             </td>
           </tr>
           <tr>
-            <td data-i18n="setup.oled_group">Message group:</td>
-            <td><select class="input-box" id="settingsOledDisplayGroup" style="width:10em"></select></td>
+            <td data-i18n="setup.cpu_frequency">CPU Frequenz:</td>
+            <td>
+              <select id="settingsCpuFrequency" class="input-box">
+                <option value="80">80 MHz</option>
+                <option value="160">160 MHz</option>
+                <option value="240" selected>240 MHz</option>
+              </select>
+            </td>
           </tr>
           <tr>
-            <td data-i18n="setup.disp_brightness">Helligkeit:</td>
-            <td>
-              <input type="range" id="settingsDisplayBrightness" class="input-box" min="5" max="255" step="5" value="200" oninput="updateDispBrightnessLabel(parseInt(this.value))">
-              <span id="settingsDisplayBrightnessValue">200</span>
+            <td colspan="2">
+              <button class="button" id="settingsDeleteMessages" data-i18n="btn.delete_messages">Nachrichten löschen</button>
+              <button class="button" id="statusSyncTime" data-i18n="btn.sync_time">Browserzeit sync.</button>
+              <button class="button" id="settingsReboot" title="Neustart" data-i18n-title="btn.reboot">&#x21BB;</button>
+              <button class="button" id="settingsShutdown" title="Herunterfahren" data-i18n-title="btn.shutdown">&#x23FB;</button>
             </td>
           </tr>
         </table>
@@ -400,48 +400,71 @@
     </div>
 
     <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_system">System</div>
+      <div class="section-header" data-i18n="setup.section_battery">Akku</div>
       <div class="section-body">
         <table>
           <tr>
-            <td data-i18n="setup.language">Sprache:</td>
+            <td data-i18n="setup.bat_show">Akkustand anzeigen:</td>
             <td>
-              <select id="langSelect" class="input-box" onchange="setLanguage(this.value)">
-                <option value="de">Deutsch</option>
-                <option value="en">English</option>
-              </select>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsBatteryEnabled">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
             </td>
           </tr>
           <tr>
-            <td data-i18n="setup.chat_fontsize">Chat-Schriftgröße:</td>
+            <td data-i18n="setup.bat_full">Spannung bei 100%:</td>
+            <td><input class="input-box" id="settingsBatteryFullVoltage" type="number" step="0.05" min="3.5" max="4.4" style="width:5em"> V</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div id="oledSettingsSection" class="settings-section">
+      <div class="section-header" data-i18n="setup.section_oled">OLED Display</div>
+      <div class="section-body">
+        <table>
+          <tr>
+            <td data-i18n="setup.oled_enabled">Display enabled:</td>
             <td>
-              <select id="chatFontSize" class="input-box" onchange="setChatFontSize(this.value)">
-                <option value="12">12px</option>
-                <option value="14">14px</option>
-                <option value="16">16px</option>
-                <option value="18">18px</option>
-                <option value="20">20px</option>
-                <option value="22">22px</option>
-                <option value="24">24px</option>
-              </select>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsOledEnabled">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
             </td>
           </tr>
           <tr>
-            <td data-i18n="setup.cpu_frequency">CPU Frequenz:</td>
+            <td data-i18n="setup.oled_group">Message group:</td>
+            <td><select class="input-box" id="settingsOledDisplayGroup" style="width:10em"></select></td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.disp_brightness">Helligkeit:</td>
             <td>
-              <select id="settingsCpuFrequency" class="input-box">
-                <option value="80">80 MHz</option>
-                <option value="160">160 MHz</option>
-                <option value="240" selected>240 MHz</option>
-              </select>
+              <input type="range" id="settingsDisplayBrightness" class="input-box" min="5" max="255" step="5" value="200" oninput="updateDispBrightnessLabel(parseInt(this.value))">
+              <span id="settingsDisplayBrightnessValue">200</span>
             </td>
           </tr>
           <tr>
-            <td colspan="2">
-              <button class="button" id="settingsDeleteMessages" data-i18n="btn.delete_messages">Nachrichten löschen</button>
-              <button class="button" id="statusSyncTime" data-i18n="btn.sync_time">Browserzeit sync.</button>
-              <button class="button" id="settingsReboot" title="Neustart" data-i18n-title="btn.reboot">&#x21BB;</button>
-              <button class="button" id="settingsShutdown" title="Herunterfahren" data-i18n-title="btn.shutdown">&#x23FB;</button>
+            <td data-i18n="setup.oled_page_interval">Seitenwechsel (s):</td>
+            <td>
+              <input type="number" id="settingsOledPageInterval" class="input-box" min="1" max="60" step="1" value="5" style="width:5em">
+            </td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.oled_pages">Seiten:</td>
+            <td>
+              <label><input type="checkbox" id="settingsOledPageIdentity" checked> ID</label>
+              <label><input type="checkbox" id="settingsOledPageNetwork"  checked> NET</label>
+              <label><input type="checkbox" id="settingsOledPageLora"     checked> LoRa</label>
+              <label><input type="checkbox" id="settingsOledPageMessages" checked> MSG</label>
+              <label><input type="checkbox" id="settingsOledPageSystem"   checked> SYS</label>
+            </td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.oled_button_pin">Taster-GPIO:</td>
+            <td>
+              <input type="number" id="settingsOledButtonPin" class="input-box" min="-1" max="48" step="1" value="-1" style="width:5em">
+              <span style="opacity:0.7" data-i18n="setup.oled_button_pin_hint">(-1 = aus, active-low)</span>
             </td>
           </tr>
         </table>

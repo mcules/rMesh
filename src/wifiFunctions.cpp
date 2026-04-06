@@ -10,6 +10,9 @@
 
 #include "wifiFunctions.h"
 #include "serial.h"
+#ifdef ESP32_E22_V1
+#include "display_ESP32_E22_V1.h"
+#endif
 #include "settings.h"
 #include "logging.h"
 #include "hal.h"
@@ -160,6 +163,9 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     snprintf(callParam, sizeof(callParam), "&call=%s&device=%s&tag=%s",
              settings.mycall, PIO_ENV_NAME, newVersion);
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
+    #ifdef ESP32_E22_V1
+    showStatusDisplayFlashing();
+    #endif
 
     // LittleFS – up to 3 attempts
     char spiffsUrl[256];
