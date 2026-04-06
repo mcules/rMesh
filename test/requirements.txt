@@ -1,0 +1,4 @@
+pyserial>=3.5
+pytest>=8.0
+pytest-timeout>=2.3
+pyyaml>=6.0

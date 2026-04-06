@@ -7,6 +7,7 @@
 #include "main.h"
 #include "helperFunctions.h"
 #include "webFunctions.h"
+#include "logging.h"
 
 bool txFlag = false;
 bool rxFlag = false;
@@ -20,14 +21,14 @@ bool getKeyApMode() {
 }
 
 void initHal() {
-   //Ausgäne
+   //Outputs
     pinMode(PIN_WIFI_LED, OUTPUT);
     digitalWrite(PIN_WIFI_LED, 0);
 
-    //Eingänge
+    //Inputs
     pinMode(PIN_AP_MODE_SWITCH, INPUT);
 
-    loraReady = false;  // Kein HF-Modul vorhanden
+    loraReady = false;  // No RF module present
 }
 
 

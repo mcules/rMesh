@@ -10,6 +10,8 @@
     #include "hal_HELTEC_Wireless_Stick_Lite_V3.h"
 #elif defined(HELTEC_WIFI_LORA_32_V4)
     #include "hal_HELTEC_WiFi_LoRa_32_V4.h"
+#elif defined(HELTEC_HT_TRACKER_V1_2)
+    #include "hal_HELTEC_HT-Tracker_V1_2.h"
 #elif defined(HELTEC_WIFI_LORA_32_V3)
     #include "hal_HELTEC_WiFi_LoRa_32_V3.h"
 #elif defined(LILYGO_T_LORA_PAGER)
@@ -22,6 +24,8 @@
     #include "hal_ESP32_E22_V1.h"
 #elif defined(SEEED_XIAO_ESP32S3_WIO_SX1262)
     #include "hal_SEEED_XIAO_ESP32S3_Wio_SX1262.h"
+#elif defined(LILYGO_T_ECHO)
+    #include "hal_LILYGO_T-Echo.h"
 #else
     #error "No HAL defined for this board!"
 #endif

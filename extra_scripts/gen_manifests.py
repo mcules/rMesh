@@ -20,6 +20,12 @@ os.makedirs(output_dir, exist_ok=True)
 for dev in devices:
     device      = dev['name']
     chip        = dev['chip']
+
+    # esp-web-tools manifests only apply to ESP32 chips
+    if not chip.startswith('ESP32'):
+        print(f'  SKIP {device} (not ESP32)')
+        continue
+
     lfs_offset  = dev['lfs_offset']
     is_s3       = chip == 'ESP32-S3'
     boot_offset = 0x0000 if is_s3 else 0x1000

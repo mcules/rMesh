@@ -1,12 +1,16 @@
 #include "auth.h"
+
+#ifdef HAS_WIFI
+
 #include <Preferences.h>
 #include "mbedtls/md.h"
 #include <esp_random.h>
+#include "logging.h"
 
 AuthSession authSessions[MAX_AUTH_SESSIONS];
 String      webPasswordHash = "";
 
-// ── Passwort-Hash aus NVS laden ───────────────────────────────────────────────
+// ── Load password hash from NVS ───────────────────────────────────────────────
 void loadPasswordHash() {
     Preferences p;
     p.begin("rmesh_auth", true);
@@ -14,23 +18,22 @@ void loadPasswordHash() {
     p.getString("webPwdHash", buf, sizeof(buf));
     p.end();
     webPasswordHash = String(buf);
-    Serial.printf("[Auth] loadPasswordHash: '%s'\n", webPasswordHash.isEmpty() ? "(leer)" : "(gesetzt)");
+    logPrintf(LOG_INFO, "Auth", "loadPasswordHash: '%s'", webPasswordHash.isEmpty() ? "(empty)" : "(set)");
 }
 
-// ── Passwort-Hash in NVS speichern ────────────────────────────────────────────
-void savePasswordHash(const String& hash) {
+// ── Store password hash in NVS ────────────────────────────────────────────
+void savePasswordHash(const char* hash) {
     webPasswordHash = hash;
     Preferences p;
     p.begin("rmesh_auth", false);
-    p.putString("webPwdHash", hash.c_str());
+    p.putString("webPwdHash", hash);
     p.end();
 }
 
-// ── Zufällige Nonce erzeugen und in der Session speichern ────────────────────
-String generateNonce(uint32_t clientId) {
+// ── Generate random nonce and store in session ────────────────────
+void generateNonce(uint32_t clientId, char* buf) {
     uint8_t bytes[16];
     esp_fill_random(bytes, sizeof(bytes));
-    char buf[33];
     for (int i = 0; i < 16; i++) sprintf(buf + 2 * i, "%02x", bytes[i]);
     buf[32] = '\0';
 
@@ -40,12 +43,11 @@ String generateNonce(uint32_t clientId) {
             break;
         }
     }
-    return String(buf);
 }
 
-// ── Ist ein Client authentifiziert? ──────────────────────────────────────────
+// ── Is a client authenticated? ──────────────────────────────────────────
 bool isAuthenticated(uint32_t clientId) {
-    if (webPasswordHash.isEmpty()) return true;  // kein Passwort gesetzt
+    if (webPasswordHash.isEmpty()) return true;  // no password set
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId)
             return authSessions[i].authenticated;
@@ -53,27 +55,38 @@ bool isAuthenticated(uint32_t clientId) {
     return false;
 }
 
-// ── Session anlegen oder aktualisieren ────────────────────────────────────────
-void setClientAuth(uint32_t clientId, bool auth) {
-    // vorhandene Session aktualisieren
+// ── Create or update session ────────────────────────────────────────
+void setClientAuth(uint32_t clientId, bool auth, uint32_t ipAddr) {
+    // update existing session
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId) {
             authSessions[i].authenticated = auth;
+            if (ipAddr) authSessions[i].ipAddr = ipAddr;
             return;
         }
     }
-    // freien Slot belegen
+    // occupy free slot
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == 0) {
             authSessions[i].clientId      = clientId;
             authSessions[i].authenticated = auth;
+            authSessions[i].ipAddr        = ipAddr;
             memset(authSessions[i].nonce, 0, sizeof(authSessions[i].nonce));
             return;
         }
     }
+    // All slots full: evict the first unauthenticated session, or slot 0 as fallback
+    int evict = 0;
+    for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
+        if (!authSessions[i].authenticated) { evict = i; break; }
+    }
+    authSessions[evict].clientId      = clientId;
+    authSessions[evict].authenticated = auth;
+    authSessions[evict].ipAddr        = ipAddr;
+    memset(authSessions[evict].nonce, 0, sizeof(authSessions[evict].nonce));
 }
 
-// ── Session entfernen (bei Disconnect) ───────────────────────────────────────
+// ── Remove session (on disconnect) ───────────────────────────────────────
 void removeClientAuth(uint32_t clientId) {
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId) {
@@ -85,13 +98,13 @@ void removeClientAuth(uint32_t clientId) {
     }
 }
 
-// ── HMAC-Antwort prüfen ───────────────────────────────────────────────────────
-// Erwartet: HMAC-SHA256(key=SHA256(passwort), data=nonce) als 64-char Hex
-bool verifyAuthResponse(uint32_t clientId, const String& response) {
+// ── Verify HMAC response ───────────────────────────────────────────────────────
+// Expected: HMAC-SHA256(key=SHA256(password), data=nonce) as 64-char hex
+bool verifyAuthResponse(uint32_t clientId, const char* response) {
     if (webPasswordHash.isEmpty()) return true;
-    if (response.length() != 64)  return false;
+    if (strlen(response) != 64)   return false;
 
-    // Nonce für diesen Client suchen
+    // Find nonce for this client
     char nonce[33] = {0};
     for (int i = 0; i < MAX_AUTH_SESSIONS; i++) {
         if (authSessions[i].clientId == clientId) {
@@ -101,14 +114,17 @@ bool verifyAuthResponse(uint32_t clientId, const String& response) {
     }
     if (nonce[0] == '\0') return false;
 
-    // gespeicherten Hash (Hex) → Bytes (= HMAC-Schlüssel)
+    // Validate hash length before accessing individual characters
+    if (webPasswordHash.length() < 64) return false;
+
+    // stored hash (hex) → bytes (= HMAC key)
     uint8_t keyBytes[32];
     for (int i = 0; i < 32; i++) {
         char hex[3] = {webPasswordHash[i * 2], webPasswordHash[i * 2 + 1], '\0'};
         keyBytes[i] = (uint8_t)strtoul(hex, nullptr, 16);
     }
 
-    // HMAC-SHA256(key=gespeicherterHash, data=nonce) berechnen
+    // compute HMAC-SHA256(key=storedHash, data=nonce)
     uint8_t hmacResult[32];
     mbedtls_md_context_t ctx;
     mbedtls_md_init(&ctx);
@@ -118,10 +134,15 @@ bool verifyAuthResponse(uint32_t clientId, const String& response) {
     mbedtls_md_hmac_finish(&ctx, hmacResult);
     mbedtls_md_free(&ctx);
 
-    // Ergebnis → Hex-String
+    // result → hex string
     char expected[65];
     for (int i = 0; i < 32; i++) sprintf(expected + 2 * i, "%02x", hmacResult[i]);
     expected[64] = '\0';
 
-    return response.equalsIgnoreCase(String(expected));
+    return strncasecmp(response, expected, 64) == 0;
 }
+
+#else
+// ── Stubs for non-WiFi builds ────────────────────────────────────────────────
+String webPasswordHash = "";
+#endif

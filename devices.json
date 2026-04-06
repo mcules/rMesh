@@ -42,6 +42,12 @@
     "image": "heltec_wifi_lora32_v3.webp"
   },
   {
+    "name": "HELTEC_HT-Tracker_V1_2",
+    "chip": "ESP32-S3",
+    "lfs_offset": 3735552,
+    "image": "heltec_ht-tracker_v1_2.png"
+  },
+  {
     "name": "HELTEC_WiFi_LoRa_32_V4",
     "chip": "ESP32-S3",
     "lfs_offset": 3735552,
@@ -58,5 +64,11 @@
     "chip": "ESP32-S3",
     "lfs_offset": 4259840,
     "image": "seeed_xiao_esp32s3_wio_sx1262.svg"
+  },
+  {
+    "name": "LILYGO_T-Echo",
+    "chip": "nRF52840",
+    "image": "lilygo_t-echo.svg",
+    "flashable": false
   }
 ]

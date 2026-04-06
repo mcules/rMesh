@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <ArduinoJson.h>
 
 #include "frame.h"
@@ -6,59 +7,70 @@
 #include "webFunctions.h"
 
 size_t Frame::exportBinary(uint8_t* data, size_t length) {
-    //Binär-Daten erzeugen
+    //Generate binary data
     size_t position = 0;
-    //Frame-Typ + Hop-Count
+    if (length < 1) return 0;
+    //Frame type + hop count
     data[position] = (frameType & 0x0F) | ((hopCount & 0x0F) << 4);
     position ++;
-    //Absender hinzufügen
-    if (strlen(srcCall) > 0) {
-        data[position] = Frame::HeaderTypes::SRC_CALL_HEADER << 4 | (0x0F & strlen(srcCall));  
+    //Add sender
+    size_t sLen = strlen(srcCall);
+    if (sLen > 0) {
+        if (position + 1 + sLen > length) return position;
+        data[position] = Frame::HeaderTypes::SRC_CALL_HEADER << 4 | (0x0F & sLen);
         position ++;
-        memcpy(&data[position], srcCall, strlen(srcCall)); //Payload
-        position += strlen(srcCall);
+        memcpy(&data[position], srcCall, sLen);
+        position += sLen;
     }
-    //Node hinzufügen
-    if (strlen(nodeCall) > 0) {
-        data[position] = Frame::HeaderTypes::NODE_CALL_HEADER << 4 | (0x0F & strlen(nodeCall));  
+    //Add node
+    size_t nLen = strlen(nodeCall);
+    if (nLen > 0) {
+        if (position + 1 + nLen > length) return position;
+        data[position] = Frame::HeaderTypes::NODE_CALL_HEADER << 4 | (0x0F & nLen);
         position ++;
-        memcpy(&data[position], nodeCall, strlen(nodeCall)); //Payload
-        position += strlen(nodeCall);
+        memcpy(&data[position], nodeCall, nLen);
+        position += nLen;
     }
-    //VIA-Call hinzufügen
-    if (strlen(viaCall) > 0) {
-        data[position] = Frame::HeaderTypes::VIA_CALL_HEADER << 4 | (0x0F & strlen(viaCall));  
+    //Add VIA call
+    size_t vLen = strlen(viaCall);
+    if (vLen > 0) {
+        if (position + 1 + vLen > length) return position;
+        data[position] = Frame::HeaderTypes::VIA_CALL_HEADER << 4 | (0x0F & vLen);
         position ++;
-        memcpy(&data[position], viaCall, strlen(viaCall)); //Payload
-        position += strlen(viaCall);
+        memcpy(&data[position], viaCall, vLen);
+        position += vLen;
     }
-    //Destination hinzufügen
-    if (strlen(dstGroup) > 0) {
-        data[position] = Frame::HeaderTypes::DST_GROUP_HEADER << 4 | (0x0F & strlen(dstGroup));  
+    //Add destination
+    size_t gLen = strlen(dstGroup);
+    if (gLen > 0) {
+        if (position + 1 + gLen > length) return position;
+        data[position] = Frame::HeaderTypes::DST_GROUP_HEADER << 4 | (0x0F & gLen);
         position ++;
-        memcpy(&data[position], dstGroup, strlen(dstGroup)); //Payload
-        position += strlen(dstGroup);
+        memcpy(&data[position], dstGroup, gLen);
+        position += gLen;
     }
-    //Destination Call hinzufügen
-    if (strlen(dstCall) > 0) {
-        data[position] = Frame::HeaderTypes::DST_CALL_HEADER << 4 | (0x0F & strlen(dstCall));  
+    //Add destination call
+    size_t dLen = strlen(dstCall);
+    if (dLen > 0) {
+        if (position + 1 + dLen > length) return position;
+        data[position] = Frame::HeaderTypes::DST_CALL_HEADER << 4 | (0x0F & dLen);
         position ++;
-        memcpy(&data[position], dstCall, strlen(dstCall)); //Payload
-        position += strlen(dstCall);
+        memcpy(&data[position], dstCall, dLen);
+        position += dLen;
     }
-    //Message hinzu (muss immer ganz hinten sein, weil keine Längenangabe)
+    //Add message (must always be at the end since there is no length field)
     switch (frameType) {
         case Frame::FrameTypes::MESSAGE_FRAME:
         case Frame::FrameTypes::MESSAGE_ACK_FRAME:
-            //Normale Message Frames
-            //TYP
+            //Normal message frames
+            //Type
             data[position] = Frame::HeaderTypes::MESSAGE_HEADER << 4;     
             data[position] = data[position] | messageType;               
             position ++;
             //ID
             memcpy(&data[position], &id, sizeof(id)); //Payload
             position += sizeof(id);
-            //Message kopieren
+            //Copy message
             if (messageLength > (length - position)) { messageLength = length - position; }
             memcpy(&data[position], &message, messageLength); //Payload
             position += messageLength;    
@@ -74,155 +86,216 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
 }
 
 void Frame::monitorJSON() {
-    //Schreibt Monitor-Daten in JSON-Buffer
-    JsonDocument doc;
-    // for (size_t i = 0; i < messageLength; i++) {
-    //     doc["monitor"]["message"][i] = message[i];
-    // }    
-    if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
-        char text[messageLength + 1];
-        safeUtf8Copy(text, (uint8_t*)message, messageLength);
-        doc["monitor"]["text"] = text;
-    }
-    doc["monitor"]["messageType"] = messageType;
-    doc["monitor"]["messageLength"] = messageLength;
-    doc["monitor"]["tx"] = tx;
-    if (tx == false) {
-        doc["monitor"]["rssi"] = rssi;
-        doc["monitor"]["snr"] = snr;
-        doc["monitor"]["frqError"] = frqError;
-    }
-    doc["monitor"]["timestamp"] = timestamp;
-    if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
-    if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
-    if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
-    if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
-    if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
-    doc["monitor"]["frameType"] = frameType;
-    doc["monitor"]["id"] = id;
-    doc["monitor"]["hopCount"] = hopCount;
-    doc["monitor"]["initRetry"] = initRetry;
-    doc["monitor"]["retry"] = retry;
-    doc["monitor"]["port"] = port;
+    #ifdef HAS_WIFI
+    if (ESP.getFreeHeap() < 40000) return;
 
-    size_t len = measureJson(doc);
-    if (len == 0) return;
-    AsyncWebSocketMessageBuffer * wsBuffer = ws.makeBuffer(len);
-    if (wsBuffer != nullptr) {
-        serializeJson(doc, (char*)wsBuffer->get(), len);
-        ws.textAll(wsBuffer); 
-    } else {
-        Serial.println(F("Fehler: Kein RAM für Buffer"));
+    // Rate-limit: max 2 monitor messages per second to reduce heap pressure
+    // from WebSocket shared_ptr allocations
+    static uint32_t lastMonitorMs = 0;
+    static uint8_t  monitorCount  = 0;
+    uint32_t now = millis();
+    if ((int32_t)(now - lastMonitorMs) >= 500) {
+        lastMonitorMs = now;
+        monitorCount = 0;
+    }
+    if (++monitorCount > 2) return;
+
+    // Build monitor JSON directly into static buffer (no heap JsonDocument).
+    // Only called from the main loop, so a static buffer is safe.
+    static char buf[512];
+    int pos = 0;
+    const int cap = (int)sizeof(buf);
+
+    pos += snprintf(buf + pos, cap - pos, "{\"monitor\":{");
+
+    if (messageLength > 0 && messageLength <= sizeof(message) &&
+        (messageType == Frame::MessageTypes::TEXT_MESSAGE || messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
+        char text[261];
+        size_t safeLen = messageLength < sizeof(text) ? messageLength : sizeof(text) - 1;
+        safeUtf8Copy(text, (uint8_t*)message, safeLen, sizeof(text));
+        pos += snprintf(buf + pos, cap - pos, "\"text\":\"");
+        // JSON-escape the text inline
+        for (const char *p = text; *p && pos + 7 < cap; p++) {
+            switch (*p) {
+                case '"':  buf[pos++] = '\\'; buf[pos++] = '"';  break;
+                case '\\': buf[pos++] = '\\'; buf[pos++] = '\\'; break;
+                case '\n': buf[pos++] = '\\'; buf[pos++] = 'n';  break;
+                case '\r': buf[pos++] = '\\'; buf[pos++] = 'r';  break;
+                case '\t': buf[pos++] = '\\'; buf[pos++] = 't';  break;
+                default:
+                    if ((uint8_t)*p < 0x20)
+                        pos += snprintf(buf + pos, cap - pos, "\\u%04x", (uint8_t)*p);
+                    else
+                        buf[pos++] = *p;
+            }
+        }
+        pos += snprintf(buf + pos, cap - pos, "\",");
     }
 
+    pos += snprintf(buf + pos, cap - pos,
+        "\"messageType\":%u,\"messageLength\":%u,\"tx\":%s",
+        (unsigned)messageType, (unsigned)messageLength, tx ? "true" : "false");
 
+    if (!tx) {
+        pos += snprintf(buf + pos, cap - pos,
+            ",\"rssi\":%.1f,\"snr\":%.1f,\"frqError\":%.1f", rssi, snr, frqError);
+    }
+
+    pos += snprintf(buf + pos, cap - pos, ",\"timestamp\":%ld", (long)timestamp);
+
+    if (srcCall[0])  pos += snprintf(buf + pos, cap - pos, ",\"srcCall\":\"%s\"", srcCall);
+    if (dstGroup[0]) pos += snprintf(buf + pos, cap - pos, ",\"dstGroup\":\"%s\"", dstGroup);
+    if (dstCall[0])  pos += snprintf(buf + pos, cap - pos, ",\"dstCall\":\"%s\"", dstCall);
+    if (viaCall[0])  pos += snprintf(buf + pos, cap - pos, ",\"viaCall\":\"%s\"", viaCall);
+    if (nodeCall[0]) pos += snprintf(buf + pos, cap - pos, ",\"nodeCall\":\"%s\"", nodeCall);
+
+    pos += snprintf(buf + pos, cap - pos,
+        ",\"frameType\":%u,\"id\":%lu,\"hopCount\":%u,\"initRetry\":%u,\"retry\":%u,\"port\":%u}}",
+        (unsigned)frameType, (unsigned long)id, (unsigned)hopCount,
+        (unsigned)initRetry, (unsigned)retry, (unsigned)port);
+
+    if (pos > 0 && pos < cap) {
+        wsBroadcast(buf, pos);
+    }
+    #endif
+}
+
+/**
+ * @brief Escape a string for safe JSON embedding (handles \, ", and control chars).
+ * @return Number of bytes written (excluding NUL).
+ */
+static size_t jsonEscape(char* dst, size_t dstLen, const char* src) {
+    size_t d = 0;
+    for (size_t i = 0; src[i] && d + 6 < dstLen; i++) {
+        char c = src[i];
+        if (c == '"')       { dst[d++] = '\\'; dst[d++] = '"'; }
+        else if (c == '\\') { dst[d++] = '\\'; dst[d++] = '\\'; }
+        else if (c == '\n') { dst[d++] = '\\'; dst[d++] = 'n'; }
+        else if (c == '\r') { dst[d++] = '\\'; dst[d++] = 'r'; }
+        else if (c == '\t') { dst[d++] = '\\'; dst[d++] = 't'; }
+        else if ((uint8_t)c < 0x20) {
+            d += snprintf(dst + d, dstLen - d, "\\u%04x", (uint8_t)c);
+        }
+        else { dst[d++] = c; }
+    }
+    dst[d] = '\0';
+    return d;
 }
 
 size_t Frame::messageJSON(char* buffer, size_t length) {
-    //Schreibt Message-Daten in JSON-Buffer
-    JsonDocument doc;
-    // for (size_t i = 0; i < messageLength; i++) {
-    //     doc["message"]["message"][i] = message[i];
-    // }    
-    if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
+    // Build message JSON without heap-allocating JsonDocument.
+    char escapedText[512] = {0};
+    char escapedDst[MAX_CALLSIGN_LENGTH * 2 + 1] = {0};
+    char escapedDstGrp[MAX_CALLSIGN_LENGTH * 2 + 1] = {0};
+    char escapedSrc[MAX_CALLSIGN_LENGTH * 2 + 1] = {0};
+
+    jsonEscape(escapedDst, sizeof(escapedDst), dstCall);
+    jsonEscape(escapedDstGrp, sizeof(escapedDstGrp), dstGroup);
+    jsonEscape(escapedSrc, sizeof(escapedSrc), srcCall);
+
+    size_t pos = 0;
+    pos += snprintf(buffer + pos, length - pos, "{\"message\":{");
+
+    if ((messageLength > 0) && (messageType == Frame::MessageTypes::TEXT_MESSAGE || messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
         char text[messageLength + 1];
-        safeUtf8Copy(text, (uint8_t*)message, messageLength);
-        doc["message"]["text"] = text;  
+        safeUtf8Copy(text, (uint8_t*)message, messageLength, messageLength + 1);
+        jsonEscape(escapedText, sizeof(escapedText), text);
+        pos += snprintf(buffer + pos, length - pos, "\"text\":\"%s\",", escapedText);
     }
-    doc["message"]["messageType"] = messageType;
-    doc["message"]["dstCall"] = dstCall;
-    doc["message"]["dstGroup"] = dstGroup;
-    doc["message"]["srcCall"] = srcCall;
-    doc["message"]["id"] = id;
-    doc["message"]["tx"] = tx;
-    doc["message"]["timestamp"] = timestamp;
-    doc["message"]["hopCount"] = hopCount;
-    size_t len = serializeJson(doc, buffer, length);
-    return len;
+
+    pos += snprintf(buffer + pos, length - pos,
+        "\"messageType\":%u,\"dstCall\":\"%s\",\"dstGroup\":\"%s\","
+        "\"srcCall\":\"%s\",\"id\":%lu,\"tx\":%s,\"timestamp\":%ld,\"hopCount\":%u}}",
+        messageType, escapedDst, escapedDstGrp, escapedSrc,
+        (unsigned long)id, tx ? "true" : "false",
+        (long)timestamp, hopCount);
+
+    return pos;
 }
 
 
 void Frame::importBinary(uint8_t* data, size_t length) {
-    //Abbruch, wenn Frame zu kurz
+    //Abort if frame too short
     if (length <= 1) { return; }
 
-    //Frame-TYP
+    //Frame type
     frameType = data[0] & 0x0F;
     hopCount = (data[0] & 0xF0) >> 4;
 
-    //Frame druchlaufen und nach Headern suchen
+    //Iterate frame and search for headers
     uint8_t header = 0;
     uint8_t payloadLength = 0;
-    size_t i = 1;       //Position 1. Header
+    size_t i = 1;       //Position of 1st header
     while (i < length) {
-        //Header prüfen
+        //Check header
         header = data[i] >> 4;
         payloadLength = data[i] & 0x0F;
         switch (header) {
             case Frame::HeaderTypes::NODE_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(nodeCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(nodeCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(nodeCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::VIA_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(viaCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(viaCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(viaCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::SRC_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(srcCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(srcCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(srcCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::DST_GROUP_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(dstGroup, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(dstGroup, (const uint8_t*)(data + i + 1), payloadLength, sizeof(dstGroup));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::DST_CALL_HEADER:
                 if (i + payloadLength < length) {
                     if (payloadLength > MAX_CALLSIGN_LENGTH) {payloadLength = MAX_CALLSIGN_LENGTH;}
-                    safeUtf8Copy(dstCall, (const uint8_t*)(data + i + 1), payloadLength);
+                    safeUtf8Copy(dstCall, (const uint8_t*)(data + i + 1), payloadLength, sizeof(dstCall));
                     i += payloadLength + 1;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
             case Frame::HeaderTypes::MESSAGE_HEADER:
                 if (i + sizeof(id) < length) {
                     //Message Type 
-                    messageType = payloadLength; //Wird dopplet verwendet 
+                    messageType = payloadLength; //Used for dual purpose
                     i++;
                     //Message ID
                     memcpy(&id, &data[i], sizeof(id));  
                     i = i + sizeof(id);
-                    //Message Länge
+                    //Message length
                     messageLength = length - i;
+                    if (messageLength > sizeof(message)) messageLength = sizeof(message);
                     //Message
                     memcpy(message, data + i, messageLength);
-                    //Frame Ende
+                    //End of frame
                     i = length;
                 } else {
-                    i = length; //Abbruch
+                    i = length; //Abort
                 }
                 break;
-            default: //Falscher Header
+            default: //Invalid header
                 i = length;
                 break;
         }      

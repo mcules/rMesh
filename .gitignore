@@ -2,9 +2,11 @@
 .vscode
 .vs
 .idea
+.external
 src/version.h
 
 *.bak
 
 # Auto-generated gzip-compressed web assets
 data_gz/
+/test/nodes.yml

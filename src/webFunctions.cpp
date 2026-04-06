@@ -1,3 +1,4 @@
+#ifdef HAS_WIFI
 #include <ESPAsyncWebServer.h>
 #include <WiFi.h>
 #include <LittleFS.h>
@@ -5,11 +6,33 @@
 
 #include "config.h"
 #include "settings.h"
+#include "hal.h"
+#include "wifiFunctions.h"
 #include "main.h"
 #include "helperFunctions.h"
 #include "peer.h"
 #include "routing.h"
 #include "auth.h"
+#include "serial.h"
+#include "logging.h"
+#include "heapdbg.h"
+#include "api.h"
+#ifdef ESP32_E22_V1
+#include "display_ESP32_E22_V1.h"
+#endif
+
+#ifdef HELTEC_WIFI_LORA_32_V3
+#include "display_HELTEC_WiFi_LoRa_32_V3.h"
+#endif
+#ifdef HELTEC_HT_TRACKER_V1_2
+#include "display_HELTEC_HT-Tracker_V1_2.h"
+#endif
+#ifdef LILYGO_T3_LORA32_V1_6_1
+#include "display_LILYGO_T3_LoRa32_V1_6_1.h"
+#endif
+#ifdef LILYGO_T_BEAM
+#include "display_LILYGO_T-Beam.h"
+#endif
 
 AsyncWebServer webServer(80);
 AsyncWebSocketMessageHandler wsHandler;
@@ -22,6 +45,13 @@ AsyncWebSocket ws("/socket", wsHandler.eventHandler());
  * Otherwise, sends only to authenticated clients.
  */
 void wsBroadcast(const char *buf, size_t len) {
+    // ws.textAll/text internally allocates shared_ptr<vector> on the heap.
+    // Under low heap conditions, operator new would trigger std::terminate().
+    // Small messages (notifications < 30 bytes) are allowed at lower heap;
+    // larger messages (status, monitor) need more headroom.
+    uint32_t minHeap = (len < 30) ? 15000 : 40000;
+    if (ESP.getFreeHeap() < minHeap || ESP.getMaxAllocHeap() < 8000) return;
+
     if (webPasswordHash.isEmpty()) {
         ws.textAll(buf, len);
         return;
@@ -33,6 +63,75 @@ void wsBroadcast(const char *buf, size_t len) {
     }
 }
 
+// ── Lightweight WebSocket notifications ─────────────────────────────────────
+// Instead of serializing full JSON on the heap, send a tiny "data changed"
+// event.  The WebUI fetches the updated data via the REST API.
+
+// Lightweight "something changed" notifications: the payload is a
+// constant 20-byte string, so they do not grow the WS send buffer or the
+// heap beyond what the WS stack already reserves per client. The WebUI
+// re-fetches /api/peers or /api/routes via REST on receipt.
+void notifyPeerListChanged() {
+    wsBroadcast("{\"notify\":\"peers\"}", 18);
+}
+
+void notifyRoutingChanged() {
+    wsBroadcast("{\"notify\":\"routes\"}", 19);
+}
+
+void notifySettingsChanged() {
+    // Settings changes are rare; still broadcast so open WebUIs refresh.
+    wsBroadcast("{\"notify\":\"settings\"}", 21);
+}
+
+void notifyNewMessage() {
+    wsBroadcast("{\"notify\":\"messages\"}", 21);
+}
+
+/**
+ * Send initial data to a single WebSocket client on connect/auth.
+ * Uses notification messages that tell the client to fetch via REST API.
+ * The REST API does not require auth when no password is set; when a password
+ * IS set, we send the full settings inline (since the client can't fetch
+ * the API without HTTP auth headers), but peers and routes use notifications
+ * (the JS fetches /api/peers and /api/routes without auth — we add a
+ * session-cookie bypass for these endpoints).
+ *
+ * Simpler approach: just send the same notifications. The client fetches
+ * the API. For the no-password case this works. For the password case,
+ * the API endpoints skip auth-check for requests originating from the
+ * same IP as an authenticated WebSocket client.
+ *
+ * SIMPLEST approach (chosen): Send data directly via WebSocket to the
+ * connecting client, using small JSON snippets.
+ */
+static void sendInitialDataToClient(AsyncWebSocketClient *client) {
+    if (ESP.getFreeHeap() < 15000 || ESP.getMaxAllocHeap() < 8000) return;
+
+    // Settings must be sent inline (WebUI needs mycall/version before anything works).
+    // Use a minimal JSON with just the essential fields — avoids the old 17KB JsonDocument.
+    {
+        char json[512];
+        int n = snprintf(json, sizeof(json),
+            "{\"settings\":{\"mycall\":\"%s\",\"version\":\"%s\","
+            "\"name\":\"%s\",\"hardware\":\"%s\","
+            "\"webPasswordSet\":%s,"
+            "\"loraMaxMessageLength\":%u}}",
+            settings.mycall, VERSION, NAME, PIO_ENV_NAME,
+            !webPasswordHash.isEmpty() ? "true" : "false",
+            (unsigned)settings.loraMaxMessageLength);
+        if (n > 0 && n < (int)sizeof(json)) {
+            client->text(json, n);
+        }
+    }
+
+    // After minimal settings, tell client to fetch full data via API
+    // (API auth is bypassed for IPs with authenticated WS sessions)
+    client->text("{\"notify\":\"settings\"}");
+    client->text("{\"notify\":\"peers\"}");
+    client->text("{\"notify\":\"routes\"}");
+}
+
 /**
  * Initializes and starts the web server and WebSocket handlers.
  */
@@ -41,22 +140,22 @@ void startWebServer() {
 
     wsHandler.onConnect([](AsyncWebSocket *server, AsyncWebSocketClient *client) {
         ws.cleanupClients();
-        setClientAuth(client->id(), false);
+        setClientAuth(client->id(), false, (uint32_t)client->remoteIP());
 
         if (webPasswordHash.isEmpty()) {
-            sendSettings();
-            sendPeerList();
-            sendRoutingList();
+            sendInitialDataToClient(client);
         } else {
-            String nonce = generateNonce(client->id());
+            char nonce[33];
+            generateNonce(client->id(), nonce);
             uint64_t mac = ESP.getEfuseMac();
             char chipId[13];
             snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
                      (uint8_t) (mac >> 40), (uint8_t) (mac >> 32), (uint8_t) (mac >> 24),
                      (uint8_t) (mac >> 16), (uint8_t) (mac >> 8), (uint8_t) (mac));
-            String challenge = "{\"auth\":{\"required\":true,\"nonce\":\"" + nonce
-                               + "\",\"mycall\":\"" + String(settings.mycall)
-                               + "\",\"chipId\":\"" + String(chipId) + "\"}}";
+            char challenge[256];
+            snprintf(challenge, sizeof(challenge),
+                     "{\"auth\":{\"required\":true,\"nonce\":\"%s\",\"mycall\":\"%s\",\"chipId\":\"%s\"}}",
+                     nonce, settings.mycall, chipId);
             client->text(challenge);
         }
     });
@@ -68,7 +167,7 @@ void startWebServer() {
 
     wsHandler.onError([](AsyncWebSocket *server, AsyncWebSocketClient *client, uint16_t errorCode, const char *reason,
                          size_t len) {
-        Serial.printf("Client %" PRIu32 " error: %" PRIu16 ": %s\n", client->id(), errorCode, reason);
+        logPrintf(LOG_ERROR, "Web", "Client %" PRIu32 " error: %" PRIu16 ": %s", client->id(), errorCode, reason);
         ws.cleanupClients();
     });
 
@@ -80,16 +179,18 @@ void startWebServer() {
         // Authentication handshake
         if (json["auth"].is<JsonVariant>()) {
             if (json["auth"]["response"].is<JsonVariant>()) {
-                String response = json["auth"]["response"].as<String>();
+                const char* response = json["auth"]["response"] | "";
                 if (verifyAuthResponse(client->id(), response)) {
-                    setClientAuth(client->id(), true);
+                    setClientAuth(client->id(), true, (uint32_t)client->remoteIP());
                     client->text("{\"auth\":{\"ok\":true}}");
-                    sendSettings();
-                    sendPeerList();
-                    sendRoutingList();
+                    sendInitialDataToClient(client);
                 } else {
-                    String nonce = generateNonce(client->id());
-                    String msg = "{\"auth\":{\"error\":\"Wrong password\",\"nonce\":\"" + nonce + "\"}}";
+                    char nonce[33];
+                    generateNonce(client->id(), nonce);
+                    char msg[192];
+                    snprintf(msg, sizeof(msg),
+                             "{\"auth\":{\"error\":\"Wrong password\",\"nonce\":\"%s\"}}",
+                             nonce);
                     client->text(msg);
                 }
             }
@@ -105,16 +206,16 @@ void startWebServer() {
 
         // Set or clear the web password hash
         if (json["setPassword"].is<JsonVariant>()) {
-            String hash = json["setPassword"].as<String>();
-            Serial.printf("[Auth] setPassword received, hash='%s'\n", hash.c_str());
+            const char* hash = json["setPassword"] | "";
+            logPrintf(LOG_INFO, "Auth", "setPassword received, hash='%s'", hash);
             savePasswordHash(hash);
             setClientAuth(client->id(), true);
-            Serial.printf("[Auth] webPasswordHash now: '%s'\n", webPasswordHash.c_str());
+            logPrintf(LOG_INFO, "Auth", "webPasswordHash now: '%s'", webPasswordHash.c_str());
 
-            String resp = hash.isEmpty()
+            const char* resp = (hash[0] == '\0')
                               ? "{\"passwordSaved\":false}"
                               : "{\"passwordSaved\":true}";
-            Serial.printf("[Auth] Sending to client %u: %s\n", client->id(), resp.c_str());
+            logPrintf(LOG_INFO, "Auth", "Sending to client %u: %s", client->id(), resp);
             client->text(resp);
             return;
         }
@@ -123,7 +224,7 @@ void startWebServer() {
         if (json["settings"].is<JsonVariant>()) {
             if (json["settings"]["mycall"].is<JsonVariant>()) {
                 const char *mycallSrc = json["settings"]["mycall"] | "";
-                safeUtf8Copy(settings.mycall, (const uint8_t *) mycallSrc, sizeof(settings.mycall));
+                safeUtf8Copy(settings.mycall, (const uint8_t *) mycallSrc, sizeof(settings.mycall), sizeof(settings.mycall));
                 for (size_t i = 0; i < sizeof(settings.mycall); i++) {
                     settings.mycall[i] = toupper(settings.mycall[i]);
                 }
@@ -142,10 +243,45 @@ void startWebServer() {
                 strlcpy(settings.wifiSSID, json["settings"]["wifiSSID"] | "", sizeof(settings.wifiSSID));
             }
             if (json["settings"]["wifiPassword"].is<JsonVariant>()) {
-                strlcpy(settings.wifiPassword, json["settings"]["wifiPassword"] | "", sizeof(settings.wifiPassword));
+                const char* pw = json["settings"]["wifiPassword"] | "";
+                if (strcmp(pw, "***") != 0) {
+                    strlcpy(settings.wifiPassword, pw, sizeof(settings.wifiPassword));
+                }
             }
             if (json["settings"]["apMode"].is<JsonVariant>()) {
                 settings.apMode = json["settings"]["apMode"].as<bool>();
+            }
+            if (json["settings"]["apName"].is<JsonVariant>()) {
+                apName = json["settings"]["apName"] | "rMesh";
+            }
+            if (json["settings"]["apPassword"].is<JsonVariant>()) {
+                apPassword = json["settings"]["apPassword"] | "";
+            }
+            // Update WiFi network list
+            if (json["settings"]["wifiNetworks"].is<JsonArray>()) {
+                JsonArray nets = json["settings"]["wifiNetworks"];
+                std::vector<WifiNetwork> oldNetworks = wifiNetworks;
+                wifiNetworks.clear();
+                for (JsonObject n : nets) {
+                    WifiNetwork net;
+                    memset(&net, 0, sizeof(net));
+                    strlcpy(net.ssid,     n["ssid"] | "",     sizeof(net.ssid));
+                    const char* pw = n["password"] | "";
+                    if (strcmp(pw, "***") == 0) {
+                        for (auto& old : oldNetworks) {
+                            if (strcmp(old.ssid, net.ssid) == 0) {
+                                strlcpy(net.password, old.password, sizeof(net.password));
+                                break;
+                            }
+                        }
+                    } else {
+                        strlcpy(net.password, pw, sizeof(net.password));
+                    }
+                    net.favorite = n["favorite"] | false;
+                    if (net.ssid[0] != '\0') {
+                        wifiNetworks.push_back(net);
+                    }
+                }
             }
             if (json["settings"]["wifiIP"].is<JsonVariant>()) {
                 JsonArray ipArray = json["settings"]["wifiIP"];
@@ -182,7 +318,7 @@ void startWebServer() {
                         udpPeers.push_back(IPAddress(ip[0] | 0, ip[1] | 0, ip[2] | 0, ip[3] | 0));
                         udpPeerLegacy.push_back(p["legacy"] | false);
                         udpPeerEnabled.push_back(p["enabled"] | true);
-                        udpPeerCall.push_back(p["call"] | "");
+                        udpPeerCall.push_back(UdpPeerCallsign(p["call"] | ""));
                     }
                 }
             }
@@ -227,6 +363,9 @@ void startWebServer() {
             if (json["settings"]["maxHopTelemetry"].is<JsonVariant>()) {
                 extSettings.maxHopTelemetry = json["settings"]["maxHopTelemetry"].as<uint8_t>();
             }
+            if (json["settings"]["minSnr"].is<JsonVariant>()) {
+                extSettings.minSnr = json["settings"]["minSnr"].as<int8_t>();
+            }
             if (json["settings"]["updateChannel"].is<JsonVariant>()) {
                 updateChannel = json["settings"]["updateChannel"].as<uint8_t>();
             }
@@ -239,7 +378,67 @@ void startWebServer() {
             if (json["settings"]["batteryFullVoltage"].is<JsonVariant>()) {
                 batteryFullVoltage = json["settings"]["batteryFullVoltage"].as<float>();
             }
-            saveSettings();
+            if (json["settings"]["wifiTxPower"].is<JsonVariant>()) {
+                wifiTxPower = json["settings"]["wifiTxPower"].as<int8_t>();
+                if (wifiTxPower < 2) wifiTxPower = 2;
+                if (wifiTxPower > WIFI_MAX_TX_POWER_DBM) wifiTxPower = WIFI_MAX_TX_POWER_DBM;
+            }
+            if (json["settings"]["displayBrightness"].is<JsonVariant>()) {
+                displayBrightness = json["settings"]["displayBrightness"].as<uint8_t>();
+                if (displayBrightness < 5) displayBrightness = 5;
+            }
+            if (json["settings"]["cpuFrequency"].is<JsonVariant>()) {
+                uint16_t freq = json["settings"]["cpuFrequency"].as<uint16_t>();
+                if (freq == 80 || freq == 160 || freq == 240) {
+                    cpuFrequency = freq;
+                }
+            }
+            if (json["settings"]["oledEnabled"].is<JsonVariant>()) {
+                oledEnabled = json["settings"]["oledEnabled"].as<bool>();
+            }
+            if (json["settings"]["serialDebug"].is<JsonVariant>()) {
+                serialDebug = json["settings"]["serialDebug"].as<bool>();
+                Serial.setDebugOutput(serialDebug);
+            }
+            if (json["settings"]["heapDebug"].is<JsonVariant>()) {
+                heapDebugEnabled = json["settings"]["heapDebug"].as<bool>();
+            }
+            if (json["settings"]["oledDisplayGroup"].is<JsonVariant>()) {
+                strlcpy(oledDisplayGroup, json["settings"]["oledDisplayGroup"] | "", sizeof(oledDisplayGroup));
+            }
+            if (json["settings"]["oledPageInterval"].is<JsonVariant>()) {
+                uint32_t iv = json["settings"]["oledPageInterval"].as<uint32_t>();
+                if (iv < 1000)  iv = 1000;
+                if (iv > 60000) iv = 60000;
+                oledPageInterval = (uint16_t)iv;
+            }
+            if (json["settings"]["oledPageMask"].is<JsonVariant>()) {
+                uint8_t m = json["settings"]["oledPageMask"].as<uint8_t>();
+                if (m == 0) m = 0xFF;
+                oledPageMask = m;
+            }
+            if (json["settings"]["oledButtonPin"].is<JsonVariant>()) {
+                int pin = json["settings"]["oledButtonPin"].as<int>();
+                if (pin < -1 || pin > 48) pin = -1;
+                oledButtonPin = (int8_t)pin;
+            }
+            if (json["settings"]["groupNames"].is<JsonObject>()) {
+                JsonObject gn = json["settings"]["groupNames"];
+                for (int i = 3; i <= MAX_CHANNELS; i++) {
+                    String key = String(i);
+                    if (gn[key].is<const char*>()) {
+                        strlcpy(groupNames[i], gn[key] | "", MAX_GROUP_NAME_LEN);
+                    }
+                }
+                saveGroupNames();
+            }
+            pendingSettingsSave = true;
+            #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
+            if (hasStatusDisplay()) {
+                if (oledEnabled) updateStatusDisplay();
+                else disableStatusDisplay();
+            }
+            #endif
         }
 
         // Send raw frame
@@ -265,14 +464,16 @@ void startWebServer() {
             }
             if (json["sendFrame"]["messageText"].is<JsonVariant>()) {
                 const char *tempText = json["sendFrame"]["messageText"];
-                memcpy((char *) f.message, tempText, sizeof(f.message));
-                f.messageLength = strlen(tempText);
+                size_t textLen = strlen(tempText);
+                if (textLen > sizeof(f.message)) textLen = sizeof(f.message);
+                memcpy((char *) f.message, tempText, textLen);
+                f.messageLength = textLen;
             }
             if (json["sendFrame"]["message"].is<JsonArray>()) {
                 JsonArray jsonMsg = json["sendFrame"]["message"].as<JsonArray>();
                 uint8_t i = 0;
                 for (uint8_t v: jsonMsg) {
-                    if (i < len && i < sizeof(f.message)) {
+                    if (i < sizeof(f.message)) {
                         f.message[i] = v;
                         i++;
                     }
@@ -282,16 +483,20 @@ void startWebServer() {
         }
 
         if (json["sendMessage"].is<JsonVariant>()) {
-            sendMessage(json["sendMessage"]["dst"].as<const char *>(), json["sendMessage"]["text"].as<const char *>());
+            const char* dst = json["sendMessage"]["dst"] | "";
+            const char* text = json["sendMessage"]["text"] | "";
+            sendMessage(dst, text);
         }
 
         if (json["sendGroup"].is<JsonVariant>()) {
-            sendGroup(json["sendGroup"]["dst"].as<const char *>(), json["sendGroup"]["text"].as<const char *>());
+            const char* dst = json["sendGroup"]["dst"] | "";
+            const char* text = json["sendGroup"]["text"] | "";
+            sendGroup(dst, text);
         }
 
         if (json["deleteMessages"].is<JsonVariant>()) {
             LittleFS.remove("/messages.json");
-            rebootTimer = millis() + 1000;
+            rebootTimer = millis() + 1000; rebootRequested = true;
         }
 
         if (json["trace"].is<JsonVariant>()) {
@@ -308,35 +513,36 @@ void startWebServer() {
         }
 
         if (json["scanWifi"].is<JsonVariant>()) {
-            Serial.println("WiFi scan...");
+            logPrintf(LOG_INFO, "Web", "WiFi scan...");
+            pendingReconnectScan = false;  // Don't treat this as a reconnect scan
             WiFi.scanNetworks(true);
         }
 
         if (json["announce"].is<JsonVariant>()) {
-            Serial.println("Send manual announce...");
+            logPrintf(LOG_INFO, "Web", "Send manual announce...");
             announceTimer = 0;
         }
 
         if (json["tune"].is<JsonVariant>()) {
-            Serial.println("Send tune...");
+            logPrintf(LOG_INFO, "Web", "Send tune...");
             Frame f;
             f.frameType = Frame::FrameTypes::TUNE_FRAME;
-            txBuffer.push_back(f);
+            sendFrame(f);
         }
 
         if (json["reboot"].is<JsonVariant>()) {
-            Serial.println("Reboot");
-            rebootTimer = 0;
+            logPrintf(LOG_INFO, "Web", "Reboot");
+            rebootTimer = millis(); rebootRequested = true;
         }
 
         if (json["shutdown"].is<JsonVariant>()) {
-            Serial.println("Shutdown");
+            logPrintf(LOG_INFO, "Web", "Shutdown");
             pendingShutdown = true;
         }
 
         // Deferred OTA update, handled in the main loop
         if (json["update"].is<JsonVariant>()) {
-            Serial.println("OTA update requested...");
+            logPrintf(LOG_INFO, "Web", "OTA update requested...");
             pendingManualUpdate = true;
         }
 
@@ -344,7 +550,7 @@ void startWebServer() {
         if (json["forceUpdate"].is<JsonVariant>()) {
             pendingForceChannel = json["forceUpdate"].as<uint8_t>(); // 0=release, 1=dev
             pendingForceUpdate = true;
-            Serial.printf("Force install requested (channel: %s)...\n", pendingForceChannel == 1 ? "dev" : "release");
+            logPrintf(LOG_INFO, "Web", "Force install requested (channel: %s)...", pendingForceChannel == 1 ? "dev" : "release");
         }
     });
 
@@ -353,14 +559,15 @@ void startWebServer() {
     //---------------------- WEBSERVER -------------------------
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
     DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS");
-    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
+    DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
 
     // Serve files from LittleFS and fall back to 404
     webServer.onNotFound([](AsyncWebServerRequest *request) {
         String path = request->url();
         if (path == "/") path = "/index.html";
 
-        if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(10000))) {
+        // Shorter timeout (2s) — prevents long UI hangs during trim operations
+        if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(2000))) {
             bool gzipped = !LittleFS.exists(path) && LittleFS.exists(path + ".gz");
             String servePath = gzipped ? path + ".gz" : path;
 
@@ -392,6 +599,12 @@ void startWebServer() {
     // OTA upload endpoint
     webServer.on("/ota", HTTP_POST,
                  [](AsyncWebServerRequest *request) {
+                     if (!webPasswordHash.isEmpty()) {
+                         if (!request->hasHeader("X-OTA-Token") || request->getHeader("X-OTA-Token")->value() != webPasswordHash) {
+                             request->send(401, "text/plain", "Unauthorized");
+                             return;
+                         }
+                     }
                      bool ok = !Update.hasError();
                      String msg = ok ? "OK" : String(Update.errorString());
                      AsyncWebServerResponse *resp = request->beginResponse(200, "text/plain", msg);
@@ -406,7 +619,7 @@ void startWebServer() {
                          } else {
                              char buf[] = "{\"updateStatus\":\"Upload successful – rebooting...\"}";
                              wsBroadcast(buf, strlen(buf));
-                             rebootTimer = millis() + 2000;
+                             rebootTimer = millis() + 2000; rebootRequested = true;
                          }
                      } else {
                          char buf[128];
@@ -421,26 +634,33 @@ void startWebServer() {
                          if (request->hasParam("type")) {
                              if (request->getParam("type")->value() == "spiffs") updateType = U_SPIFFS;
                          }
-                         Serial.printf("[OTA-Upload] Start: %s, type: %s\n", filename.c_str(),
+                         logPrintf(LOG_INFO, "Web", "OTA-Upload Start: %s, type: %s", filename.c_str(),
                                        updateType == U_SPIFFS ? "SPIFFS" : "Flash");
+                         #ifdef ESP32_E22_V1
+                         showStatusDisplayFlashing(updateType == U_SPIFFS ? "Filesystem" : "Firmware");
+                         #endif
                          if (!Update.begin(UPDATE_SIZE_UNKNOWN, updateType)) {
-                             Serial.printf("[OTA-Upload] begin() error: %s\n", Update.errorString());
+                             logPrintf(LOG_ERROR, "Web", "OTA-Upload begin() error: %s", Update.errorString());
                          }
                          char buf[] = "{\"updateStatus\":\"Upload in progress...\"}";
                          wsBroadcast(buf, strlen(buf));
                      }
                      if (len && Update.write(data, len) != len) {
-                         Serial.printf("[OTA-Upload] write() error: %s\n", Update.errorString());
+                         logPrintf(LOG_ERROR, "Web", "OTA-Upload write() error: %s", Update.errorString());
                      }
                      if (final) {
                          if (Update.end(true)) {
-                             Serial.printf("[OTA-Upload] Done, %u bytes\n", index + len);
+                             logPrintf(LOG_INFO, "Web", "OTA-Upload Done, %u bytes", index + len);
                          } else {
-                             Serial.printf("[OTA-Upload] end() error: %s\n", Update.errorString());
+                             logPrintf(LOG_ERROR, "Web", "OTA-Upload end() error: %s", Update.errorString());
                          }
                      }
                  }
     );
 
+    // Register REST API endpoints for Bridge Server integration
+    setupApiEndpoints(webServer);
+
     webServer.begin();
 }
+#endif // HAS_WIFI

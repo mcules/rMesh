@@ -1,13 +1,13 @@
 /*
  * hal_LILYGO_T-LoraPager.cpp
  *
- * Hardware-Abstraktionsschicht für den LILYGO T-LoraPager (ESP32-S3 + SX1262).
+ * Hardware abstraction layer for the LILYGO T-LoraPager (ESP32-S3 + SX1262).
  *
- * SPI-Bus-Koordination:
- *   - instance.begin() initialisiert den gesamten SPI-Bus und IO-Expander.
- *   - Alle RadioLib-Zugriffe werden mit instance.lockSPI() / unlockSPI()
- *     gesichert, damit sich LoRa und Display den Bus teilen können.
- *   - LovyanGFX nutzt denselben Lock (use_lock=true in Bus-Konfiguration).
+ * SPI bus coordination:
+ *   - instance.begin() initializes the entire SPI bus and IO expander.
+ *   - All RadioLib accesses are protected with instance.lockSPI() / unlockSPI()
+ *     so that LoRa and display can share the bus.
+ *   - LovyanGFX uses the same lock (use_lock=true in bus configuration).
  */
 
 #ifdef LILYGO_T_LORA_PAGER
@@ -21,12 +21,13 @@
 #include "helperFunctions.h"
 #include "webFunctions.h"
 #include "dutycycle.h"
+#include "logging.h"
 
-// LilyGoLib-Instanz (definiert in LilyGo_LoRa_Pager.cpp)
+// LilyGoLib instance (defined in LilyGo_LoRa_Pager.cpp)
 #include <LilyGoLib.h>
 #include <SD.h>
 
-// radio wird von LilyGoLib definiert (via ARDUINO_LILYGO_LORA_SX1262 in LilyGo_LoRa_Pager.cpp)
+// radio is defined by LilyGoLib (via ARDUINO_LILYGO_LORA_SX1262 in LilyGo_LoRa_Pager.cpp)
 
 bool txFlag = false;
 bool rxFlag = false;
@@ -53,25 +54,25 @@ void pagerAddMessageToSD(const char* json, size_t len) {
     instance.unlockSPI();
 }
 
-// ─── Hilfsfunktionen ─────────────────────────────────────────────────────
+// ─── Helper functions ────────────────────────────────────────────────────
 
 static void printState(int state) {
     if (state != RADIOLIB_ERR_NONE) {
-        Serial.printf("[LoRa] FAILED code %d\n", state);
+        logPrintf(LOG_ERROR, "LoRa", "FAILED code %d", state);
     }
 }
 
 void setWiFiLED(bool value) {
-    // T-LoraPager hat keine dedizierte WiFi-LED
+    // T-LoraPager has no dedicated WiFi LED
     (void)value;
 }
 
 bool getKeyApMode() {
-    // BOOT-Taste (GPIO0) als AP-Mode-Switch
+    // BOOT button (GPIO0) as AP mode switch
     return !digitalRead(PIN_AP_MODE_SWITCH);
 }
 
-// ─── Hardware-Init ────────────────────────────────────────────────────────
+// ─── Hardware init ───────────────────────────────────────────────────────
 
 void initHal() {
     txFlag  = false;
@@ -85,21 +86,27 @@ void initHal() {
 
     // SD state is determined by instance.begin() inside initDisplay()
     sdMounted = (SD.cardType() != CARD_NONE);
-    Serial.printf("[SD] %s\n", sdMounted ? "Card mounted" : "No card detected");
+    logPrintf(LOG_INFO, "HAL", "%s", sdMounted ? "SD card mounted" : "SD no card detected");
 
-    // LoRa-Init nur wenn Frequenz konfiguriert ist
+    // Only initialize LoRa if frequency is configured
     if (!loraConfigured(settings.loraFrequency)) {
-        Serial.println("[LoRa] Keine Frequenz konfiguriert – HF deaktiviert.");
+        logPrintf(LOG_WARN, "LoRa", "Keine Frequenz konfiguriert – HF deaktiviert.");
         loraReady = false;
         return;
     }
 
-    // LoRa-Init auf bereits konfiguriertem SPI-Bus, mit SPI-Lock
+    // LoRa init on already configured SPI bus, with SPI lock
     instance.lockSPI();
 
     radio.reset();
     delay(100);
-    printState(radio.begin());
+    int beginState = radio.begin();
+    if (beginState != RADIOLIB_ERR_NONE) {
+        logPrintf(LOG_ERROR, "LoRa", "radio.begin() failed (code %d)", beginState);
+        loraReady = false;
+        instance.unlockSPI();
+        return;
+    }
     printState(radio.setDio2AsRfSwitch(true));
     printState(radio.setSyncWord(settings.loraSyncWord));
     printState(radio.setFrequency(settings.loraFrequency));
@@ -116,10 +123,10 @@ void initHal() {
     instance.unlockSPI();
 
     loraReady = true;
-    Serial.println("[LoRa] SX1262 ready.");
+    logPrintf(LOG_INFO, "LoRa", "SX1262 ready.");
 }
 
-// ─── Empfang ──────────────────────────────────────────────────────────────
+// ─── Reception ───────────────────────────────────────────────────────────
 
 bool checkReceive(Frame &f) {
     if (!loraReady) return false;
@@ -127,14 +134,14 @@ bool checkReceive(Frame &f) {
     uint16_t irqFlags = radio.getIrqFlags();
     instance.unlockSPI();
 
-    // Kanal belegt (Header erkannt)
+    // Channel busy (header detected)
     if (irqFlags & RADIOLIB_SX126X_IRQ_HEADER_VALID) {
         if (!rxFlag) { rxFlag = true;  statusTimer = 0; }
     } else {
         if (rxFlag)  { rxFlag = false; statusTimer = 0; }
     }
 
-    // Senden abgeschlossen
+    // Transmit complete
     if (irqFlags & RADIOLIB_SX126X_IRQ_TX_DONE) {
         instance.lockSPI();
         radio.startReceive();
@@ -143,12 +150,16 @@ bool checkReceive(Frame &f) {
         statusTimer = 0;
     }
 
-    // Daten empfangen
+    // Data received
     if (irqFlags & RADIOLIB_SX126X_IRQ_RX_DONE) {
         instance.lockSPI();
         uint8_t rxBuffer[256];
         size_t rxBufferLength = radio.getPacketLength();
         int16_t state = radio.readData(rxBuffer, rxBufferLength);
+        //Read RSSI/SNR BEFORE startReceive(), as startReceive() can reset the registers
+        float rxRssi     = radio.getRSSI();
+        float rxSnr      = radio.getSNR();
+        float rxFrqError = radio.getFrequencyError();
         radio.startReceive();
         instance.unlockSPI();
 
@@ -156,9 +167,9 @@ bool checkReceive(Frame &f) {
             f.importBinary(rxBuffer, rxBufferLength);
             f.tx        = false;
             f.timestamp = time(NULL);
-            f.rssi      = radio.getRSSI();
-            f.snr       = radio.getSNR();
-            f.frqError  = radio.getFrequencyError();
+            f.rssi      = rxRssi;
+            f.snr       = rxSnr;
+            f.frqError  = rxFrqError;
             f.port      = 0;
             return true;
         }
@@ -166,7 +177,7 @@ bool checkReceive(Frame &f) {
     return false;
 }
 
-// ─── Senden ───────────────────────────────────────────────────────────────
+// ─── Transmit ────────────────────────────────────────────────────────────
 
 void transmitFrame(Frame &f) {
     if (!loraReady) return;
@@ -174,7 +185,6 @@ void transmitFrame(Frame &f) {
     uint8_t txBuffer[255];
     size_t txBufferLength;
 
-    txFlag = true;
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx        = true;
@@ -185,18 +195,18 @@ void transmitFrame(Frame &f) {
 
     txBufferLength = f.exportBinary(txBuffer, sizeof(txBuffer));
 
-    // Duty-Cycle-Check für Public-Band (10 % in 60 s)
+    // Duty cycle check for public band (10% in 60s)
     if (isPublicBand(settings.loraFrequency)) {
         instance.lockSPI();
         uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
         instance.unlockSPI();
         if (!dutyCycleAllowed(toa)) {
-            Serial.println("[LoRa] Duty-Cycle-Limit erreicht, TX übersprungen.");
+            logPrintf(LOG_WARN, "LoRa", "Duty cycle limit reached, TX skipped.");
             return;
         }
-        dutyCycleTrackTx(toa);
     }
 
+    txFlag = true;
     instance.lockSPI();
     radio.startTransmit(txBuffer, txBufferLength);
     instance.unlockSPI();

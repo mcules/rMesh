@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include <time.h>
 
 #include "config.h"
 
@@ -42,14 +43,15 @@ struct Frame {
     };
 
     enum MessageTypes {
-        //Untere 4 Bits vom Header-Byte -> 0x00 bis 0x0F; Nur Bei MESSAGE-HEADER (sonst ist das Payload-Length)
+        //Lower 4 bits of header byte -> 0x00 to 0x0F; Only for MESSAGE-HEADER (otherwise it's payload length)
         TEXT_MESSAGE = 0,
         TRACE_MESSAGE = 1,
-        COMMAND_MESSAGE = 15   //Fernsteuerbefehle für Node:  0xFF:Version, 0xFE:Reboot
+        ROUTING_INFO_MESSAGE = 14, //Periodic routing beacon – builds routing table automatically
+        COMMAND_MESSAGE = 15   //Remote control commands for node: 0xFF:Version, 0xFE:Reboot
     };
 
     enum HeaderTypes {
-        //Obere 4 Bits vom Header-Byte -> 0x00 bis 0x0F
+        //Upper 4 bits of header byte -> 0x00 to 0x0F
         SRC_CALL_HEADER,  
         DST_GROUP_HEADER,
         MESSAGE_HEADER,

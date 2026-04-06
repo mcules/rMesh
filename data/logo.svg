@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 130 120">
+  <defs>
+    <radialGradient id="ng" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#38bdf8" stop-opacity="0.4"/><stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/></radialGradient>
+    <filter id="gl"><feGaussianBlur stdDeviation="2.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="sg"><feGaussianBlur stdDeviation="1.5" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  </defs>
+  <g stroke="#1e40af" stroke-width="1.2" opacity="0.6"><line x1="22" y1="60" x2="46" y2="30"/><line x1="22" y1="60" x2="46" y2="90"/><line x1="46" y1="30" x2="76" y2="60"/><line x1="46" y1="90" x2="76" y2="60"/><line x1="46" y1="30" x2="76" y2="18"/><line x1="46" y1="90" x2="76" y2="102"/><line x1="76" y1="18" x2="76" y2="60"/><line x1="76" y1="60" x2="76" y2="102"/></g>
+  <g stroke="#38bdf8" stroke-width="1.2" opacity="0.35" filter="url(#sg)"><line x1="22" y1="60" x2="46" y2="30"/><line x1="46" y1="30" x2="76" y2="60"/><line x1="76" y1="60" x2="76" y2="18"/></g>
+  <g fill="none" stroke="#38bdf8" stroke-linecap="round" filter="url(#gl)"><path d="M 88 44 Q 96 60 88 76" stroke-width="2.2" opacity="0.9"/><path d="M 96 36 Q 108 60 96 84" stroke-width="1.8" opacity="0.6"/><path d="M 104 29 Q 120 60 104 91" stroke-width="1.4" opacity="0.35"/></g>
+  <g filter="url(#gl)"><circle cx="22" cy="60" r="10" fill="url(#ng)"/><circle cx="76" cy="60" r="14" fill="url(#ng)"/><circle cx="22" cy="60" r="4" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8"/><circle cx="46" cy="30" r="3.5" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/><circle cx="46" cy="90" r="3.5" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5"/><circle cx="76" cy="18" r="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" opacity="0.7"/><circle cx="76" cy="102" r="3" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" opacity="0.7"/><circle cx="76" cy="60" r="5.5" fill="#38bdf8"/><circle cx="76" cy="60" r="3" fill="#0f172a"/></g>
+  <text x="8" y="112" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="18" font-weight="800" letter-spacing="2" fill="#38bdf8" filter="url(#sg)">rMesh</text>
+</svg>

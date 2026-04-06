@@ -12,6 +12,14 @@
 #include "config.h"
 #include "frame.h"
 
+#ifdef NRF52_PLATFORM
+#include <FreeRTOS.h>
+#include <semphr.h>
+#include <task.h>
+#else
+#include <freertos/semphr.h>
+#endif
+
 /**
  * @brief Lightweight record used in the in-RAM message deduplication ring-buffer.
  *
@@ -25,9 +33,17 @@ struct MSG {
 
 /** Millisecond timestamp (millis()) at which the device will call ESP.restart(). */
 extern uint32_t rebootTimer;
+/** Set to true to arm the reboot timer. */
+extern bool rebootRequested;
 
 /** Set to true by the web UI to trigger a manual OTA update check in the main loop. */
 extern bool pendingManualUpdate;
+
+/** Set to true by saveSettings() to defer initHal() to the loop context. */
+extern bool pendingLoraReinit;
+
+/** Set to true by the WebSocket handler to defer saveSettings() to the loop context. */
+extern bool pendingSettingsSave;
 
 /** Set to true by the web UI to trigger an immediate deep-sleep shutdown. */
 extern bool pendingShutdown;
@@ -65,6 +81,23 @@ extern std::vector<Frame> txBuffer;
 extern SemaphoreHandle_t fsMutex;
 
 /**
+ * @brief FreeRTOS mutex protecting peerList and routingList access.
+ *
+ * Must be held when iterating or modifying peerList/routingList from
+ * FreeRTOS tasks that run concurrently with the Arduino loop.
+ */
+extern SemaphoreHandle_t listMutex;
+
+/**
+ * @brief FreeRTOS task handle identifying the Arduino loop() task.
+ *
+ * Used by sendFrame() to detect when it is called from a background task
+ * (e.g. the async WebSocket handler) and defer the send to the main loop,
+ * avoiding unsynchronised access to txBuffer and the messages ring-buffer.
+ */
+extern TaskHandle_t mainLoopTaskHandle;
+
+/**
  * @brief In-RAM ring-buffer of recently seen (srcCall, id) pairs.
  *
  * Used for duplicate detection: before writing a received message to flash or
@@ -75,3 +108,6 @@ extern MSG messages[MAX_STORED_MESSAGES_RAM];
 
 /** Write head for the messages ring-buffer; wraps around at MAX_STORED_MESSAGES_RAM. */
 extern uint16_t messagesHead;
+
+/** Set to true when LittleFS free space is critically low; triggers an immediate trim in the main loop. */
+extern volatile bool trimNeeded;

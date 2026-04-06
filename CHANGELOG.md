@@ -1,10 +1,54 @@
 # Changelog
 
-## [v1.0.30a-dev]
+## [v1.0.31]
+
+- FIX: Heap- und Langzeitstabilität grundlegend verbessert — deutlich weniger kurzlebige Allokationen in den Hot-Paths (Topologie-Report, Status-/Peer-/Routing-Broadcasts, Auth, WiFi-Scan, Frame-Verarbeitung, UDP-Peer-Verwaltung). Behebt u. a. ein Memory-Leak in `sendPeerList()`, das nach ~3,5 h zum OOM-Crash führte, sowie eine Task-Stack-Fragmentierung, die nach längerer Laufzeit AsyncTCP zum Hängen brachte
+- NEU: Heap-Watchdog — automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
+- FIX: LittleFS „No more free space"-Abstürze beim Schreiben von Logs/Nachrichten verhindert (Freiplatz wird jetzt vor dem Schreiben geprüft)
+
+- NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt, mit Mehrsprachigkeit (DE/EN), Uptime-Anzeige, einheitlichem Stylesheet, SVG-Icons, einklappbaren Settings-Bereichen und verbesserten Tabellen-Layouts
+- NEU: CPU-Frequenz einstellbar (80 / 160 / 240 MHz, Default 240 MHz) — persistiert, sofort wirksam, konfigurierbar in der WebUI
+- NEU: Channel 1 (all) und 2 (direct) können per Doppelklick stummgeschaltet werden
+- NEU: Gruppennamen werden persistent auf dem Node gespeichert und zwischen allen verbundenen Clients synchronisiert (vorher nur pro Browser)
+- UI: Setup-Tab neu sortiert — Allgemein → System → Online Update → Firmware Upload → Sicherheit → Akku → OLED Display → Debug
+
+- NEU: Support für Heltec HT-Tracker V1.2 (Wireless Tracker) mit TFT-Statusanzeige und Button-Steuerung
+- NEU: Platform-Abstraktion für nRF52840-basierte Boards (`NRF52_PLATFORM`), erster experimenteller Bringup für LILYGO T-Echo (noch nicht produktionsreif)
+- NEU: SSD1306-OLED-Support für HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1, LILYGO T-Beam sowie das ESP32 E22 Multimodul (Rentner Gang)
+- NEU: Display-Einstellung wird persistent gespeichert; kurzer Tastendruck schaltet das Display, langer Druck wechselt den WiFi-Modus; Nachrichten-Gruppe für die Display-Anzeige ist konfigurierbar
+- NEU: Automatische Display-Erkennung beim T-Beam sowie Vext-Steuerung für HELTEC V3; diverse Display-Korrekturen für T-Beam und HELTEC V3
+- NEU: Multi-Screen-UI für das ESP32-E22-Display — rotierende Seiten `ID` / `NET` / `LoRa` / `MSG` / `SYS`, neue Nachrichten springen automatisch auf die MSG-Seite. Seitenwechsel-Intervall, sichtbare Seiten und optionaler Taster-GPIO sind in der WebUI unter „OLED Display" einstellbar
+- NEU: 5 s Boot-Splashscreen auf dem ESP32-E22-Display mit „rMesh"-Überschrift, Versions-String und Node-Callsign — unabhängig vom Display-Setting
+- NEU: Während eines OTA-/HTTP-Firmware-Updates zeigt das ESP32-E22-Display „Flashing…" großflächig an
+
+- NEU: Routing-Tabelle und Peer-Liste werden im Flash gespeichert und stehen nach Reboot direkt wieder zur Verfügung; Kapazität für gespeicherte Routen erhöht
+- NEU: mDNS-Support — Nodes sind im lokalen Netzwerk per `<callsign>-rmesh.local` erreichbar
+- NEU: Erweiterte WiFi- und AP-Verwaltung inklusive verbesserter WiFi-Client/AP-Tabelle in der WebUI
+
+- NEU: Erweitertes serielles Kommando-Interface — neue Befehle: `msg`, `xgrp`, `xtrace`, `announce`, `dbg`, `uc`, `updf`, `peers`, `routes`, `acks`, `xtxbuf`; Hilfe und Befehlsliste in Kategorien gegliedert
+
+- FIX: TX-Buffer-Handling verbessert — behebt verlorene Frames, Duplikate und festhängende Einträge bei unerreichbaren Peers
+- FIX: Private WiFi/UDP-Nachrichten an fremde Callsigns werden nicht mehr lokal angezeigt oder gespeichert, sondern nur noch weitergeleitet
+- FIX: Absturz bei DNS-/HTTP-Fehlern im Update- und Reporting-Pfad behoben
+- FIX: Mehrere Stabilitätsprobleme behoben, u. a. bei Speicher-Allokationen, Timern, Reboot-Logik, Buffer-Grenzen, TRACE-Echo, File-Handling und Auth-Session-Verwaltung
+- FIX: Gerichtete Nachrichten gingen verloren, wenn der geroutete Next-Hop unavailable oder identisch mit dem Absender war — Relay fällt jetzt auf Flooding zurück statt die Nachricht stillschweigend zu verwerfen
+- FIX: Extrem langsame WiFi-Reaktion bei Retransmit-Fluten von Nachbar-Nodes — Duplikat-Erkennung für MESSAGE_FRAMEs greift jetzt vor der teuren Nachverarbeitung
+- FIX: Eingabefeld wird nach dem Senden automatisch geleert
+- FIX: UDP-Peer-Auflistung zeigt jetzt auch den Enabled-Status an; `udp add` Serial-Befehl setzt das Enabled-Flag nun korrekt
+- FIX: Automatische Update-Prüfung wird bei Nightly-Builds unterdrückt (verhinderte unnötige Downgrade-Versuche)
+- NEU: Peer-Cooldown (10 min) nach Retry-Exhaustion verhindert den Announce→Relay→Exhaust→Re-Announce-Zyklus bei einseitigen Funkverbindungen
+
+- NEU: Nach LoRa-Sendungen wird eine zusätzliche Guard-Zeit eingehalten, damit Empfänger sicher in den RX-Modus zurückkehren können
+- NEU: Duty-Cycle-Enforcement für das öffentliche 869,4–869,65-MHz-Band — überschrittene Sendungen werden verzögert statt verworfen
+- NEU: Kapazitätslimits für Peer-, Routing- und UDP-Peer-Listen verhindern unkontrolliertes Wachstum
+- NEU: Konfigurierbarer minimaler SNR-Schwellwert für die Peer-Liste
+- CHANGE: ACK- und Retry-Timing für dichtere Mesh-Topologien angepasst
+
+## [v1.0.30a]
 
 - FIX: OTA-Update schlug auf langsamen Verbindungen mit „HTTP error: read Timeout" fehl – TCP-Read-Timeout für LittleFS- und Firmware-Download von 30 s auf 120 s erhöht; betrifft sowohl automatische als auch manuelle Updates
 
-## [v1.0.30-dev]
+## [v1.0.30]
 
 - NEU: Support für Seeed XIAO ESP32-S3 + Wio-SX1262 – neues HAL (`hal_SEEED_XIAO_ESP32S3_Wio_SX1262`) für das Seeed XIAO ESP32-S3 Board mit aufgestecktem Wio-SX1262 LoRa-Modul (B2B-Stecker); Build-Konfiguration in PlatformIO, Eintrag in `devices.json` für das Web-Flash-Tool
 - NEU: Manueller Firmware-Upload über die WebUI – neuer `/ota`-Endpunkt im Webserver zum direkten Flashen eigener Firmware- und LittleFS-Binaries ohne OTA-Server; Desktop- und Mobile-Interface erhalten einen „Upload & Flash"-Button, der beide Dateien sequenziell hochlädt und die Node danach neu startet
@@ -16,11 +60,11 @@
 - DOKU: Technische Dokumentation für alle unterstützten Boards neu strukturiert – Verzeichnis `Doku/` nach `docu/` umbenannt (einheitlich englisch); Datenblätter und Schaltpläne für HELTEC WiFi LoRa 32 V3/V4, Wireless Stick Lite V3, LILYGO T-Beam und T3 ergänzt; ESP32 E22 Multimodul-Dokumentation (Schaltplan, Bestückungsplan, Gehäuse-3MF-Dateien) hinzugefügt
 - CLEANUP: `build.bat` entfernt, ungenutztes LilyGoLib-ThirdParty-Submodul entfernt, PlatformIO-Boilerplate-README-Platzhalter entfernt
 
-## [v1.0.29e-dev]
+## [v1.0.29e]
 
 - FIX: Serielle Konsole – `h`-Befehl (Hilfe) zeigte seit v1.0.29b keine Ausgabe mehr – `help.txt` wurde durch den Filesystem-Build per gzip komprimiert (`.txt` in `COMPRESS_EXTENSIONS`) und lag im LittleFS nur noch als `help.txt.gz`; der Code öffnete aber `/help.txt` – Datei wurde nicht gefunden, keine Ausgabe; `.txt` aus den komprimierten Erweiterungen entfernt, `help.txt` liegt jetzt wieder unkomprimiert im LittleFS
 
-## [v1.0.29d-dev]
+## [v1.0.29d]
 
 - NEU: Serielle Konsole – `uc 0` / `uc 1` setzt den Update-Kanal (Release/Dev) und speichert ihn persistent; `updf` / `updf 0` / `updf 1` startet eine Force-Installation aus dem gewählten Kanal
 - NEU: Frisch geflashte Nodes wählen den Update-Kanal automatisch passend zur Firmware: Dev-Builds (`-dev`-Suffix) setzen den Default auf „Dev", Release-Builds auf „Release" – ein bereits gespeicherter Wert im Flash bleibt erhalten

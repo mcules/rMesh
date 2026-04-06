@@ -1,99 +1,164 @@
+#ifdef HAS_WIFI
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 
 #include "reporting.h"
+#include "heapdbg.h"
+#include "bgWorker.h"
+#include "serial.h"
 #include "settings.h"
+#include "logging.h"
 #include "peer.h"
 #include "routing.h"
 #include "config.h"
+#include "main.h"
 
-bool topologyChanged = false;
-static uint32_t changeDebounceTimer = 0xFFFFFFFF;
+volatile bool topologyChanged = false;
+static volatile uint32_t changeDebounceTimer = 0xFFFFFFFF;
+static volatile bool reportingInProgress = false;
 
-// Gibt true zurück, wenn der Node Internet-Uplink hat
-// (WiFi-Client verbunden, nicht im AP-Mode)
+// Returns true if the node has internet uplink
+// (WiFi client connected, not in AP mode)
 static bool hasInternetUplink() {
     if (settings.apMode) return false;
     return (WiFi.status() == WL_CONNECTED);
 }
 
-void reportTopology() {
-    if (!hasInternetUplink()) return;
-    if (strlen(settings.mycall) == 0) return;
+// Persistent WiFiClient — keeping this as a file-level static means lwIP
+// socket state is allocated once (when the first report runs, while heap
+// is still unfragmented) and then reused. Avoids the repeated TIME_WAIT
+// accumulation that was bleeding ~6 KB per report.
+static WiFiClient s_reportClient;
 
-    WiFiClientSecure client;
-    client.setInsecure();
+static void reportTopologyWork() {
+    // Manual heap accounting — the bgWorker runs this inline, but we still
+    // want a scoped before/after record in the heapdbg ring.
+    uint32_t _heapFree0 = ESP.getFreeHeap();
+    uint32_t _heapMax0  = ESP.getMaxAllocHeap();
+
     HTTPClient http;
-    http.begin(client, "https://www.rMesh.de/report.php");
+    http.setTimeout(10000);
+    http.setReuse(true);
+    if (!http.begin(s_reportClient, "http://www.rMesh.de:8082/report.php")) {
+        heapRecord("reportTopo/beginFail", _heapFree0, _heapMax0);
+        reportingInProgress = false;
+        return;
+    }
     http.addHeader("Content-Type", "application/json");
 
-    // JSON aufbauen
-    JsonDocument doc;
-    doc["call"]      = settings.mycall;
-    doc["position"]  = settings.position;
-    doc["timestamp"] = (uint32_t)time(NULL);
+    // Build JSON directly into a stack buffer with snprintf — no JsonDocument,
+    // no std::vector snapshot copies, no malloc. This eliminates the main
+    // per-call heap churn that was fragmenting maxBlock.
+    static char body[4096];
+    size_t pos = 0;
+    uint64_t mac = ESP.getEfuseMac();
+    pos += snprintf(body + pos, sizeof(body) - pos,
+        "{\"call\":\"%s\",\"position\":\"%s\",\"timestamp\":%u,"
+        "\"chip_id\":\"%02X%02X%02X%02X%02X%02X\","
+        "\"is_afu\":%s,\"band\":\"%s\",\"peers\":[",
+        settings.mycall, settings.position, (unsigned)time(NULL),
+        (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
+        (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)mac,
+        isAmateurBand(settings.loraFrequency) ? "true" : "false",
+        isPublicBand(settings.loraFrequency) ? "868" : "433");
 
-    // Chip-ID (EFuse MAC)
-    {
-        uint64_t mac = ESP.getEfuseMac();
-        char chipId[13];
-        snprintf(chipId, sizeof(chipId), "%02X%02X%02X%02X%02X%02X",
-            (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
-            (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)(mac));
-        doc["chip_id"] = chipId;
+    // Iterate peer/route lists directly under mutex — no heap snapshot.
+    if (xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {
+        bool firstPeer = true;
+        for (size_t i = 0; i < peerList.size() && pos < sizeof(body) - 128; i++) {
+            const Peer& p = peerList[i];
+            if (!p.available) continue;
+            pos += snprintf(body + pos, sizeof(body) - pos,
+                "%s{\"call\":\"%s\",\"rssi\":%.1f,\"snr\":%.1f,\"port\":%u,\"available\":true}",
+                firstPeer ? "" : ",", p.nodeCall, p.rssi, p.snr, p.port);
+            firstPeer = false;
+        }
+        pos += snprintf(body + pos, sizeof(body) - pos, "],\"routes\":[");
+        bool firstRoute = true;
+        for (size_t i = 0; i < routingList.size() && pos < sizeof(body) - 96; i++) {
+            const Route& r = routingList[i];
+            pos += snprintf(body + pos, sizeof(body) - pos,
+                "%s{\"src\":\"%s\",\"via\":\"%s\",\"hops\":%u}",
+                firstRoute ? "" : ",", r.srcCall, r.viaCall, r.hopCount);
+            firstRoute = false;
+        }
+        xSemaphoreGive(listMutex);
+    } else {
+        pos += snprintf(body + pos, sizeof(body) - pos, "],\"routes\":[");
+    }
+    pos += snprintf(body + pos, sizeof(body) - pos, "]}");
+
+    if (pos >= sizeof(body) - 1) {
+        logPrintf(LOG_WARN, "Report", "topology body truncated (pos=%u)", (unsigned)pos);
     }
 
-    // AFU-Flag und Band aus der eingestellten Frequenz ableiten
-    doc["is_afu"] = isAmateurBand(settings.loraFrequency);
-    doc["band"]   = isPublicBand(settings.loraFrequency) ? "868" : "433";
-
-    // Peer-Liste
-    JsonArray peers = doc["peers"].to<JsonArray>();
-    for (auto& p : peerList) {
-        if (!p.available) continue;
-        JsonObject o = peers.add<JsonObject>();
-        o["call"]      = p.nodeCall;
-        o["rssi"]      = p.rssi;
-        o["snr"]       = p.snr;
-        o["port"]      = p.port;
-        o["available"] = p.available;
-    }
-
-    // Routing-Tabelle
-    JsonArray routes = doc["routes"].to<JsonArray>();
-    for (auto& r : routingList) {
-        JsonObject o = routes.add<JsonObject>();
-        o["src"]  = r.srcCall;
-        o["via"]  = r.viaCall;
-        o["hops"] = r.hopCount;
-    }
-
-    char* buf = (char*)malloc(4096);
-    if (!buf) { http.end(); return; }
-    size_t len = serializeJson(doc, buf, 4096);
-    int code = http.POST((uint8_t*)buf, len);
-    free(buf);
+    int code = http.POST((uint8_t*)body, pos);
     http.end();
 
     if (code == 200) {
         topologyChanged = false;
     }
+    logPrintf(LOG_DEBUG, "Report", "topology report http_code=%d len=%u", code, (unsigned)pos);
+    heapRecord("reportTopo/done", _heapFree0, _heapMax0);
+    reportingInProgress = false;
 }
 
-// Muss regelmäßig aus dem main loop aufgerufen werden
+void reportTopology() {
+    if (!hasInternetUplink()) return;
+    if (strlen(settings.mycall) == 0) return;
+    if (reportingInProgress) return;
+    if (ESP.getFreeHeap() < 40000) {
+        logPrintf(LOG_DEBUG, "Report", "topology skipped, low heap=%u", ESP.getFreeHeap());
+        return;
+    }
+    reportingInProgress = true;
+
+    HEAP_MARK("reportTopo/enq");
+    if (!bgWorkerEnqueue(reportTopologyWork)) {
+        logPrintf(LOG_WARN, "Report", "reportTopo enqueue failed (queue full?)");
+        reportingInProgress = false;
+    }
+}
+
+// Must be called regularly from the main loop
 void reportTopologyIfChanged() {
-    if (topologyChanged && millis() > changeDebounceTimer) {
-        changeDebounceTimer = 0xFFFFFFFF;
+    if (topologyChanged && (int32_t)(millis() - changeDebounceTimer) >= 0) {
+        changeDebounceTimer = millis() + 0x7FFFFFFF; // effectively disabled
         reportTopology();
     }
 }
 
-// Wird aus peer.cpp / routing.cpp aufgerufen wenn sich etwas ändert
+// Called from peer.cpp / routing.cpp when something changes
 void markTopologyChanged() {
     topologyChanged = true;
-    // Debounce: frühestens 30s nach der letzten Änderung reporten
+    // Debounce: report at earliest 30 s after the last change
     changeDebounceTimer = millis() + 30000;
 }
+
+bool logRemoteCommand(const char* sender, const char* command) {
+    if (!hasInternetUplink()) return false;
+    if (strlen(settings.mycall) == 0) return false;
+
+    WiFiClient client;
+    HTTPClient http;
+    http.setTimeout(5000);
+    if (!http.begin(client, "http://www.rMesh.de:8082/command_log.php")) return false;
+    http.addHeader("Content-Type", "application/json");
+
+    JsonDocument doc;
+    doc["call"]    = settings.mycall;
+    doc["sender"]  = sender;
+    doc["command"] = command;
+
+    char body[256];
+    size_t len = serializeJson(doc, body, sizeof(body));
+    int code = http.POST((uint8_t*)body, len);
+    http.end();
+
+    logPrintf(LOG_DEBUG, "Report", "command_log sender=%s command=%s http_code=%d", sender, command, code);
+    return (code == 200);
+}
+
+#endif // HAS_WIFI

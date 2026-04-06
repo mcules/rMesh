@@ -8,18 +8,21 @@
 #include "helperFunctions.h"
 #include "config.h"
 #include "settings.h"
+#include "persistence.h"
+#include "logging.h"
+#include "api.h"
 
-//Routing Liste
+//Routing list
 std::vector<Route> routingList;
 
 void getRoute(const char* dstCall, char* viaCall, size_t len) {
-    //Serial.printf("dst:%s via:%s\n", dstCall, viaCall);
+    //Serial.printf("dst:%s via:%s\r\n", dstCall, viaCall);
     viaCall[0] = '\0';
-    //Routing Liste duchsuchen
+    //Search routing list
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) { return (strcmp(r.srcCall, dstCall) == 0); });
 
     if (it != routingList.end()) {
-        //Prüfen, ob Call "noch" in Peer-Liste
+        //Check if call is still in peer list
         auto it2 = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { return (strcmp(peer.nodeCall, it->viaCall) == 0) && (peer.available == true) ; });
         if (it2 != peerList.end()) {
             strncpy(viaCall, it->viaCall, len - 1);
@@ -29,44 +32,32 @@ void getRoute(const char* dstCall, char* viaCall, size_t len) {
 }
 
 bool checkRoute(char* srcCall, char* viaCall) {
-    //Routing Liste duchsuchen
+    //Search routing list
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) { return (strcmp(r.srcCall, srcCall) == 0) && (strcmp(r.viaCall, viaCall) == 0); });
     if (it != routingList.end()) { return true; }
     return false;
 }
 
 void sendRoutingList() {
-    JsonDocument doc;
-    doc["routingList"]["routes"] = JsonArray();
-    for (int i = 0; i < routingList.size(); i++) {
-        JsonObject route = doc["routingList"]["routes"].add<JsonObject>();
-        route["srcCall"] = routingList[i].srcCall;
-        route["viaCall"] = routingList[i].viaCall;
-        route["timestamp"] = routingList[i].timestamp;
-        route["hopCount"] = routingList[i].hopCount;
-    }
-    
-    char* jsonBuffer = (char*)malloc(measureJson(doc) + 1);
-    if (jsonBuffer != nullptr) {
-        size_t len = serializeJson(doc, jsonBuffer, measureJson(doc) + 1);
-        wsBroadcast(jsonBuffer, len);
-        free(jsonBuffer);
-    } else {
-        Serial.println(F("Fehler: Kein RAM für Buffer"));
-    }
+    // Replaced: no longer serializes full JSON on heap.
+    // Sends lightweight notification; WebUI fetches /api/routes instead.
+    notifyRoutingChanged();
 }
 
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) {
     if (strlen(srcCall) == 0 || strlen(viaCall) == 0) return;
     if (strcmp(settings.mycall, srcCall) == 0) return;
+    // Loop detection: reject routes that point back to ourselves or to the destination itself
+    if (strcmp(viaCall, srcCall) == 0) return;
+    if (strcmp(viaCall, settings.mycall) == 0) return;
 
-    // 1. Prüfen, ob viaCall (der nächste Hop) in Peer Liste ist
+    // 1. Check if viaCall (the next hop) is in the peer list
     auto itt = std::find_if(peerList.begin(), peerList.end(), [&](const Peer& peer) { 
         return (strcmp(peer.nodeCall, viaCall) == 0) && (peer.available == true); 
     });
     if (itt == peerList.end()) return;
 
-    // 2. Routing Liste nach dem Ziel-Call (srcCall) durchsuchen
+    // 2. Search routing list for the destination call (srcCall)
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) {
         return (strcmp(r.srcCall, srcCall) == 0);
     });
@@ -74,7 +65,16 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
     bool isNew = (it == routingList.end());
 
     if (isNew) {
-        // Fall A: Ziel unbekannt -> Neu anlegen
+        // Case A: Destination unknown -> Create new (evict oldest if full)
+        if (routingList.size() >= ROUTING_BUFFER_SIZE) {
+            // Evict oldest entry by timestamp
+            auto oldest = std::min_element(routingList.begin(), routingList.end(),
+                [](const Route& a, const Route& b) { return a.timestamp < b.timestamp; });
+            if (oldest != routingList.end()) {
+                logPrintf(LOG_WARN, "Route", "Table full, evicting %s", oldest->srcCall);
+                routingList.erase(oldest);
+            }
+        }
         Route r;
         strncpy(r.srcCall, srcCall, MAX_CALLSIGN_LENGTH);
         r.srcCall[MAX_CALLSIGN_LENGTH] = '\0';
@@ -83,21 +83,33 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
         r.timestamp = time(NULL);
         r.hopCount = hopCount;
         routingList.push_back(r);
-        Serial.printf("[Reporting] Neue Route: %s via %s (%d Hops)\n", srcCall, viaCall, hopCount);
+        routesDirty = true;
+        #ifdef HAS_WIFI
+        apiRecordRoutingEvent("new", srcCall, viaCall, hopCount);
+        #endif
+        logPrintf(LOG_INFO, "Route", "New route: %s via %s (%d hops)", srcCall, viaCall, hopCount);
     } else {
-        // Fall B: Ziel existiert -> Kürzester Weg gewinnt
-        if (hopCount < it->hopCount || strcmp(it->viaCall, viaCall) == 0) {
+        // Case B: Destination exists -> Shortest path wins
+        if (hopCount < it->hopCount) {
+            // Shorter path found -> Update route
+            routesDirty = true;
+            #ifdef HAS_WIFI
+            apiRecordRoutingEvent("update", srcCall, viaCall, hopCount);
+            #endif
             strncpy(it->viaCall, viaCall, MAX_CALLSIGN_LENGTH);
             it->viaCall[MAX_CALLSIGN_LENGTH] = '\0';
             it->timestamp = time(NULL);
             it->hopCount = hopCount;
+        } else if (strcmp(it->viaCall, viaCall) == 0) {
+            // Same via node -> only refresh timestamp
+            it->timestamp = time(NULL);
         } else {
-            // Neuer Pfad ist länger oder gleich lang über anderen Knoten -> ignorieren
+            // New path is longer or equal via different node -> ignore
             return;
         }
     }
 
-    // 3. Sortierung (kürzeste Hops nach oben)
+    // 3. Sort (shortest hops first)
     std::sort(routingList.begin(), routingList.end(), [](const Route& a, const Route& b) {
         if (a.hopCount != b.hopCount) return a.hopCount < b.hopCount;
         return a.timestamp > b.timestamp;

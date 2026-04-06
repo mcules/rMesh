@@ -13,11 +13,18 @@
  */
 
 #include <Arduino.h>
+#include <vector>
+#include <ArduinoJson.h>
+
+#ifdef NRF52_PLATFORM
+#include "platform_nrf52.h"
+#include <Adafruit_LittleFS.h>
+#include <InternalFileSystem.h>
+#else
 #include <LittleFS.h>
 #include <esp_task_wdt.h>
-#include <vector>
 #include <nvs_flash.h>
-#include <freertos/semphr.h>
+#endif
 
 #include "config.h"
 #include "hal.h"
@@ -27,14 +34,19 @@
 #include "wifiFunctions.h"
 #include "webFunctions.h"
 #include "serial.h"
-#include "webFunctions.h"
 #include "helperFunctions.h"
 #include "peer.h"
 #include "ack.h"
 #include "udp.h"
 #include "routing.h"
 #include "reporting.h"
+#include "dutycycle.h"
+#include "persistence.h"
 #include "time.h"
+#include "logging.h"
+#include "heapdbg.h"
+#include "bgWorker.h"
+#include "api.h"
 
 #ifdef LILYGO_T_LORA_PAGER
 #include "display_LILYGO_T-LoraPager.h"
@@ -46,11 +58,51 @@
 #include "hal_SEEED_SenseCAP_Indicator.h"
 #endif
 
+#ifdef HELTEC_WIFI_LORA_32_V3
+#include "display_HELTEC_WiFi_LoRa_32_V3.h"
+#endif
+#ifdef ESP32_E22_V1
+#include "display_ESP32_E22_V1.h"
+#endif
+#ifdef HELTEC_HT_TRACKER_V1_2
+#include "display_HELTEC_HT-Tracker_V1_2.h"
+#endif
+#ifdef LILYGO_T3_LORA32_V1_6_1
+#include "display_LILYGO_T3_LoRa32_V1_6_1.h"
+#endif
+#ifdef LILYGO_T_BEAM
+#include "display_LILYGO_T-Beam.h"
+#endif
+#ifdef LILYGO_T_ECHO
+#include "display_LILYGO_T-Echo.h"
+#endif
+
 
 // ── Global state ──────────────────────────────────────────────────────────────
 
 /** POSIX timezone rule string for CET/CEST (Central Europe). */
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
+
+#ifndef NRF52_PLATFORM
+/** Human-readable string for the last ESP32 reset reason. */
+static const char* lastResetReason = "unknown";
+
+static const char* getResetReasonStr() {
+    switch (esp_reset_reason()) {
+        case ESP_RST_POWERON:  return "power-on";
+        case ESP_RST_EXT:      return "external";
+        case ESP_RST_SW:       return "software";
+        case ESP_RST_PANIC:    return "panic/crash";
+        case ESP_RST_INT_WDT:  return "interrupt-watchdog";
+        case ESP_RST_TASK_WDT: return "task-watchdog";
+        case ESP_RST_WDT:      return "other-watchdog";
+        case ESP_RST_DEEPSLEEP:return "deep-sleep";
+        case ESP_RST_BROWNOUT: return "brownout";
+        case ESP_RST_SDIO:     return "SDIO";
+        default:               return "unknown";
+    }
+}
+#endif
 
 /** Outgoing frame queue (see main.h for details). */
 std::vector<Frame> txBuffer;
@@ -61,8 +113,19 @@ uint16_t messagesHead = 0;
 
 /** Mutex protecting all LittleFS accesses. */
 SemaphoreHandle_t fsMutex = NULL;
+SemaphoreHandle_t listMutex = NULL;
+TaskHandle_t mainLoopTaskHandle = NULL;
 
 // ── Timing ────────────────────────────────────────────────────────────────────
+
+/**
+ * Overflow-safe timer check: returns true when the deadline has been reached.
+ * Works correctly across the millis() 32-bit wrap (~49 days) for intervals
+ * up to ~24.8 days.
+ */
+static inline bool timerExpired(uint32_t deadline) {
+    return (int32_t)(millis() - deadline) >= 0;
+}
 
 /** First ANNOUNCE is sent 5 s after boot to give WiFi time to connect. */
 uint32_t announceTimer = 5000;
@@ -70,23 +133,40 @@ uint32_t announceTimer = 5000;
 /** Deadline for the next 1-second WebSocket status push. */
 uint32_t statusTimer = 0;
 
-/** millis() value at which ESP.restart() is called; 0xFFFFFFFF = disabled. */
-uint32_t rebootTimer = 0xFFFFFFFF;
+/** Deadline for the next periodic flash save of dirty routes/peers. */
+static uint32_t persistTimer = PERSIST_INTERVAL;
+
+/** Deadline for the next ROUTING_INFO_MESSAGE broadcast (24 h cycle). */
+static uint32_t routingInfoTimer = 60 * 1000; // first send 60 s after boot
+
+/** millis() value at which ESP.restart() is called; 0 = disabled. */
+uint32_t rebootTimer = 0;
+bool rebootRequested = false;
 
 /** Retry counter for the frame currently being transmitted from txBuffer. */
 uint8_t currentRetry = 0;
+
+/** Flux guard: earliest millis() at which the next LoRa TX is allowed.
+ *  A short pause after each TX lets remote receivers settle back into RX,
+ *  improving effective range. */
+uint32_t loraFluxGuard = 0;
 
 /** Deferred flags set by the web UI and consumed in loop(). */
 bool pendingManualUpdate = false;
 bool pendingShutdown     = false;
 bool pendingForceUpdate  = false;
 uint8_t pendingForceChannel = 0;
+bool pendingLoraReinit   = false;
+bool pendingSettingsSave = false;
 
 /** First OTA update check fires 1 hour after boot. */
 uint32_t updateCheckTimer = 60 * 60 * 1000;
 
 /** First messages.json trim fires 30 minutes after boot. */
 uint32_t messagesDeleteTimer = 30 * 60 * 1000;
+
+/** Filesystem low-space flag — set by addJSONtoFileTask, consumed by main loop. */
+volatile bool trimNeeded = false;
 
 /** First topology report fires 5 minutes after boot. */
 uint32_t reportingTimer = 5 * 60 * 1000;
@@ -120,12 +200,65 @@ void processRxFrame(Frame &f) {
     // Log to monitor
     f.monitorJSON();
 
+    // Early duplicate drop for MESSAGE_FRAME: if we already have this (srcCall, id)
+    // in the ring-buffer AND the frame is not directly addressed to us, skip the
+    // expensive JSON debug serialization, addPeerList, and full case logic.
+    // Directly-addressed duplicates (viaCall == mycall) are NOT dropped so that
+    // re-ACKs still work for retransmitting peers.
+    if (f.frameType == Frame::FrameTypes::MESSAGE_FRAME &&
+        strcmp(f.viaCall, settings.mycall) != 0) {
+        for (int i = 0; i < MAX_STORED_MESSAGES_RAM; i++) {
+            if (messages[i].id == f.id &&
+                strcmp(messages[i].srcCall, f.srcCall) == 0) {
+                // Duplicate: remove any pending relay copies from TX buffer
+                txBuffer.erase(
+                    std::remove_if(txBuffer.begin(), txBuffer.end(),
+                        [&](const Frame& txB) {
+                            return (strcmp(txB.srcCall, f.srcCall) == 0) &&
+                                   (txB.id == f.id) &&
+                                   (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
+                        }),
+                    txBuffer.end()
+                );
+                return;
+            }
+        }
+    }
+
+    // Debug output for test framework
+    if (serialDebug) {
+        JsonDocument dbg;
+        dbg["event"] = "rx";
+        dbg["frameType"] = f.frameType;
+        if (strlen(f.srcCall) > 0) dbg["srcCall"] = f.srcCall;
+        if (strlen(f.nodeCall) > 0) dbg["nodeCall"] = f.nodeCall;
+        if (strlen(f.dstCall) > 0) dbg["dstCall"] = f.dstCall;
+        if (strlen(f.dstGroup) > 0) dbg["dstGroup"] = f.dstGroup;
+        if (strlen(f.viaCall) > 0) dbg["viaCall"] = f.viaCall;
+        dbg["id"] = f.id;
+        dbg["hopCount"] = f.hopCount;
+        dbg["messageType"] = f.messageType;
+        if (f.messageLength > 0 && (f.messageType == Frame::MessageTypes::TEXT_MESSAGE || f.messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
+            char text[261] = {0};
+            memcpy(text, f.message, f.messageLength);
+            dbg["text"] = text;
+        }
+        dbg["rssi"] = f.rssi;
+        dbg["snr"] = f.snr;
+        dbg["port"] = f.port;
+        logJson(dbg);
+    }
+
+    // Record RX event in API ring buffer (always active, independent of serialDebug)
+    #ifdef HAS_WIFI
+    apiRecordRxEvent(f);
+    #endif
+
     // Update peer list with signal quality data from this frame
     addPeerList(f);
 
     Frame tf;       // Reply frame built during processing
     bool found = false;
-    File file;
     switch (f.frameType) {
 
         // ── ANNOUNCE_FRAME ────────────────────────────────────────────────────
@@ -136,7 +269,7 @@ void processRxFrame(Frame &f) {
                 if (f.port == 0) {
                     bool peerOnWifi = false;
                     for (size_t pi = 0; pi < peerList.size(); pi++) {
-                        if (strcmp(f.nodeCall, peerList[pi].nodeCall) == 0 && peerList[pi].port == 1) {
+                        if (strcmp(f.nodeCall, peerList[pi].nodeCall) == 0 && peerList[pi].port == 1 && peerList[pi].available) {
                             peerOnWifi = true; break;
                         }
                     }
@@ -150,7 +283,7 @@ void processRxFrame(Frame &f) {
                     case 1: tf.transmitMillis = millis(); break;
                 }
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
-                txBuffer.push_back(tf);
+                if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(tf);
             }
             break;
 
@@ -158,8 +291,13 @@ void processRxFrame(Frame &f) {
         // Remote node confirmed our announce; mark it available and update routing.
         case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:
             if (strcmp(f.viaCall, settings.mycall) == 0) {
+                // Direct ACK to us: mark peer available, add 0-hop route
                 availablePeerList(f.nodeCall, true, f.port);
                 addRoutingList(f.nodeCall, f.nodeCall, f.hopCount);
+            } else if (strlen(f.viaCall) > 0) {
+                // Overheard ACK: nodeCall confirmed viaCall as its peer.
+                // Learn that viaCall is reachable through nodeCall (1 extra hop).
+                addRoutingList(f.viaCall, f.nodeCall, f.hopCount + 1);
             }
             break;
 
@@ -185,6 +323,22 @@ void processRxFrame(Frame &f) {
 
             // Persist the ACK so repeat logic and foreign-ACK forwarding work correctly
             addACK(f.srcCall, f.nodeCall, f.id);
+
+            // Record ACK event in API ring buffer and mark message as acked
+            #ifdef HAS_WIFI
+            apiRecordAckEvent(f);
+            apiMarkMessageAcked(f.srcCall, f.id);
+            #endif
+
+            // Debug output for test framework
+            if (serialDebug) {
+                JsonDocument dbgAck;
+                dbgAck["event"] = "ack";
+                dbgAck["srcCall"] = f.srcCall;
+                dbgAck["nodeCall"] = f.nodeCall;
+                dbgAck["id"] = f.id;
+                logJson(dbgAck);
+            }
             break;
 
         // ── MESSAGE_FRAME ─────────────────────────────────────────────────────
@@ -234,7 +388,7 @@ void processRxFrame(Frame &f) {
                 addACK(f.srcCall, f.nodeCall, f.id);
                 tf.frameType = Frame::FrameTypes::MESSAGE_ACK_FRAME;
                 memcpy(tf.viaCall, f.nodeCall, sizeof(tf.viaCall));
-                memcpy(tf.srcCall, f.nodeCall, sizeof(tf.srcCall));
+                memcpy(tf.srcCall, f.srcCall, sizeof(tf.srcCall));
                 tf.id = f.id;
                 // Send the ACK via the same transport the peer is reachable on
                 bool nodeOnWifi = false;
@@ -247,11 +401,11 @@ void processRxFrame(Frame &f) {
                 if (nodeOnWifi) {
                     tf.port = 1;
                     tf.transmitMillis = 0;
-                    txBuffer.push_back(tf);
+                    if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(tf);
                 } else {
                     tf.port = 0;
                     tf.transmitMillis = millis() + calculateAckTime();
-                    txBuffer.push_back(tf);
+                    if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(tf);
                 }
             }
 
@@ -268,26 +422,48 @@ void processRxFrame(Frame &f) {
             // Update routing: the sender is reachable via nodeCall
             addRoutingList(f.srcCall, f.nodeCall, f.hopCount);
 
-            if ((found == false) && (f.messageLength > 0)) {
-                // ── New, unseen message ──────────────────────────────────────
+            // Duplicate detected: remove any remaining relay copies from TX buffer
+            if (found) {
+                txBuffer.erase(
+                    std::remove_if(txBuffer.begin(), txBuffer.end(),
+                        [&](const Frame& txB) {
+                            return (strcmp(txB.srcCall, f.srcCall) == 0) && (txB.id == f.id)
+                                && (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
+                        }),
+                    txBuffer.end()
+                );
+            }
 
-                // Store (srcCall, id) in the ring-buffer to suppress future duplicates
+            // Check if this message is addressed to someone else (private message not for us)
+            bool forOther = (strlen(f.dstCall) > 0) && (strcmp(f.dstCall, settings.mycall) != 0);
+
+            // Store (srcCall, id) in the ring-buffer to suppress future duplicates
+            if ((found == false) && (f.messageLength > 0)) {
                 strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
                 messages[messagesHead].id = f.id;
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
+            }
+
+            if ((found == false) && (f.messageLength > 0) && (!forOther) && (f.messageType != Frame::MessageTypes::ROUTING_INFO_MESSAGE)) {
+                // ── New, unseen message addressed to us, a group, or broadcast ──
+
+                // Record in API message ring buffer (always active)
+                #ifdef HAS_WIFI
+                apiRecordMessage(f, false);
+                #endif
 
                 // Serialize to JSON, broadcast via WebSocket, and append to flash
-                char* jsonBuffer = (char*)malloc(4096);
-                size_t len = f.messageJSON(jsonBuffer, 4096);
-                ws.textAll(jsonBuffer, len);
+                char jsonBuffer[1024];
+                size_t len = f.messageJSON(jsonBuffer, sizeof(jsonBuffer));
+                #ifdef HAS_WIFI
+                wsBroadcast(jsonBuffer, len);
+                #endif
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
                 #ifdef LILYGO_T_LORA_PAGER
                 // Archive to SD card without size limit when a card is inserted
                 pagerAddMessageToSD(jsonBuffer, len);
                 #endif
-                free(jsonBuffer);
-                jsonBuffer = nullptr;
 
                 // Display incoming message on T-LoraPager screen
                 #ifdef LILYGO_T_LORA_PAGER
@@ -309,34 +485,68 @@ void processRxFrame(Frame &f) {
                 displayMonitorFrame(f);
                 #endif
 
+                // Show last message on status display (SSD1306 or E-Paper)
+                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO) || defined(ESP32_E22_V1)
+                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
+                    char textBuf[261] = {0};
+                    memcpy(textBuf, f.message, f.messageLength);
+                    onStatusDisplayMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
+                }
+                #endif
+
                 // TRACE echo: if we are the destination, append our callsign + time and reply
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
-                        char message[512];
-                        size_t messageLength = f.messageLength;
-                        memcpy(message, f.message, f.messageLength);
-                        memcpy(&message[messageLength], " -> ECHO ", 9);
-                        messageLength += 9;
-                        memcpy(&message[messageLength], settings.mycall, strlen(settings.mycall));
-                        messageLength += strlen(settings.mycall);
-                        memcpy(&message[messageLength], " ", 1);
-                        messageLength += 1;
-                        char text[128];
-                        getFormattedTime("%H:%M:%S", text, sizeof(text));
-                        memcpy(&message[messageLength], text, strlen(text));
-                        messageLength += strlen(text);
-                        if (messageLength > 255) {messageLength = 255;}
-                        sendMessage(f.srcCall, message, Frame::MessageTypes::TRACE_MESSAGE);
+                        char traceMsg[261] = {0};
+                        size_t traceLen = f.messageLength;
+                        if (traceLen > 255) traceLen = 255;
+                        memcpy(traceMsg, f.message, traceLen);
+                        const char* echoTag = " -> ECHO ";
+                        size_t callLen = strlen(settings.mycall);
+                        char timeStr[16];
+                        getFormattedTime("%H:%M:%S", timeStr, sizeof(timeStr));
+                        size_t timeLen = strlen(timeStr);
+                        size_t needed = 9 + callLen + 1 + timeLen;
+                        if (traceLen + needed <= 260) {
+                            memcpy(&traceMsg[traceLen], echoTag, 9);
+                            traceLen += 9;
+                            memcpy(&traceMsg[traceLen], settings.mycall, callLen);
+                            traceLen += callLen;
+                            traceMsg[traceLen++] = ' ';
+                            memcpy(&traceMsg[traceLen], timeStr, timeLen);
+                            traceLen += timeLen;
+                        }
+                        if (traceLen > 255) traceLen = 255;
+                        traceMsg[traceLen] = '\0';
+                        sendMessage(f.srcCall, traceMsg, Frame::MessageTypes::TRACE_MESSAGE);
                 }
 
-                // Remote COMMAND: execute instructions sent directly to this node
+                // Remote COMMAND: execute instructions sent directly to this node (only from known peers)
+                // The command is only executed after it has been successfully logged to the web backend.
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::COMMAND_MESSAGE) ) {
+                    bool cmdFromKnownPeer = false;
+                    for (size_t pi = 0; pi < peerList.size(); pi++) {
+                        if (strcmp(peerList[pi].nodeCall, f.srcCall) == 0 && peerList[pi].available) {
+                            cmdFromKnownPeer = true;
+                            break;
+                        }
+                    }
+                    if (!cmdFromKnownPeer) break;
+
+                    const char* cmdName = nullptr;
                     switch (f.message[0]) {
-                        case 0xff: // Version query: reply with firmware info string
-                            sendMessage(f.srcCall, NAME " " VERSION " " PIO_ENV_NAME);
-                            break;
-                        case 0xfe: // Reboot: schedule restart in 2.5 s
-                            rebootTimer = millis() + 2500;
-                            break;
+                        case 0xff: cmdName = "version"; break;
+                        case 0xfe: cmdName = "reboot";  break;
+                    }
+
+                    if (cmdName && logRemoteCommand(f.srcCall, cmdName)) {
+                        switch (f.message[0]) {
+                            case 0xff: // Version query: reply with firmware info string
+                                sendMessage(f.srcCall, NAME " " VERSION " " PIO_ENV_NAME);
+                                break;
+                            case 0xfe: // Reboot: schedule restart in 2.5 s
+                                rebootTimer = millis() + 2500; rebootRequested = true;
+                                break;
+                        }
                     }
                 }
 
@@ -374,6 +584,44 @@ void processRxFrame(Frame &f) {
                         }
                     }
 
+                    // TRACE: append our callsign + timestamp to the path (once, before port loop)
+                    if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
+                        size_t callLen = strlen(settings.mycall);
+                        char timeStr[16];
+                        getFormattedTime("%H:%M:%S", timeStr, sizeof(timeStr));
+                        size_t timeLen = strlen(timeStr);
+                        size_t needed = 4 + callLen + 1 + timeLen;
+                        if (tf.messageLength + needed <= sizeof(tf.message)) {
+                            memcpy(&tf.message[tf.messageLength], " -> ", 4);
+                            tf.messageLength += 4;
+                            memcpy(&tf.message[tf.messageLength], settings.mycall, callLen);
+                            tf.messageLength += callLen;
+                            tf.message[tf.messageLength++] = ' ';
+                            memcpy(&tf.message[tf.messageLength], timeStr, timeLen);
+                            tf.messageLength += timeLen;
+                        }
+                        if (tf.messageLength > 255) tf.messageLength = 255;
+                    }
+
+                    // Check if the routed next-hop is actually reachable.
+                    // If not, fall back to flooding so the message isn't silently lost.
+                    if (routing) {
+                        bool routeReachable = false;
+                        for (size_t pi = 0; pi < peerList.size(); pi++) {
+                            if (strcmp(peerList[pi].nodeCall, viaCall) == 0 &&
+                                peerList[pi].available &&
+                                strcmp(peerList[pi].nodeCall, f.nodeCall) != 0 &&
+                                strcmp(peerList[pi].nodeCall, f.srcCall) != 0) {
+                                routeReachable = true;
+                                break;
+                            }
+                        }
+                        if (!routeReachable) {
+                            routing = false;  // fall back to flood
+                            routeViaWifi = false;
+                        }
+                    }
+
                     // Iterate ports: WiFi first (port 1), then LoRa (port 0)
                     for (int _port = 1; _port >= 0; _port--) {
                         tf.port = (uint8_t)_port;
@@ -382,21 +630,6 @@ void processRxFrame(Frame &f) {
                         switch (tf.port){
                             case 0: tf.transmitMillis = millis() + calculateRetryTime(); break;
                             case 1: tf.transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
-                        }
-
-                        // TRACE: append our callsign + timestamp to the path
-                        if (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) {
-                            memcpy(&tf.message[tf.messageLength], " -> ", 4);
-                            tf.messageLength += 4;
-                            memcpy(&tf.message[tf.messageLength], settings.mycall, strlen(settings.mycall));
-                            tf.messageLength += strlen(settings.mycall);
-                            memcpy(&tf.message[tf.messageLength], " ", 1);
-                            tf.messageLength += 1;
-                            char text[128];
-                            getFormattedTime("%H:%M:%S", text, sizeof(text));
-                            memcpy(&tf.message[tf.messageLength], text, strlen(text));
-                            tf.messageLength += strlen(text);
-                            if (tf.messageLength > 255) {tf.messageLength = 255;}
                         }
 
                         // Enqueue a relay copy for every eligible peer on this port
@@ -411,10 +644,12 @@ void processRxFrame(Frame &f) {
                                     memcpy(tf.viaCall, peerList[i].nodeCall, sizeof(tf.viaCall));
                                     tf.retry = TX_RETRY;
                                     tf.initRetry = TX_RETRY;
-                                    txBuffer.push_back(tf);
-                                    // Pre-record ACK so we don't send a redundant ACK
-                                    // if the peer echoes the message back
-                                    addACK(tf.srcCall, tf.viaCall, tf.id);
+                                    if (txBuffer.size() < TX_BUFFER_SIZE) {
+                                        txBuffer.push_back(tf);
+                                        // Pre-record ACK so we don't send a redundant ACK
+                                        // if the peer echoes the message back
+                                        addACK(tf.srcCall, tf.viaCall, tf.id);
+                                    }
                                 }
                             }
                         }
@@ -445,43 +680,106 @@ void processRxFrame(Frame &f) {
 void setup() {
     // Initialise UART debug output
     Serial.begin(115200);
-    Serial.setDebugOutput(true);
+    #ifndef NRF52_PLATFORM
+    // Enable setDebugOutput only after settings load (see below),
+    // so early UART output doesn't interfere with esptool auto-reset.
+    #endif
 
     #if defined(LILYGO_T_LORA_PAGER)
     // USB-CDC needs ~1 s to enumerate; early output would be lost
     delay(2000);
-    Serial.println("=== rMesh T-LoraPager boot ===");
-    Serial.printf("PSRAM: %s (%u bytes)\n", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
-    Serial.printf("Free heap: %u\n", ESP.getFreeHeap());
+    logPrintf(LOG_INFO, "Boot", "=== rMesh T-LoraPager boot ===");
+    logPrintf(LOG_INFO, "Boot", "PSRAM: %s (%u bytes)", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
+    logPrintf(LOG_INFO, "Boot", "Free heap: %u", ESP.getFreeHeap());
     Serial.flush();
     #elif defined(SEEED_SENSECAP_INDICATOR)
     // UART0 via CH340 bridge — ready immediately, no wait needed
     delay(100);
+    #elif defined(NRF52_PLATFORM)
+    // USB-CDC on nRF52840 — wait up to 3s for host to connect
+    {
+        // Early LED feedback: blink to show firmware is alive
+        pinMode(PIN_LED_GREEN, OUTPUT);
+        digitalWrite(PIN_LED_GREEN, HIGH);
+        uint32_t usbWait = millis();
+        while (!Serial && (millis() - usbWait < 3000)) {
+            delay(100);
+        }
+        digitalWrite(PIN_LED_GREEN, LOW);
+    }
     #else
-    while (!Serial) {}
+    {
+        uint32_t serialWait = millis();
+        while (!Serial && (millis() - serialWait < 3000)) { delay(10); }
+    }
     #endif
 
-    // Lock CPU to 240 MHz (recommended for reliable SPI timing)
-    setCpuFrequencyMhz(240);
+    #ifndef NRF52_PLATFORM
+    lastResetReason = getResetReasonStr();
+    logPrintf(LOG_INFO, "Boot", "Reset reason: %s", lastResetReason);
+    logPrintf(LOG_INFO, "Boot", "Free heap: %u bytes", ESP.getFreeHeap());
+
+    // ESP32 (original): Reinitialize task WDT with reduced timeout,
+    // since the WiFi stack blocks CPU 0 for >30 s during scans/reconnects.
+    // ESP32-S3 does not have this issue. The interrupt WDT remains
+    // active as a safety net.
+    #if !CONFIG_IDF_TARGET_ESP32S3 && !CONFIG_IDF_TARGET_ESP32S2 && !CONFIG_IDF_TARGET_ESP32C3
+    esp_task_wdt_deinit();
+    esp_task_wdt_config_t twdt_config = {
+        .timeout_ms = 45000,
+        .idle_core_mask = 0,
+        .trigger_panic = true
+    };
+    esp_task_wdt_init(&twdt_config);
+    #endif
+    #endif
+
+    #ifndef NRF52_PLATFORM
     // Suppress verbose ESP-IDF log output for noisy subsystems
     esp_log_level_set("NetworkUdp", ESP_LOG_NONE);
-    esp_log_level_set("NetworkUdp", ESP_LOG_ERROR);
-    esp_log_level_set("vfs", ESP_LOG_WARN);
     esp_log_level_set("vfs", ESP_LOG_NONE);
+    #endif
 
     // Pre-allocate vector capacity to avoid heap fragmentation at runtime
     peerList.reserve(PEER_LIST_SIZE);
     txBuffer.reserve(TX_BUFFER_SIZE);
-    routingList.reserve(ROUTING_BUFFER_SIZE);
+    #ifndef NRF52_PLATFORM
+    // PSRAM boards can afford full reservation; others start small and grow
+    if (psramFound()) {
+        routingList.reserve(ROUTING_BUFFER_SIZE);
+    } else {
+        routingList.reserve(100);
+    }
+    #else
+    routingList.reserve(100);
+    #endif
 
-    // Load user settings from NVS
+    // Mount filesystem (nRF52 Preferences uses InternalFS, so mount first)
+    #ifdef NRF52_PLATFORM
+    InternalFS.begin();
+    #else
+    if (!LittleFS.begin(false)) {
+        logPrintf(LOG_WARN, "FS", "Mount failed — formatting...");
+        if (!LittleFS.begin(true)) {
+            logPrintf(LOG_ERROR, "FS", "Format failed!");
+        }
+    }
+    #endif
+    fsMutex = xSemaphoreCreateMutex();
+    listMutex = xSemaphoreCreateMutex();
+    mainLoopTaskHandle = xTaskGetCurrentTaskHandle();
+    initPendingSendQueue();
+    initFileWriteWorker();
+
+    // Load user settings from NVS / InternalFS
     loadSettings();
 
-    // Mount LittleFS (do not format on failure — preserve user data)
-    if (!LittleFS.begin(false)) {
-        Serial.println("An error has occurred while mounting LittleFS");
-    }
-    fsMutex = xSemaphoreCreateMutex();
+    #ifndef NRF52_PLATFORM
+    // Apply CPU frequency from settings (default 240 MHz).
+    // No dynamic switching – APB clock changes disrupt active WiFi connections.
+    setCpuFrequencyMhz(cpuFrequency);
+    Serial.setDebugOutput(serialDebug);
+    #endif
 
     // Pre-populate the in-RAM deduplication ring-buffer from messages.json
     File file = LittleFS.open("/messages.json", "r");
@@ -492,10 +790,9 @@ void setup() {
             if (error == DeserializationError::Ok) {
                 const char* tempSrc = doc["message"]["srcCall"] | "";
                 uint32_t tempId = doc["message"]["id"] | 0;
-                strncpy(messages[messagesHead].srcCall, tempSrc, MAX_CALLSIGN_LENGTH);
+                strncpy(messages[messagesHead].srcCall, tempSrc, MAX_CALLSIGN_LENGTH + 1);
                 messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
-                messagesHead++;
-                if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
+                if (++messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
             } else if (error != DeserializationError::EmptyInput) {
                 file.readStringUntil('\n'); // skip malformed line and continue
             }
@@ -503,21 +800,56 @@ void setup() {
         file.close();
     }
 
+    // Start shared background worker BEFORE loading peers/routes, so its
+    // stack is carved out of a still-contiguous heap and never needs to
+    // be reallocated later (key mitigation against heap fragmentation).
+    bgWorkerInit();
+
+    // Restore persisted peers and routes from flash
+    loadPeers();
+    loadRoutes();
+
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
 
+    // Initialise status display (if present)
+    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO) || defined(ESP32_E22_V1)
+    initStatusDisplay();
+    #endif
+
+    #ifdef HAS_WIFI
+    // Register WiFi scan handler once (before wifiInit, which may be called repeatedly)
+    WiFi.onEvent(onWiFiGotIP, ARDUINO_EVENT_WIFI_STA_GOT_IP);
+    WiFi.onEvent(onWiFiDisconnected, ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
+    WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
+    #endif
 
     // Set system time to epoch 0 and configure NTP + timezone
     struct timeval tv = { .tv_sec = 0, .tv_usec = 0 };
     settimeofday(&tv, NULL);
+    #ifdef HAS_WIFI
     configTzTime(TZ_INFO, settings.ntpServer);
+    #endif
 
     // Start the async web server and WebSocket endpoint
     startWebServer();
 
-    Serial.printf("\n\n\n%s\n%s %s\nREADY.\n", PIO_ENV_NAME, NAME, VERSION);
+    logPrintf(LOG_INFO, "System", "");
+    logPrintf(LOG_INFO, "System", "%s", PIO_ENV_NAME);
+    logPrintf(LOG_INFO, "System", "%s %s", NAME, VERSION);
+    logPrintf(LOG_INFO, "System", "READY.");
+
+    // Emit ready event for test framework (only when debug enabled)
+    if (serialDebug) {
+        JsonDocument dbgReady;
+        dbgReady["event"] = "ready";
+        dbgReady["call"] = settings.mycall;
+        dbgReady["version"] = VERSION;
+        dbgReady["board"] = PIO_ENV_NAME;
+        logJson(dbgReady);
+    }
 }
 
 
@@ -539,6 +871,9 @@ void setup() {
  * 11. Topology reporting (hourly + change-driven 30 s debounce).
  */
 void loop() {
+    // ── 0. Deferred sends from background tasks (e.g. WebSocket) ────────────
+    processPendingSends();
+
     // ── 1. Serial input ───────────────────────────────────────────────────────
     checkSerialRX();
 
@@ -552,18 +887,35 @@ void loop() {
     #ifdef SEEED_SENSECAP_INDICATOR
     displayUpdateLoop();
     #endif
+    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(ESP32_E22_V1)
+    {
+        static uint32_t oledRefreshTimer = 0;
+        if (oledEnabled && timerExpired(oledRefreshTimer)) {
+            oledRefreshTimer = millis() + 5000;
+            updateStatusDisplay();
+        }
+        #ifdef ESP32_E22_V1
+        displayButtonPoll();
+        #endif
+    }
+    #endif
+    #ifdef LILYGO_T_ECHO
+    displayUpdateLoop();
+    #endif
 
     // ── 4. ANNOUNCE beacon ────────────────────────────────────────────────────
     // Enqueue an ANNOUNCE_FRAME on both WiFi (port 1) and LoRa (port 0)
-    if (millis() > announceTimer) {
+    if (timerExpired(announceTimer)) {
         announceTimer = millis() + ANNOUNCE_TIME;
         Frame f;
         f.frameType = Frame::FrameTypes::ANNOUNCE_FRAME;
         f.transmitMillis = 0;
+        #ifdef HAS_WIFI
         f.port = 1;
-        txBuffer.push_back(f);
+        if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
+        #endif
         f.port = 0;
-        txBuffer.push_back(f);
+        if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
         sendPeerList();
     }
 
@@ -597,14 +949,60 @@ void loop() {
         // Iterate the buffer and send any frame whose deadline has passed
         if (txBuffer.size() == 0) {currentRetry = 0;}
         for (int i = 0; i < txBuffer.size(); i++) {
-            if ((millis() > txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
+            if (timerExpired(txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
+                // Flux guard: enforce minimum pause between LoRa transmissions
+                // so remote receivers can settle back into RX mode (improves range)
+                if (txBuffer[i].port == 0 && !timerExpired(loraFluxGuard)) break;
+
+                // Track whether the frame was actually transmitted (not just postponed)
+                bool postponed = false;
+
                 // Transmit — discard silently if LoRa is disabled on this device
                 if (txBuffer[i].port == 0 && !loraEnabled) {
                     txBuffer[i].retry = 0;
                 } else {
                     switch (txBuffer[i].port){
-                        case 0: transmitFrame(txBuffer[i]); break;
+                        case 0: {
+                            // Duty cycle enforcement for public SRD band (10% in 60s)
+                            uint32_t toa = getTOA(txBuffer[i].messageLength + 10 + 2 * MAX_CALLSIGN_LENGTH);
+                            if (isPublicBand(settings.loraFrequency) && !dutyCycleAllowed(toa)) {
+                                // Postpone frame instead of dropping it
+                                txBuffer[i].transmitMillis = millis() + 5000;
+                                postponed = true;
+                                break;
+                            }
+                            transmitFrame(txBuffer[i]);
+                            if (isPublicBand(settings.loraFrequency)) {
+                                dutyCycleTrackTx(toa);
+                            }
+                            loraFluxGuard = millis() + getTOA(10 + 2 * MAX_CALLSIGN_LENGTH);
+                            break;
+                        }
                         case 1: sendUDP(txBuffer[i]); break;
+                    }
+
+                    // Duty cycle postponed: skip retry logic, try again later
+                    if (postponed) break;
+
+                    // Record TX event in API ring buffer (always active)
+                    #ifdef HAS_WIFI
+                    apiRecordTxEvent(txBuffer[i]);
+                    #endif
+
+                    // Debug output for test framework
+                    if (serialDebug) {
+                        JsonDocument dbgTx;
+                        dbgTx["event"] = "tx";
+                        dbgTx["frameType"] = txBuffer[i].frameType;
+                        if (strlen(txBuffer[i].srcCall) > 0) dbgTx["srcCall"] = txBuffer[i].srcCall;
+                        if (strlen(txBuffer[i].nodeCall) > 0) dbgTx["nodeCall"] = txBuffer[i].nodeCall;
+                        if (strlen(txBuffer[i].dstCall) > 0) dbgTx["dstCall"] = txBuffer[i].dstCall;
+                        if (strlen(txBuffer[i].viaCall) > 0) dbgTx["viaCall"] = txBuffer[i].viaCall;
+                        dbgTx["id"] = txBuffer[i].id;
+                        dbgTx["hopCount"] = txBuffer[i].hopCount;
+                        dbgTx["port"] = txBuffer[i].port;
+                        dbgTx["retry"] = txBuffer[i].retry;
+                        logJson(dbgTx);
                     }
                 }
                 // Decrement retry counter and track progress for the status update
@@ -615,51 +1013,145 @@ void loop() {
                     case 0: txBuffer[i].transmitMillis = millis() + calculateRetryTime(); break;
                     case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
                 }
-                // All retries exhausted: remove the frame and mark the peer unavailable
+                // All retries exhausted: remove the frame.
+                // For multi-retry frames (initRetry > 1): the peer is unreachable,
+                // so mark it unavailable and purge ALL pending frames to that peer
+                // to prevent txBuffer congestion.
+                // For one-shot frames (initRetry <= 1, e.g. ACKs): only remove
+                // the single frame, do NOT purge other frames to the same peer.
                 if (txBuffer[i].retry == 0) {
                     if (txBuffer[i].initRetry > 1) {
-                        availablePeerList(txBuffer[i].viaCall, false, txBuffer[i].port);
+                        char deadVia[MAX_CALLSIGN_LENGTH + 1];
+                        strncpy(deadVia, txBuffer[i].viaCall, sizeof(deadVia));
+                        deadVia[sizeof(deadVia) - 1] = '\0';
+                        uint8_t deadPort = txBuffer[i].port;
+                        availablePeerList(deadVia, false, deadPort);
+                        // Set cooldown so ANNOUNCE_ACK cannot immediately re-enable
+                        for (auto& p : peerList) {
+                            if (strcmp(p.nodeCall, deadVia) == 0 && p.port == deadPort) {
+                                p.cooldownUntil = millis() + PEER_RETRY_COOLDOWN;
+                                break;
+                            }
+                        }
+                        txBuffer.erase(
+                            std::remove_if(txBuffer.begin(), txBuffer.end(),
+                                [&](const Frame& txB) {
+                                    return (strcmp(txB.viaCall, deadVia) == 0) && (txB.port == deadPort);
+                                }),
+                            txBuffer.end()
+                        );
+                    } else {
+                        txBuffer.erase(txBuffer.begin() + i);
                     }
-                    txBuffer.erase(txBuffer.begin() + i);
+                    i = -1; // restart iteration since indices shifted
                 }
                 break;
             }
         }
     }
 
+
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
     if (checkReceive(f)) { processRxFrame(f); }   // LoRa
+    #ifdef HAS_WIFI
     if (checkUDP(f))     { processRxFrame(f); }   // UDP
+    #endif
 
-    // ── 7. WebSocket status broadcast (1 s interval) ──────────────────────────
-    if (millis() > statusTimer) {
-        statusTimer = millis() + 1000;
-        JsonDocument doc;
-        doc["status"]["time"]         = time(NULL);
-        doc["status"]["tx"]           = txFlag;
-        doc["status"]["rx"]           = rxFlag;
-        doc["status"]["txBufferCount"]= txBuffer.size();
-        doc["status"]["retry"]        = currentRetry;
-        doc["status"]["heap"]         = ESP.getFreeHeap();
-        #ifdef HAS_BATTERY_ADC
-        if (batteryEnabled) doc["status"]["battery"] = getBatteryVoltage();
+    // ── 7. Status broadcast (3 s interval) ────────────────────────────────────
+    if (timerExpired(statusTimer)) {
+        statusTimer = millis() + 3000;
+        #ifdef HAS_WIFI
+        // Periodically clean up dead WebSocket clients to prevent heap leaks
+        ws.cleanupClients();
+
+        // Only broadcast status if heap has enough room for the WebSocket
+        // shared_ptr allocation (~400 bytes per message per client)
+        if (ESP.getFreeHeap() > 40000) {
+            char jsonBuffer[384];
+            int len;
+            #ifdef HAS_BATTERY_ADC
+            if (batteryEnabled) {
+                len = snprintf(jsonBuffer, sizeof(jsonBuffer),
+                    "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
+                    "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"battery\":%.2f}}",
+                    (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
+                    (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
+                    ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                    lastResetReason, getBatteryVoltage());
+            } else
+            #endif
+            {
+                len = snprintf(jsonBuffer, sizeof(jsonBuffer),
+                    "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
+                    "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"cpuFreq\":%u,\"resetReason\":\"%s\"}}",
+                    (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
+                    (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
+                    ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                    lastResetReason);
+            }
+            if (len > 0 && (size_t)len < sizeof(jsonBuffer)) {
+                wsBroadcast(jsonBuffer, len);
+            }
+        }
         #endif
-        char* jsonBuffer = (char*)malloc(1024);
-        size_t len = serializeJson(doc, jsonBuffer, 1024);
-        ws.textAll(jsonBuffer, len);
-        free(jsonBuffer);
-        jsonBuffer = nullptr;
         // Expire stale peers once per second
         checkPeerList();
+        // Flush deferred RSSI/SNR updates to WebSocket clients
+        if (peerListDirty) {
+            peerListDirty = false;
+            sendPeerList();
+        }
+    }
+
+    // ── 7a. Heap watchdog — reboot when heap is critically low ──────────────
+    #ifndef NRF52_PLATFORM
+    {
+        uint32_t freeHeap = ESP.getFreeHeap();
+        uint32_t maxAlloc = ESP.getMaxAllocHeap();
+        if ((freeHeap < 10000 || maxAlloc < 4096) && !rebootRequested) {
+            logPrintf(LOG_ERROR, "HEAP", "Critical: %u bytes free, largest block %u — rebooting",
+                      freeHeap, maxAlloc);
+            rebootTimer = millis() + 500;
+            rebootRequested = true;
+        }
+    }
+    #endif
+
+    // ── 7b. Periodic ROUTING_INFO beacon (every 24 h) ──────────────────────
+    if (timerExpired(routingInfoTimer)) {
+        routingInfoTimer = millis() + 24UL * 60 * 60 * 1000; // repeat every 24 h
+        Frame rf;
+        rf.frameType = Frame::FrameTypes::MESSAGE_FRAME;
+        rf.messageType = Frame::MessageTypes::ROUTING_INFO_MESSAGE;
+        strncpy(rf.srcCall, settings.mycall, sizeof(rf.srcCall));
+        rf.message[0] = 0x00;
+        rf.messageLength = 1;
+        sendFrame(rf);
+        logPrintf(LOG_INFO, "Route", "Sent ROUTING_INFO beacon");
+    }
+
+    // ── 7c. Periodic flash persistence of routes/peers ─────────────────────
+    if (timerExpired(persistTimer)) {
+        persistTimer = millis() + PERSIST_INTERVAL;
+        if (routesDirty) saveRoutes();
+        if (peersDirty)  savePeers();
     }
 
     // ── 8. Reboot / shutdown ──────────────────────────────────────────────────
-    if (millis() > rebootTimer)  { ESP.restart(); }
-    if (pendingShutdown)         { esp_deep_sleep_start(); } // no wakeup = max power saving
+    #ifdef NRF52_PLATFORM
+    if (rebootRequested && timerExpired(rebootTimer))  { platformRestart(); }
+    if (pendingShutdown)         { platformDeepSleep(); }
+    #else
+    if (rebootRequested && timerExpired(rebootTimer))  { ESP.restart(); }
+    if (pendingShutdown)         { esp_deep_sleep_start(); }
+    #endif
 
+    #ifdef HAS_WIFI
     // ── 9. OTA update checks ──────────────────────────────────────────────────
-    if (millis() > updateCheckTimer) {
+    if (timerExpired(updateCheckTimer)) {
         updateCheckTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
         checkForUpdates();
     }
@@ -672,17 +1164,39 @@ void loop() {
         pendingForceUpdate = false;
         checkForUpdates(true, pendingForceChannel);
     }
+    #endif
+
+    // Deferred settings save from WebSocket handler
+    if (pendingSettingsSave) {
+        pendingSettingsSave = false;
+        saveSettings();
+    }
+
+    // Deferred LoRa reinit after settings change
+    if (pendingLoraReinit) {
+        pendingLoraReinit = false;
+        initHal();
+    }
 
     // ── 10. messages.json housekeeping ────────────────────────────────────────
-    if (millis() > messagesDeleteTimer) {
+    if (trimNeeded) {
+        trimNeeded = false;
+        messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // reset 24 h timer
+        trimFile("/messages.json", MAX_STORED_MESSAGES);
+    }
+    if (timerExpired(messagesDeleteTimer)) {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
         trimFile("/messages.json", MAX_STORED_MESSAGES);
     }
 
+    #ifdef HAS_WIFI
     // ── 11. Topology reporting ────────────────────────────────────────────────
-    if (millis() > reportingTimer) {
+    if (timerExpired(reportingTimer)) {
         reportingTimer = millis() + 60 * 60 * 1000; // repeat every 1 h
         reportTopology();
     }
     reportTopologyIfChanged(); // change-driven report with 30 s debounce
+    #endif
+
+    heapTick();
 }

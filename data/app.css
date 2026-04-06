@@ -1,0 +1,1565 @@
+/* ===== BASE ===== */
+html {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body, button {
+    font-family: 'Courier New', monospace;
+    font-size: 18px;
+    padding: 0;
+    margin: 0;
+    background: #000;
+    color: #e0e0e0;
+}
+
+td {
+    padding: 4px;
+    padding-left: 10px;
+    vertical-align: middle;
+}
+
+/* ===== INPUT / FORM CONTROLS ===== */
+.input-box {
+    background: #afafaf;
+    color: #000;
+    border: 1px solid #000;
+    border-radius: 0;
+    outline: none;
+    padding: 2px 4px;
+    font-family: inherit;
+    font-size: inherit;
+    height: 28px;
+    width: 280px;
+}
+
+select.input-box {
+    height: 28px;
+}
+
+.button {
+    background: #afafaf;
+    color: #000;
+    border: 1px solid #222;
+    border-radius: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: inherit;
+    padding: 3px 8px;
+    margin: 3px 3px 3px 0;
+    height: 28px;
+    line-height: 20px;
+    vertical-align: middle;
+    box-sizing: border-box;
+    box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.button:active {
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.5);
+    transform: translateY(1px);
+    background: #a5a5a5;
+}
+
+.button-danger {
+    background: #a03030;
+    color: #fff;
+}
+
+.button-danger:active {
+    background: #882020;
+}
+
+/* ===== SETTINGS INPUT / BUTTON OVERRIDES ===== */
+.settings-panel .input-box {
+    border-radius: 4px;
+    height: 32px;
+    padding: 4px 10px;
+    width: 100%;
+    max-width: 280px;
+    transition: border-color 0.15s;
+}
+
+.settings-panel .input-box:focus {
+    border-color: #00aaaa;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(0, 170, 170, 0.25);
+}
+
+.settings-panel select.input-box {
+    height: 32px;
+}
+
+.settings-panel .button {
+    border-radius: 4px;
+    padding: 5px 12px;
+}
+
+/* ===== TOGGLE SWITCH ===== */
+.toggle-switch {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.toggle-switch input {
+    display: none;
+}
+
+.toggle-track {
+    width: 44px;
+    height: 24px;
+    background: #888;
+    border-radius: 12px;
+    border: 1px solid #555;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+
+.toggle-thumb {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.toggle-switch input:checked + .toggle-track {
+    background: #00aaaa;
+    border-color: #008888;
+}
+
+.toggle-switch input:checked + .toggle-track .toggle-thumb {
+    transform: translateX(20px);
+}
+
+/* ===== CHANNEL BUTTONS ===== */
+.channel-button {
+    flex: 1 1 0;
+    background: #444;
+    color: #aaa;
+    border: 1px solid #222;
+    border-radius: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 16px;
+    text-shadow: 1px 1px 0 #000;
+    box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.08);
+    outline: none;
+    margin: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.channel-button.selected, .channel-button:active {
+    background: #7a1a1a;
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.5);
+    transform: translateY(1px);
+}
+
+.channel-button.unread {
+    color: #ffff3e;
+}
+
+/* ===== MAIN NAV BUTTONS (desktop bottom bar) ===== */
+.main-button {
+    flex: 1 1 0;
+    background: #00aaaa;
+    color: #000;
+    border: 1px solid #222;
+    border-radius: 0;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 16px;
+    padding: 2px 4px;
+    margin: 2px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    height: calc(100% - 4px);
+    box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.1), 0 2px 4px rgba(0, 0, 0, 0.4);
+    outline: none;
+}
+
+.button-icon {
+    image-rendering: pixelated;
+    height: 55%;
+    width: auto;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+.button-text {
+    line-height: 1;
+}
+
+.main-button:active, .main-button.selected {
+    box-shadow: inset 2px 2px 2px rgba(0, 0, 0, 0.5);
+    transform: translateY(1px);
+}
+
+/* ===== DIGITAL CLOCK ===== */
+.digital-clock {
+    font-size: 1.25rem;
+    font-family: 'Courier New', monospace;
+    color: #ecec5e;
+    text-align: center;
+    padding: 4px 2px;
+    text-shadow: 0 0 6px rgba(236, 236, 94, 0.5);
+    letter-spacing: 1px;
+    background: #001a00;
+    border: 1px solid #ffffff;
+    margin: 2px 3px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+/* ===== INFO BOXES ===== */
+.info-box {
+    background: #333;
+    color: #ccc;
+    font-size: 16px;
+    margin: 4px;
+    padding: 2px 6px;
+    border: 1px solid #555;
+    word-break: break-word;
+    text-align: center;
+}
+
+.info-box.update {
+    color: #ff8c00;
+}
+
+/* ===== UDP PEER TABLE ===== */
+.udpPeerTable {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.udpPeerTable th {
+    text-align: left;
+    padding: 2px 6px;
+    font-size: 0.8em;
+    opacity: 0.65;
+}
+
+.udpPeerTable td {
+    padding: 2px 4px;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.udpPeerTable td:first-child {
+    text-align: left;
+    width: 100%;
+}
+
+.udpPeerTable .udpPeerIP {
+    width: 11em;
+    min-width: 11em;
+}
+
+/* ===== MESH TABLE (peers & routing) ===== */
+.mesh-table {
+    width: 95%;
+    max-width: 800px;
+    border-collapse: separate;
+    border-spacing: 0;
+    border: 1px solid #555;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 0 auto;
+    font-size: 0.9em;
+}
+
+.mesh-table thead th {
+    background: #3a3a3a;
+    color: #ddd;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.75em;
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 2px solid #00aaaa;
+}
+
+.mesh-table tbody td {
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    vertical-align: middle;
+    color: #e0e0e0;
+}
+
+.mesh-table tbody tr {
+    background: rgba(0, 0, 0, 0.15);
+    transition: background 0.15s;
+}
+
+.mesh-table tbody tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.mesh-table tbody tr:hover {
+    background: rgba(0, 170, 170, 0.12);
+}
+
+.mesh-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.mesh-table .green {
+    color: #33ff33;
+    text-shadow: 0 0 4px rgba(51, 255, 51, 0.3);
+}
+
+.mesh-table .red {
+    color: #ff4444;
+    text-shadow: 0 0 4px rgba(255, 68, 68, 0.3);
+}
+
+.mesh-table .suppressed {
+    color: #888888;
+    text-shadow: none;
+    font-style: italic;
+}
+
+.badge-preferred {
+    color: #ffd700;
+    font-size: 1em;
+    text-shadow: 0 0 4px rgba(255, 215, 0, 0.4);
+}
+
+.mesh-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 0.8em;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+}
+
+.badge-lora {
+    background: #2a4a6a;
+    color: #6ab7ff;
+    border: 1px solid #4a7aaa;
+}
+
+.badge-wifi {
+    background: #2a5a2a;
+    color: #6aff6a;
+    border: 1px solid #4a8a4a;
+}
+
+/* ===== WIFI NETWORK TABLE ===== */
+.wifiNetTable {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 4px 2px;
+}
+
+.wifiNetTable th,
+.wifiNetTable td {
+    padding: 0;
+    vertical-align: middle;
+    text-align: left;
+    overflow: hidden;
+}
+
+.wifiNetTable th {
+    font-size: 0.8em;
+    opacity: 0.65;
+}
+
+.wifiNetTable col.col-ssid    { width: 30%; }
+.wifiNetTable col.col-pw      { width: 35%; }
+.wifiNetTable col.col-fav     { width: 57px; }
+.wifiNetTable col.col-del     { width: 30px; }
+
+.wifiNetTable .wifiNetSSID,
+.wifiNetTable .wifiNetPW {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* ===== SETTINGS PANELS ===== */
+.settings-panel {
+    background: #555555;
+    color: #e2e2e2;
+    overflow-y: auto;
+    overflow-x: hidden;
+    display: block;
+}
+
+.settings-section {
+    background: #606060;
+    border: 1px solid #888;
+    border-radius: 4px;
+    break-inside: avoid;
+    margin-bottom: 8px;
+}
+
+.section-header {
+    background: #494949;
+    color: #fff;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 0.8rem;
+    padding: 8px 14px;
+    border-bottom: 1px solid #888;
+    border-radius: 3px 3px 0 0;
+}
+
+.section-body {
+    padding: 12px 14px 14px;
+}
+
+.section-body table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.section-body td {
+    padding: 5px 4px;
+    vertical-align: middle;
+}
+
+.section-body td:first-child {
+    color: #ddd;
+    white-space: nowrap;
+    width: 42%;
+    padding-right: 10px;
+}
+
+.section-body td:last-child {
+    width: 58%;
+}
+
+/* ===== MESSAGE COLORS ===== */
+.green {
+    color: #00c400;
+}
+
+.red {
+    color: #911717;
+}
+
+.middle-tx {
+    color: #00c400;
+}
+
+.monitor-tx {
+    color: #ffff3e;
+}
+
+.monitor-splash {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* ===== CHAT MESSAGE — desktop: fixed-width columns ===== */
+.msg-bubble {
+    display: grid;
+    grid-template-columns: 17ch 10ch 1fr;
+    gap: 0 4px;
+    align-items: baseline;
+    line-height: 1.35;
+}
+
+.msg-bubble.msg-tx .msg-time,
+.msg-bubble.msg-tx .msg-text {
+    color: #00c400;
+}
+
+.msg-time {
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.msg-call {
+    color: #ffcc00 !important;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.msg-call:hover {
+    text-decoration: underline;
+}
+
+.msg-text {
+    min-width: 0;
+    word-break: break-word;
+}
+
+/* Message length exceeded — red flash */
+.msg-overlength {
+    animation: msgFlashRed 0.6s ease-out;
+}
+
+@keyframes msgFlashRed {
+    0%   { background-color: #aa2222; }
+    100% { background-color: inherit; }
+}
+
+
+/* ===== TOAST ===== */
+#toast-container {
+    position: fixed;
+    bottom: 12%;
+    right: 10px;
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+
+.toast {
+    background: #222;
+    color: #fff;
+    border: 2px solid #fff;
+    padding: 8px 14px;
+    min-width: 180px;
+    max-width: 280px;
+    font-size: 14px;
+    box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.5);
+    pointer-events: auto;
+    cursor: pointer;
+    animation: slideIn 0.3s ease-out forwards;
+    word-wrap: break-word;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(120%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
+.toast.fade-out {
+    animation: fadeOut 0.5s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+}
+
+/* ===== CHANNEL SETTINGS DIALOG ===== */
+.ch-settings-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ch-settings-dialog {
+    background: #333;
+    color: #ddd;
+    border: 2px solid #888;
+    padding: 16px 18px;
+    min-width: 280px;
+    max-width: 340px;
+    font-size: 14px;
+}
+
+.ch-settings-dialog h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.ch-settings-dialog label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: #aaa;
+}
+
+.ch-settings-dialog input[type="text"] {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    background: #afafaf;
+    color: #000;
+    border: 1px solid #222;
+    font-family: inherit;
+    font-size: 13px;
+    height: 28px;
+    outline: none;
+}
+
+.ch-settings-dialog .ch-btn {
+    background: #afafaf;
+    color: #000;
+    border: 1px solid #222;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 5px 12px;
+    height: 28px;
+    box-shadow: inset 1px 1px 1px rgba(255, 255, 255, 0.15);
+}
+
+.ch-settings-dialog .ch-btn:active {
+    box-shadow: inset 1px 1px 2px rgba(0, 0, 0, 0.5);
+    transform: translateY(1px);
+    background: #a5a5a5;
+}
+
+.ch-settings-dialog .ch-btn-active {
+    background: #00aaaa;
+    color: #000;
+    border-color: #008888;
+}
+
+.ch-settings-dialog .ch-btn-active:active {
+    background: #009090;
+}
+
+.ch-settings-dialog .ch-btn-icon {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    font-size: 18px;
+    text-align: center;
+    line-height: 36px;
+}
+
+.ch-settings-dialog .ch-btn-danger {
+    background: #a03030;
+    color: #fff;
+}
+
+.ch-settings-dialog .ch-btn-danger:active {
+    background: #882020;
+}
+
+.ch-settings-dialog .ch-icon-row {
+    display: flex;
+    gap: 6px;
+}
+
+.ch-settings-dialog .ch-footer {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 16px;
+}
+
+.ch-settings-dialog .ch-section {
+    margin-bottom: 10px;
+}
+
+.ch-settings-dialog .ch-sam-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 4px;
+    background: #444;
+    padding: 3px 8px;
+    border: 1px solid #555;
+}
+
+.ch-settings-dialog .ch-sam-item span {
+    flex: 1;
+}
+
+.ch-settings-dialog .ch-add-row {
+    display: flex;
+    gap: 6px;
+}
+
+.ch-settings-dialog .ch-add-row input {
+    flex: 1;
+}
+
+/* ===== MODAL OVERLAY ===== */
+#overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+#modal {
+    text-align: center;
+    background: #444;
+    color: #fff;
+    padding: 20px;
+    border-radius: 4px;
+    min-width: 280px;
+    border: 2px solid #fff;
+}
+
+#modalInput {
+    color: #000;
+    width: 100%;
+    padding: 5px;
+}
+
+/* ===== ─────────────────────────────────────── ===== */
+/* ===== DESKTOP LAYOUT (min-width: 768px)       ===== */
+/* ===== ─────────────────────────────────────── ===== */
+@media (min-width: 768px) {
+    .mob-header, .mob-input-bar, .mob-nav, .mob-nav-overlay {
+        display: none !important;
+    }
+
+    .mob-channel-select, .mob-ch-settings-btn {
+        display: none !important;
+    }
+
+    /* Hide inline toggle labels on desktop — table headers are visible */
+    .toggle-label {
+        display: none;
+    }
+
+    /* Top bar */
+    .desk-top {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 170px;
+        display: flex;
+        color: #fff;
+        z-index: 100;
+    }
+
+    .desk-top-left {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        overflow: hidden;
+    }
+
+    .text-input {
+        background: #5555ff;
+        border: none;
+        outline: none;
+        padding: 2px 4px;
+        margin: 0;
+        resize: none;
+        overflow: hidden;
+        font-family: inherit;
+        font-size: inherit;
+        line-height: 1.2;
+        color: #fff;
+        width: 100%;
+        flex: 1;
+    }
+
+    .text-input:disabled {
+        background: #333;
+        color: #888;
+        cursor: not-allowed;
+    }
+
+    .channel-switch {
+        background: #aa1f1f;
+        width: 100%;
+        height: 32px;
+        display: flex;
+        gap: 0;
+        border-top: 1px solid #fff;
+        border-left: 1px solid #fff;
+        flex-shrink: 0;
+    }
+
+    .status-box {
+        background: #aa00aa;
+        width: 100%;
+        height: 28px;
+        display: flex;
+        flex-shrink: 0;
+    }
+
+    .status {
+        flex: 1 1 0;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid #fff;
+        padding: 2px 4px;
+        display: flex;
+        align-items: center;
+        white-space: nowrap;
+        font-size: 16px;
+        gap: 3px;
+    }
+
+    .desk-top-right {
+        width: 150px;
+        flex-shrink: 0;
+        background: #00aa00;
+        border: 1px solid #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .desk-top-right-spacer {
+        flex: 1;
+    }
+
+    /* Content panels */
+    .middle {
+        position: fixed;
+        top: 170px;
+        left: 0;
+        right: 0;
+        height: calc(75% - 170px);
+        padding: 4px;
+        background: #555555;
+        color: #e2e2e2;
+        display: flex;
+        flex-direction: column;
+        overflow-y: scroll;
+    }
+
+    .middle::before {
+        content: "";
+        margin-top: auto;
+    }
+
+    .monitor {
+        position: fixed;
+        top: 75%;
+        left: 0;
+        right: 0;
+        height: 15%;
+        padding: 4px;
+        background: #0000aa;
+        color: #aaaaaa;
+        border-top: 4px solid #aaaaaa;
+        display: flex;
+        flex-direction: column;
+        overflow-y: scroll;
+    }
+
+    .monitor::before {
+        content: "";
+        margin-top: auto;
+    }
+
+    .monitor.big {
+        border-top: none;
+        top: 170px;
+        height: calc(90% - 170px);
+    }
+
+    .peer, .routing {
+        position: fixed;
+        top: 170px;
+        left: 0;
+        right: 0;
+        height: calc(90% - 170px);
+        background: #4a4a4a;
+        color: #e0e0e0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 12px;
+        overflow: auto;
+    }
+
+    /* Settings panels */
+    #lora, #setup, #network, #about {
+        position: fixed;
+        top: 170px;
+        left: 0;
+        right: 0;
+        height: calc(90% - 170px);
+    }
+
+    .settings-panel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(320px, 660px));
+        justify-content: center;
+        align-items: start;
+        align-content: start;
+        grid-auto-rows: max-content;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .settings-section.span-2,
+    .settings-section.full-width,
+    .settings-footer.full-width {
+        grid-column: 1 / -1;
+    }
+
+    .settings-footer {
+        display: flex;
+        justify-content: flex-start;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        margin-top: 0;
+        border-top: none;
+    }
+
+    .settings-footer .save-all-btn {
+        margin: 0;
+    }
+
+    .save-all-btn {
+        min-width: 120px;
+        font-weight: bold;
+        font-size: 1rem;
+        padding: 8px 20px;
+        background-color: #2e7d32;
+        color: white;
+        border: 2px solid #fff;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        transition: background-color 0.2s, transform 0.1s;
+        border-radius: 4px;
+    }
+
+    .save-all-btn:hover {
+        background-color: #388e3c;
+        transform: translateY(-2px);
+    }
+
+    .save-all-btn:active {
+        transform: translateY(1px);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    #batterySettingsSection {
+        display: contents;
+    }
+
+    /* Bottom bar */
+    .desk-bottom {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 10%;
+        display: flex;
+        background: #aa1f1f;
+        border-top: 1px solid #fff;
+        gap: 0;
+        z-index: 100;
+    }
+
+    #toast-container {
+        bottom: 12%;
+    }
+}
+
+/* ===== ─────────────────────────────────────── ===== */
+/* ===== MOBILE LAYOUT (max-width: 767px)        ===== */
+/* ===== ─────────────────────────────────────── ===== */
+@media (max-width: 767px) {
+    body {
+        font-size: 18px;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .desk-top, .desk-bottom {
+        display: none !important;
+    }
+
+    /* Mobile header — retro red like desktop bottom bar */
+    .mob-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: calc(50px + env(safe-area-inset-top));
+        padding-top: env(safe-area-inset-top);
+        background: #aa1f1f;
+        border-bottom: 2px solid #fff;
+        display: flex;
+        align-items: center;
+        padding-left: max(12px, env(safe-area-inset-left));
+        padding-right: max(12px, env(safe-area-inset-right));
+        gap: 10px;
+        z-index: 200;
+    }
+
+    .mob-burger {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 10px 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .mob-burger span {
+        display: block;
+        width: 24px;
+        height: 2px;
+        background: #fff;
+        transition: all 0.25s;
+    }
+
+    .mob-title {
+        flex: 1;
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: #fff;
+        text-align: center;
+        letter-spacing: 2px;
+    }
+
+    .ant-icon {
+        width: 28px;
+        height: 28px;
+        stroke: #aaa;
+        fill: none;
+        stroke-width: 1.8;
+        transition: stroke 0.3s;
+    }
+
+    .ant-icon.connected {
+        stroke: #fff;
+    }
+
+    .ant-icon.active {
+        stroke: #ffff3e;
+    }
+
+    /* Channel select in header */
+    .mob-channel-select {
+        flex: 1;
+        height: 32px;
+        background: #7a1a1a;
+        color: #fff;
+        border: 1px solid #fff;
+        border-radius: 0;
+        font-family: inherit;
+        font-size: 18px;
+        padding: 0 8px;
+        outline: none;
+    }
+
+    .mob-ch-settings-btn {
+        width: 36px;
+        height: 32px;
+        background: #881818;
+        color: #fff;
+        border: 1px solid #fff;
+        border-left: none;
+        border-radius: 0;
+        font-size: 1.1rem;
+        cursor: pointer;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .mob-ch-settings-btn:active {
+        background: #661010;
+    }
+
+    /* Content panels on mobile - all start below header */
+    .middle, .monitor, .peer, .routing, #lora, #setup, #network, #about {
+        position: fixed !important;
+        top: calc(52px + env(safe-area-inset-top)) !important;
+        left: 0;
+        right: 0;
+        bottom: 0 !important;
+        height: auto !important;
+        width: 100%;
+        overflow-y: auto;
+        overflow-x: hidden;
+        padding: 4px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    body.mob-ch-active .middle,
+    body.mob-ch-active .monitor {
+        bottom: calc(54px + env(safe-area-inset-bottom)) !important;
+    }
+
+    /* Mobile input bar — retro blue like desktop text-input */
+    .mob-input-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: calc(54px + env(safe-area-inset-bottom));
+        padding-bottom: env(safe-area-inset-bottom);
+        background: #5555ff;
+        border-top: 2px solid #fff;
+        display: flex;
+        align-items: center;
+        padding-left: max(8px, env(safe-area-inset-left));
+        padding-right: max(8px, env(safe-area-inset-right));
+        padding-top: 4px;
+        gap: 6px;
+        z-index: 200;
+    }
+
+    .mob-textarea {
+        flex: 1;
+        height: 40px;
+        background: #3333cc;
+        color: #fff;
+        border: 1px solid #aaa;
+        border-radius: 0;
+        font-family: inherit;
+        font-size: 16px; /* prevent iOS zoom on focus */
+        padding: 8px 10px;
+        resize: none;
+        outline: none;
+        line-height: 1.4;
+    }
+
+    .mob-send-btn {
+        width: 48px;
+        height: 40px;
+        background: #00aaaa;
+        color: #000;
+        border: 1px solid #fff;
+        border-radius: 0;
+        font-size: 1.3rem;
+        cursor: pointer;
+        font-family: inherit;
+        flex-shrink: 0;
+    }
+
+    /* Mobile navigation: top-dropdown — retro dark gray */
+    .mob-nav {
+        position: fixed;
+        top: calc(50px + env(safe-area-inset-top));
+        left: 0;
+        right: 0;
+        background: #333;
+        border-bottom: 2px solid #fff;
+        z-index: 500;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.25s ease-out;
+    }
+
+    .mob-nav.open {
+        max-height: 75vh;
+        overflow-y: auto;
+    }
+
+    .mob-nav-overlay {
+        position: fixed;
+        inset: 0;
+        top: calc(50px + env(safe-area-inset-top));
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 499;
+        display: none;
+    }
+
+    .mob-nav-overlay.open {
+        display: block;
+    }
+
+    .mob-nav-section {
+        padding: 10px 14px 6px;
+        font-size: 0.72rem;
+        color: #ffca28;
+        text-transform: uppercase;
+        letter-spacing: 1.2px;
+        border-top: 1px solid #555;
+        background: #1a1a1a;
+        font-weight: bold;
+    }
+
+    .mob-nav-btn {
+        display: flex;
+        align-items: center;
+        width: 100%;
+        background: #333;
+        border: none;
+        color: #e0e0e0;
+        font-family: inherit;
+        font-size: 1rem;
+        text-align: left;
+        padding: 14px 18px;
+        cursor: pointer;
+        border-bottom: 1px solid #444;
+        transition: background 0.15s, color 0.15s;
+        min-height: 48px;
+    }
+
+    .mob-nav-btn::before {
+        content: "•";
+        margin-right: 12px;
+        color: #888;
+        font-size: 1.2rem;
+        width: 14px;
+        display: inline-block;
+        text-align: center;
+    }
+
+    .mob-nav-btn:active {
+        background: #444;
+        color: #fff;
+    }
+
+    .mob-nav-btn.selected {
+        color: #fff;
+        background: #aa1f1f;
+        font-weight: bold;
+    }
+
+    .mob-nav-btn.selected::before {
+        color: #fff;
+    }
+
+    /* Use a grid on mobile if width allows, else stay stack */
+    .settings-panel {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+        padding: 8px;
+    }
+
+    @media (min-width: 640px) {
+        .settings-panel {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+
+    .save-all-btn {
+        position: fixed;
+        top: calc(56px + env(safe-area-inset-top));
+        right: max(10px, env(safe-area-inset-right));
+        z-index: 210;
+        width: auto;
+        min-width: 90px;
+        margin: 0;
+        padding: 8px 14px;
+        font-size: 0.85rem;
+        background-color: #2e7d32;
+        border: 2px solid #fff;
+        color: white;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .settings-section {
+        margin-bottom: 0;
+    }
+
+    /* Stack table labels above inputs on mobile — but NOT for UDP/WiFi tables */
+    .section-body table:not(.udpPeerTable):not(.wifiNetTable),
+    .section-body tbody:not(#udpPeerBody):not(#wifiNetBody),
+    .section-body table:not(.udpPeerTable):not(.wifiNetTable) tr,
+    .section-body table:not(.udpPeerTable):not(.wifiNetTable) td {
+        display: block;
+        width: 100%;
+    }
+
+    .section-body table:not(.udpPeerTable):not(.wifiNetTable) td:first-child {
+        color: #aaa;
+        white-space: normal;
+        width: 100%;
+        padding: 8px 0 3px;
+        font-size: 0.82rem;
+    }
+
+    .section-body table:not(.udpPeerTable):not(.wifiNetTable) td:last-child {
+        padding-bottom: 6px;
+    }
+
+    /* Toggle label: hidden on desktop (table header visible), shown on mobile */
+    .toggle-label {
+        font-size: 0.78rem;
+        color: #bbb;
+        vertical-align: middle;
+        margin-right: 4px;
+    }
+
+    /* Shared card style for UDP Peer and WiFi tables */
+    .udpPeerTable,
+    .wifiNetTable {
+        border-spacing: 0;
+        table-layout: auto;
+    }
+
+    .udpPeerTable thead,
+    .wifiNetTable thead {
+        display: none;
+    }
+
+    .udpPeerTable col,
+    .wifiNetTable col {
+        width: auto !important;
+    }
+
+    .udpPeerTable tbody,
+    .udpPeerTable tr,
+    .wifiNetTable tbody,
+    .wifiNetTable tr {
+        display: block;
+        width: 100%;
+    }
+
+    .udpPeerTable tr,
+    .wifiNetTable tr {
+        background: #4a4a4a;
+        border: 1px solid #666;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        padding: 8px 10px;
+    }
+
+    .udpPeerTable td,
+    .wifiNetTable td {
+        display: block;
+        width: 100% !important;
+        min-width: 0 !important;
+        padding: 3px 0;
+        text-align: left !important;
+    }
+
+    /* Call / IP labels via pseudo-elements */
+    .udpPeerTable td:nth-child(1)::before {
+        content: "Call: ";
+        font-size: 0.75rem;
+        color: #aaa;
+    }
+
+    .udpPeerTable td:nth-child(2)::before {
+        content: "IP: ";
+        font-size: 0.75rem;
+        color: #aaa;
+    }
+
+    .wifiNetTable td:nth-child(1)::before {
+        content: "SSID: ";
+        font-size: 0.75rem;
+        color: #aaa;
+    }
+
+    .wifiNetTable td:nth-child(2)::before {
+        content: "PW: ";
+        font-size: 0.75rem;
+        color: #aaa;
+    }
+
+    .udpPeerTable .input-box,
+    .udpPeerTable .udpPeerIP,
+    .wifiNetTable .wifiNetSSID,
+    .wifiNetTable .wifiNetPW {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+
+    /* Legacy + Active switches in one row for UDP peers */
+    .udpPeerTable .udpPeerLegacyCell,
+    .udpPeerTable .udpPeerEnabledCell {
+        display: inline-flex !important;
+        align-items: center;
+        width: auto !important;
+        padding: 4px 10px 4px 0;
+    }
+
+    /* Favorite + delete in one row for WiFi */
+    .wifiNetTable .wifiNetFav,
+    .wifiNetTable td:last-child {
+        display: inline-flex !important;
+        align-items: center;
+        width: auto !important;
+        padding: 4px 10px 4px 0;
+    }
+
+    /* Delete button for both tables */
+    .udpPeerTable td:last-child,
+    .wifiNetTable td:last-child {
+        vertical-align: middle;
+    }
+
+    .udpPeerTable td:last-child {
+        display: inline-flex !important;
+        align-items: center;
+        width: auto !important;
+        padding: 4px 0;
+    }
+
+    .settings-panel .input-box {
+        max-width: 100%;
+        width: 100%;
+        font-size: 16px; /* prevent iOS zoom on focus */
+        height: 36px;
+    }
+
+    .settings-panel select.input-box {
+        font-size: 16px;
+        height: 36px;
+    }
+
+    .settings-panel .button {
+        min-height: 36px;
+        font-size: 16px;
+    }
+
+    .toggle-switch {
+        min-height: 32px;
+    }
+
+    #toast-container {
+        bottom: 60px;
+        left: 10px;
+        right: 10px;
+    }
+
+    /* Responsive mesh table on mobile — compact rows */
+    .mesh-table {
+        width: 100%;
+        font-size: 0.72em;
+        border-collapse: collapse !important;
+        border-spacing: 0 !important;
+    }
+
+    .mesh-table thead th {
+        padding: 2px 3px !important;
+        font-size: 0.65em;
+        letter-spacing: 0;
+    }
+
+    .mesh-table tbody td {
+        padding: 1px 3px !important;
+        vertical-align: top;
+        line-height: 1.1;
+        height: auto;
+    }
+
+    .mesh-table tbody tr {
+        height: auto;
+    }
+
+    .mesh-badge {
+        padding: 0 3px !important;
+        font-size: 0.65em;
+        line-height: 1.3;
+    }
+
+    /* Peers & Routing: compact, top-aligned */
+    .peer, .routing {
+        padding: 4px !important;
+    }
+
+    /* Hide rMesh splash image on mobile */
+    .monitor-splash {
+        display: none !important;
+    }
+
+    /* Chat: block layout, content flows top-to-bottom */
+    .middle {
+        background: #555555 !important;
+        color: #e2e2e2 !important;
+    }
+
+    /* Monitor: match desktop blue background, stack entries vertically */
+    .monitor {
+        background: #0000aa !important;
+        color: #aaaaaa !important;
+    }
+
+    .monitor > span {
+        display: block;
+    }
+
+    /* Peers/Routing: match desktop dark gray */
+    .peer, .routing {
+        background: #4a4a4a !important;
+        color: #e0e0e0 !important;
+    }
+
+    /* Chat messages: messenger-style bubbles on mobile */
+    .msg-bubble {
+        display: flex;
+        flex-wrap: wrap;
+        background: #3a3a3a;
+        border: 1px solid #555;
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin: 3px 4px;
+        max-width: 90%;
+        word-break: break-word;
+        gap: 0;
+    }
+
+    .msg-bubble.msg-tx {
+        background: #1a3a1a;
+        border-color: #2a5a2a;
+        margin-left: auto;
+    }
+
+    .msg-bubble.msg-tx .msg-time,
+    .msg-bubble.msg-tx .msg-call,
+    .msg-bubble.msg-tx .msg-text {
+        color: #e2e2e2;
+    }
+
+    /* Meta line: callsign first, then time */
+    .msg-call {
+        order: -2;
+        font-size: 0.72rem;
+    }
+
+    .msg-call::after {
+        content: "\00a0\00b7\00a0";
+        color: #999;
+    }
+
+    .msg-time {
+        order: -1;
+        font-size: 0.72rem;
+        color: #999;
+    }
+
+    /* Text on its own line */
+    .msg-text {
+        order: 1;
+        flex-basis: 100%;
+        font-size: 0.9rem;
+        line-height: 1.3;
+    }
+}

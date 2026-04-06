@@ -1,5 +1,8 @@
 #pragma once
 
+#include <vector>
+#include <algorithm>
+
 /**
  * @file config.h
  * @brief Central compile-time configuration for rMesh.
@@ -79,14 +82,25 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Number of TX retries before a frame is considered undeliverable. */
 #define TX_RETRY 10
 
+/**
+ * Cooldown period (ms) after all TX retries exhaust for a peer.
+ * During this time the peer cannot be re-enabled by ANNOUNCE_ACK,
+ * preventing the announce → relay → exhaust → re-announce cycle.
+ * Default: 10 minutes.
+ */
+#define PEER_RETRY_COOLDOWN (10 * 60 * 1000UL)
+
 /** Maximum number of messages persisted in messages.json (flash). */
 #define MAX_STORED_MESSAGES 1000
 
-/** Maximum number of messages held in the RAM message cache. */
-#define MAX_STORED_MESSAGES_RAM 100
+/** Minimum free bytes on LittleFS before writes are skipped and a trim is triggered. */
+#define FS_MIN_FREE_BYTES (50 * 1024)
+
+/** Maximum number of messages held in the RAM message cache (reduced to save heap). */
+#define MAX_STORED_MESSAGES_RAM 30
 
 /** Maximum number of ACK frames stored in ack.json. */
-#define MAX_STORED_ACK 100
+#define MAX_STORED_ACK 300
 
 // ── UDP Timing ────────────────────────────────────────────────────────────────
 
@@ -103,14 +117,24 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Maximum length of a callsign string (1–15 characters). */
 #define MAX_CALLSIGN_LENGTH 9
 
-/** Size of the outgoing TX frame buffer (number of frames). */
-#define TX_BUFFER_SIZE 50
+/** Size of the outgoing TX frame buffer (number of frames, reduced to save heap). */
+#define TX_BUFFER_SIZE 20
 
 /** Maximum number of peers tracked simultaneously. */
 #define PEER_LIST_SIZE 20
 
 /** Capacity of the routing table (number of callsign entries). */
-#define ROUTING_BUFFER_SIZE 100
+#define ROUTING_BUFFER_SIZE 1000
+
+/**
+ * Grace period (s) for flash-restored peers before they are marked unavailable.
+ * After a reboot, loaded peers start as available but are given only this much
+ * time (instead of the full PEER_INACTIVE_TIMEOUT) to prove they are still alive.
+ */
+#define PEER_INITIAL_TIMEOUT 120
+
+/** Interval (ms) between periodic flash saves of dirty routes/peers. */
+#define PERSIST_INTERVAL (5 * 60 * 1000)
 
 /** UDP port used for all rMesh network communication. */
 #define UDP_PORT 3333

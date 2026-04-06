@@ -8,6 +8,7 @@
 #include "helperFunctions.h"
 #include "webFunctions.h"
 #include "dutycycle.h"
+#include "logging.h"
 
 
 SX1262 radio = new Module( LORA_NSS, LORA_DIO1, LORA_RST, LORA_BUSY );
@@ -21,7 +22,7 @@ bool txFlag = false;
 bool rxFlag = false;
 
 void printState(int state) {
-    if (state != RADIOLIB_ERR_NONE) { Serial.printf("FAILED! code %d\n", state); }
+    if (state != RADIOLIB_ERR_NONE) { logPrintf(LOG_ERROR, "LoRa", "FAILED! code %d", state); }
 }
 
 void setWiFiLED(bool value) {
@@ -47,7 +48,7 @@ void initHal() {
 
     // Only initialize the radio if a frequency has been configured
     if (!loraConfigured(settings.loraFrequency)) {
-        Serial.println("[LoRa] No frequency configured – radio disabled.");
+        logPrintf(LOG_WARN, "LoRa", "No frequency configured – radio disabled.");
         loraReady = false;
         return;
     }
@@ -57,7 +58,7 @@ void initHal() {
     // SPI.begin() disrupts the bus configuration on the XIAO ESP32-S3.
     int beginState = radio.begin();
     if (beginState != RADIOLIB_ERR_NONE) {
-        Serial.printf("[LoRa] radio.begin() failed (code %d) – check wiring!\n", beginState);
+        logPrintf(LOG_ERROR, "LoRa", "radio.begin() failed (code %d) – check wiring!", beginState);
         loraReady = false;
         return;
     }
@@ -104,14 +105,18 @@ bool checkReceive(Frame &f) {
         uint8_t rxBuffer[256];
         size_t rxBufferLength = radio.getPacketLength();
         int16_t state = radio.readData(rxBuffer, rxBufferLength);
+        //Read RSSI/SNR BEFORE startReceive(), as startReceive() can reset the registers
+        float rxRssi = radio.getRSSI();
+        float rxSnr = radio.getSNR();
+        float rxFrqError = radio.getFrequencyError();
         radio.startReceive();
         if (state == RADIOLIB_ERR_NONE) {
             f.importBinary(rxBuffer, rxBufferLength);
             f.tx = false;
             f.timestamp = time(NULL);
-            f.rssi = radio.getRSSI();
-            f.snr = radio.getSNR();
-            f.frqError = radio.getFrequencyError();
+            f.rssi = rxRssi;
+            f.snr = rxSnr;
+            f.frqError = rxFrqError;
             f.port = 0;
             return true;
         }
@@ -125,7 +130,6 @@ void transmitFrame(Frame &f) {
     uint8_t txBuffer[255];
     size_t txBufferLength;
 
-    txFlag = 1;
     statusTimer = 0;
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx = true;
@@ -139,12 +143,12 @@ void transmitFrame(Frame &f) {
     if (isPublicBand(settings.loraFrequency)) {
         uint32_t toa = (uint32_t)(radio.getTimeOnAir(txBufferLength) / 1000);
         if (!dutyCycleAllowed(toa)) {
-            Serial.println("[LoRa] Duty-cycle limit reached, TX skipped.");
+            logPrintf(LOG_WARN, "LoRa", "Duty-cycle limit reached, TX skipped.");
             return;
         }
-        dutyCycleTrackTx(toa);
     }
 
+    txFlag = 1;
     radio.startTransmit(txBuffer, txBufferLength);
     f.monitorJSON();
 }

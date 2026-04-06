@@ -17,6 +17,7 @@
 #define LORA_MOSI   9   // D10 – SPI MOSI
 
 #define LORA_DEFAULT_TX_POWER 22
+#define WIFI_MAX_TX_POWER_DBM 20
 
 // Built-in user LED on XIAO ESP32-S3 (HIGH = on)
 #define PIN_WIFI_LED 21
