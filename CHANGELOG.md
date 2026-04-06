@@ -2,19 +2,20 @@
 
 ## [v1.0.31]
 
-- NEU: CPU-Frequenz einstellbar (80 / 160 / 240 MHz, Default 240 MHz) – persistiert in NVS, sofort wirksam, konfigurierbar über WebUI (Dropdown unter System)
-- NEU: Channel 1 (all) und 2 (direct) können jetzt per Doppelklick stummgeschaltet werden – gleicher Dialog wie bei Gruppen-Channels, mit Tooltip auf den Icon-Buttons
-- FIX: Heap-Fragmentierung durch wiederholte JsonDocument-Allokationen behoben – Status-Broadcast, messageJSON(), sendPeerList() und sendRoutingList() verwenden jetzt snprintf statt ArduinoJson
-- FIX: malloc(4096)/malloc(2048) in processRxFrame und sendFrame durch Stack-Buffer ersetzt – weniger Heap-Druck bei hohem Nachrichtenaufkommen
-- FIX: Tote WebSocket-Clients werden jetzt periodisch (1×/s) aufgeräumt statt nur bei Connect/Disconnect-Events
-- FIX: Heap-Watchdog – automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
-- FIX: File-Serving Mutex-Timeout von 10 s auf 2 s reduziert – schnellerer Recovery bei laufenden Trim-Operationen
-- UI: Channel-Einstellungsdialog optisch überarbeitet – einheitliches Styling mit dem Rest der WebUI (CSS-Klassen statt Inline-Styles)
+- FIX: Heap-Stabilität im Langzeitbetrieb grundlegend verbessert — zahlreiche Hot-Path-Stellen allozieren jetzt keine kurzlebigen Arduino-`String`- und `JsonDocument`-Objekte mehr, sondern schreiben direkt per `snprintf` in statische Puffer. Betrifft unter anderem Topologie-Report, Status-/Peer-/Routing-Broadcasts, `Frame::monitorJSON()`, den HMAC-/Auth-Pfad, den WiFi-Scan-Broadcast, `processRxFrame`, `sendFrame` sowie die UDP-Peer-Callsign-Speicherung
+- NEU: Gemeinsamer Background-Worker-Task (`bgWorker`) — ein einziger persistenter FreeRTOS-Task mit FIFO-Queue führt alle längeren Hintergrund-Operationen (Topologie-Reporting, Routing-/Peer-Persistenz, File-Append-Schreibvorgänge) serialisiert aus, statt pro Aktion einen neuen Task mit eigenem Stack zu spawnen
+- NEU: Topologie-Reports an rMesh.de nutzen einen persistenten `WiFiClient` mit HTTP-Keep-Alive und bauen den POST-Body in einem statischen 4-KB-Puffer auf — vermeidet TCP-TIME_WAIT-Akkumulation und per-Call-`malloc`
+- FIX: `sendPeerList()` wurde bei jedem empfangenen Frame aufgerufen (JSON + malloc + WebSocket-Broadcast) und verursachte ein Memory Leak bis zum OOM-Crash nach ~3,5 h — RSSI-Updates werden jetzt per Dirty-Flag max. 1×/s geflusht
+- FIX: Tote WebSocket-Clients werden periodisch (1×/s) aufgeräumt statt nur bei Connect/Disconnect-Events
+- FIX: Heap-Watchdog — automatischer Reboot bei < 10 KB freiem Heap verhindert den Zombie-Zustand (LoRa läuft, WiFi/Web tot)
+- FIX: File-Serving-Mutex-Timeout von 10 s auf 2 s reduziert — schnellerer Recovery bei laufenden Trim-Operationen
 
-- FIX: Build-Problem bei LILYGO T-LoraPager und SEEED SenseCAP Indicator durch doppelte `groupNames`-Deklaration behoben
-
-- NEU: WebUI grundlegend überarbeitet – Mobile und Desktop wurden zu einem gemeinsamen responsiven Interface zusammengeführt
+- NEU: WebUI grundlegend überarbeitet — Mobile und Desktop zu einem gemeinsamen responsiven Interface zusammengeführt
 - NEU: Mehrsprachigkeit (Deutsch/Englisch), Uptime-Anzeige, einheitliches Stylesheet, SVG-Icons, einklappbare Settings-Bereiche und verbesserte Tabellen-Layouts in der WebUI
+- NEU: CPU-Frequenz einstellbar (80 / 160 / 240 MHz, Default 240 MHz) — persistiert in NVS, sofort wirksam, konfigurierbar über WebUI
+- NEU: Channel 1 (all) und 2 (direct) können per Doppelklick stummgeschaltet werden — gleicher Dialog wie bei Gruppen-Channels, mit Tooltip auf den Icon-Buttons
+- NEU: Neuer Debug-Block in den Setup-Einstellungen mit "Serial Debug" und "Heap Debug" als dedizierte Toggles (DE/EN übersetzt)
+- UI: Channel-Einstellungsdialog optisch überarbeitet — einheitliches Styling mit dem Rest der WebUI (CSS-Klassen statt Inline-Styles)
 - FIX: Eingabefeld wird nach dem Senden automatisch geleert
 - CLEANUP: Obsolete WebUI-Dateien entfernt
 
@@ -30,16 +31,18 @@
 - NEU: Intelligente Speicher-Trigger reduzieren unnötige Flash-Schreibvorgänge; zusätzlicher periodischer Sicherungs-Timer für geänderte Daten
 - NEU: Kapazität für gespeicherte Routen erhöht
 
-- NEU: mDNS-Support – Nodes sind im lokalen Netzwerk per `<callsign>-rmesh.local` erreichbar
+- NEU: mDNS-Support — Nodes sind im lokalen Netzwerk per `<callsign>-rmesh.local` erreichbar
 - NEU: Erweiterte WiFi- und AP-Verwaltung
 - NEU: Verbesserte WiFi-Client/AP-Tabelle in der WebUI
 - NEU: WebSocket-Kommunikation überarbeitet
 
-- NEU: Erweitertes serielles Kommando-Interface – neue Befehle: `msg`, `xgrp`, `xtrace`, `announce`, `dbg`, `uc`, `updf`, `peers`, `routes`, `acks`, `xtxbuf`; Hilfe und Befehlsliste in Kategorien gegliedert
-- FIX: `updf` löste fälschlich auch den normalen OTA-Update-Handler aus
+- NEU: Erweitertes serielles Kommando-Interface — neue Befehle: `msg`, `xgrp`, `xtrace`, `announce`, `dbg`, `uc`, `updf`, `peers`, `routes`, `acks`, `xtxbuf`; Hilfe und Befehlsliste in Kategorien gegliedert
 - FIX: UDP-Peer-Auflistung zeigt jetzt auch den Enabled-Status an
 - NEU: Redirect-Seiten `gp.html` und `mobile.html` leiten auf `index.html` um (Kompatibilität mit alten URLs)
 - NEU: Erweiterte Settings-Verwaltung
+- NEU: Einheitlicher `[YYYY-MM-DD HH:MM:SS]`-Zeitstempel auf jeder Serial-Log-Zeile (vor NTP-Sync epochenbasiert, konsistentes Format)
+- NEU: Optional aktivierbare Heap-Instrumentierung (`HEAP_MARK` / `HEAP_SCOPE` / `heapTick`) mit Ringbuffer, auslesbar über `/api/diagnostics.heapLog`; Default aus, keine Last im Normalbetrieb
+- NEU: Build-Skript `get_version.py` mit Build-Counter und Source-Hash-Tracking — der Zähler wird nur bei echten Source-Änderungen erhöht und als `+bN` an die Version angehängt, Per-Environment-Versionen werden in `build_versions.json` abgelegt
 
 - NEU: Automatisierte Hardware-in-the-Loop Test Suite (`pytest` + `pyserial`) für Build-, Flash-, Boot-, Messaging-, Peer- und Routing-Tests
 - NEU: Node-Konfiguration per YAML und automatischer Build-/Flash-/Reboot-Ablauf für Tests
