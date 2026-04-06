@@ -50,7 +50,7 @@ bool checkUDP(Frame &f) {
                 udpPeers.push_back(senderIP);
                 udpPeerLegacy.push_back(!hasSyncword);
                 udpPeerEnabled.push_back(true);
-                udpPeerCall.push_back(strlen(f.nodeCall) > 0 ? String(f.nodeCall) : "");
+                udpPeerCall.push_back(UdpPeerCallsign(f.nodeCall));
                 saveUdpPeers();
                 logPrintf(LOG_INFO, "UDP", "UDP peer registered from announce: %d.%d.%d.%d (%s)",
                     senderIP[0], senderIP[1], senderIP[2], senderIP[3], f.nodeCall);
@@ -61,7 +61,7 @@ bool checkUDP(Frame &f) {
                 udpPeers.push_back(senderIP);
                 udpPeerLegacy.push_back(true);
                 udpPeerEnabled.push_back(true);
-                udpPeerCall.push_back(strlen(f.nodeCall) > 0 ? String(f.nodeCall) : "");
+                udpPeerCall.push_back(UdpPeerCallsign(f.nodeCall));
                 saveUdpPeers();
                 logPrintf(LOG_INFO, "UDP", "UDP legacy peer auto-registered: %d.%d.%d.%d (%s)",
                     senderIP[0], senderIP[1], senderIP[2], senderIP[3], f.nodeCall);
@@ -73,7 +73,7 @@ bool checkUDP(Frame &f) {
 
         // Learn callsign for known peer (even if peer was already registered)
         if (peerIdx >= 0 && strlen(f.nodeCall) > 0) {
-            while ((size_t)peerIdx >= udpPeerCall.size()) udpPeerCall.push_back("");
+            while ((size_t)peerIdx >= udpPeerCall.size()) udpPeerCall.push_back(UdpPeerCallsign());
             if (udpPeerCall[peerIdx] != f.nodeCall) {
                 udpPeerCall[peerIdx] = f.nodeCall;
                 sendSettings();  // Update WebUI

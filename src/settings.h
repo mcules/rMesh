@@ -62,7 +62,16 @@ struct ExtSettings {
 extern std::vector<IPAddress> udpPeers;
 extern std::vector<bool> udpPeerLegacy;
 extern std::vector<bool> udpPeerEnabled;
-extern std::vector<String> udpPeerCall;  // Callsign of UDP peer (RAM, learned on RX)
+// Fixed-size callsign type avoids heap-fragmenting String allocations on the UDP RX path
+struct UdpPeerCallsign {
+    char call[MAX_CALLSIGN_LENGTH + 1];
+    UdpPeerCallsign() { call[0] = '\0'; }
+    UdpPeerCallsign(const char* s) { strlcpy(call, s ? s : "", sizeof(call)); }
+    const char* c_str() const { return call; }
+    bool operator!=(const char* s) const { return strcmp(call, s) != 0; }
+    UdpPeerCallsign& operator=(const char* s) { strlcpy(call, s ? s : "", sizeof(call)); return *this; }
+};
+extern std::vector<UdpPeerCallsign> udpPeerCall;
 
 // Dynamic WiFi network list (unlimited, stored separately in NVS)
 // NVS key "wifiNetworks": [count:1][ssid:64][password:64][favorite:1] per entry

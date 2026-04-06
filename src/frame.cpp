@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <ArduinoJson.h>
 
 #include "frame.h"
@@ -85,49 +86,78 @@ size_t Frame::exportBinary(uint8_t* data, size_t length) {
 }
 
 void Frame::monitorJSON() {
-    //Write monitor data to JSON buffer
-    JsonDocument doc;
-    // for (size_t i = 0; i < messageLength; i++) {
-    //     doc["monitor"]["message"][i] = message[i];
-    // }    
-    if ((messageLength > 0) && ((messageType == Frame::MessageTypes::TEXT_MESSAGE) || (messageType == Frame::MessageTypes::TRACE_MESSAGE))) {
-        char text[messageLength + 1];
-        safeUtf8Copy(text, (uint8_t*)message, messageLength, messageLength + 1);
-        doc["monitor"]["text"] = text;
-    }
-    doc["monitor"]["messageType"] = messageType;
-    doc["monitor"]["messageLength"] = messageLength;
-    doc["monitor"]["tx"] = tx;
-    if (tx == false) {
-        doc["monitor"]["rssi"] = rssi;
-        doc["monitor"]["snr"] = snr;
-        doc["monitor"]["frqError"] = frqError;
-    }
-    doc["monitor"]["timestamp"] = timestamp;
-    if (strlen(srcCall) > 0) {doc["monitor"]["srcCall"] = srcCall;}
-    if (strlen(dstGroup) > 0) {doc["monitor"]["dstGroup"] = dstGroup;}
-    if (strlen(dstCall) > 0) {doc["monitor"]["dstCall"] = dstCall;}
-    if (strlen(viaCall) > 0) {doc["monitor"]["viaCall"] = viaCall;}
-    if (strlen(nodeCall) > 0) {doc["monitor"]["nodeCall"] = nodeCall;}
-    doc["monitor"]["frameType"] = frameType;
-    doc["monitor"]["id"] = id;
-    doc["monitor"]["hopCount"] = hopCount;
-    doc["monitor"]["initRetry"] = initRetry;
-    doc["monitor"]["retry"] = retry;
-    doc["monitor"]["port"] = port;
-
-    size_t len = measureJson(doc);
-    if (len == 0) return;
     #ifdef HAS_WIFI
-    char* buf = (char*)malloc(len + 1);
-    if (buf) {
-        serializeJson(doc, buf, len + 1);
-        wsBroadcast(buf, len);
-        free(buf);
+    if (ESP.getFreeHeap() < 40000) return;
+
+    // Rate-limit: max 2 monitor messages per second to reduce heap pressure
+    // from WebSocket shared_ptr allocations
+    static uint32_t lastMonitorMs = 0;
+    static uint8_t  monitorCount  = 0;
+    uint32_t now = millis();
+    if ((int32_t)(now - lastMonitorMs) >= 500) {
+        lastMonitorMs = now;
+        monitorCount = 0;
+    }
+    if (++monitorCount > 2) return;
+
+    // Build monitor JSON directly into static buffer (no heap JsonDocument).
+    // Only called from the main loop, so a static buffer is safe.
+    static char buf[512];
+    int pos = 0;
+    const int cap = (int)sizeof(buf);
+
+    pos += snprintf(buf + pos, cap - pos, "{\"monitor\":{");
+
+    if (messageLength > 0 && messageLength <= sizeof(message) &&
+        (messageType == Frame::MessageTypes::TEXT_MESSAGE || messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
+        char text[261];
+        size_t safeLen = messageLength < sizeof(text) ? messageLength : sizeof(text) - 1;
+        safeUtf8Copy(text, (uint8_t*)message, safeLen, sizeof(text));
+        pos += snprintf(buf + pos, cap - pos, "\"text\":\"");
+        // JSON-escape the text inline
+        for (const char *p = text; *p && pos + 7 < cap; p++) {
+            switch (*p) {
+                case '"':  buf[pos++] = '\\'; buf[pos++] = '"';  break;
+                case '\\': buf[pos++] = '\\'; buf[pos++] = '\\'; break;
+                case '\n': buf[pos++] = '\\'; buf[pos++] = 'n';  break;
+                case '\r': buf[pos++] = '\\'; buf[pos++] = 'r';  break;
+                case '\t': buf[pos++] = '\\'; buf[pos++] = 't';  break;
+                default:
+                    if ((uint8_t)*p < 0x20)
+                        pos += snprintf(buf + pos, cap - pos, "\\u%04x", (uint8_t)*p);
+                    else
+                        buf[pos++] = *p;
+            }
+        }
+        pos += snprintf(buf + pos, cap - pos, "\",");
+    }
+
+    pos += snprintf(buf + pos, cap - pos,
+        "\"messageType\":%u,\"messageLength\":%u,\"tx\":%s",
+        (unsigned)messageType, (unsigned)messageLength, tx ? "true" : "false");
+
+    if (!tx) {
+        pos += snprintf(buf + pos, cap - pos,
+            ",\"rssi\":%.1f,\"snr\":%.1f,\"frqError\":%.1f", rssi, snr, frqError);
+    }
+
+    pos += snprintf(buf + pos, cap - pos, ",\"timestamp\":%ld", (long)timestamp);
+
+    if (srcCall[0])  pos += snprintf(buf + pos, cap - pos, ",\"srcCall\":\"%s\"", srcCall);
+    if (dstGroup[0]) pos += snprintf(buf + pos, cap - pos, ",\"dstGroup\":\"%s\"", dstGroup);
+    if (dstCall[0])  pos += snprintf(buf + pos, cap - pos, ",\"dstCall\":\"%s\"", dstCall);
+    if (viaCall[0])  pos += snprintf(buf + pos, cap - pos, ",\"viaCall\":\"%s\"", viaCall);
+    if (nodeCall[0]) pos += snprintf(buf + pos, cap - pos, ",\"nodeCall\":\"%s\"", nodeCall);
+
+    pos += snprintf(buf + pos, cap - pos,
+        ",\"frameType\":%u,\"id\":%lu,\"hopCount\":%u,\"initRetry\":%u,\"retry\":%u,\"port\":%u}}",
+        (unsigned)frameType, (unsigned long)id, (unsigned)hopCount,
+        (unsigned)initRetry, (unsigned)retry, (unsigned)port);
+
+    if (pos > 0 && pos < cap) {
+        wsBroadcast(buf, pos);
     }
     #endif
-
-
 }
 
 /**

@@ -22,19 +22,18 @@ void loadPasswordHash() {
 }
 
 // ── Store password hash in NVS ────────────────────────────────────────────
-void savePasswordHash(const String& hash) {
+void savePasswordHash(const char* hash) {
     webPasswordHash = hash;
     Preferences p;
     p.begin("rmesh_auth", false);
-    p.putString("webPwdHash", hash.c_str());
+    p.putString("webPwdHash", hash);
     p.end();
 }
 
 // ── Generate random nonce and store in session ────────────────────
-String generateNonce(uint32_t clientId) {
+void generateNonce(uint32_t clientId, char* buf) {
     uint8_t bytes[16];
     esp_fill_random(bytes, sizeof(bytes));
-    char buf[33];
     for (int i = 0; i < 16; i++) sprintf(buf + 2 * i, "%02x", bytes[i]);
     buf[32] = '\0';
 
@@ -44,7 +43,6 @@ String generateNonce(uint32_t clientId) {
             break;
         }
     }
-    return String(buf);
 }
 
 // ── Is a client authenticated? ──────────────────────────────────────────
@@ -102,9 +100,9 @@ void removeClientAuth(uint32_t clientId) {
 
 // ── Verify HMAC response ───────────────────────────────────────────────────────
 // Expected: HMAC-SHA256(key=SHA256(password), data=nonce) as 64-char hex
-bool verifyAuthResponse(uint32_t clientId, const String& response) {
+bool verifyAuthResponse(uint32_t clientId, const char* response) {
     if (webPasswordHash.isEmpty()) return true;
-    if (response.length() != 64)  return false;
+    if (strlen(response) != 64)   return false;
 
     // Find nonce for this client
     char nonce[33] = {0};
@@ -141,7 +139,7 @@ bool verifyAuthResponse(uint32_t clientId, const String& response) {
     for (int i = 0; i < 32; i++) sprintf(expected + 2 * i, "%02x", hmacResult[i]);
     expected[64] = '\0';
 
-    return response.equalsIgnoreCase(String(expected));
+    return strncasecmp(response, expected, 64) == 0;
 }
 
 #else

@@ -614,7 +614,7 @@ void checkSerialRX() {
                             char hexHash[65];
                             for (int i = 0; i < 32; i++) sprintf(hexHash + 2 * i, "%02x", hash[i]);
                             hexHash[64] = '\0';
-                            savePasswordHash(String(hexHash));
+                            savePasswordHash(hexHash);
                             logPrintf(LOG_INFO, "Config", "WebUI password set.");
                         }
                     } else {

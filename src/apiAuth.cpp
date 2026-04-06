@@ -26,27 +26,36 @@ static bool constantTimeCompare(const char* a, const char* b, size_t len) {
     return diff == 0;
 }
 
-static bool verifyHmac(const String& authHeader, const String& method, const String& path) {
+static bool verifyHmac(const char* authHeader, const char* method, const char* path) {
     // Parse "HMAC timestamp:signature"
-    if (!authHeader.startsWith("HMAC ")) return false;
-    String payload = authHeader.substring(5);
-    int colonPos = payload.indexOf(':');
-    if (colonPos < 0) return false;
+    if (strncmp(authHeader, "HMAC ", 5) != 0) return false;
+    const char* payload = authHeader + 5;
+    const char* colon = strchr(payload, ':');
+    if (!colon) return false;
 
-    String timestamp = payload.substring(0, colonPos);
-    String clientSig = payload.substring(colonPos + 1);
+    // Extract timestamp (max 12 digits)
+    size_t tsLen = colon - payload;
+    if (tsLen == 0 || tsLen > 12) return false;
+    char timestamp[16];
+    memcpy(timestamp, payload, tsLen);
+    timestamp[tsLen] = '\0';
 
-    if (clientSig.length() != 64) return false;
+    // Extract signature (must be exactly 64 hex chars)
+    const char* clientSig = colon + 1;
+    if (strlen(clientSig) != 64) return false;
 
     // Check timestamp window (+-60 seconds)
-    long ts = timestamp.toInt();
+    long ts = atol(timestamp);
     long now = (long)time(nullptr);
     long delta = now - ts;
     if (delta < 0) delta = -delta;
     if (now > 1000000000L && delta > 60) return false;
 
     // Compute expected signature: HMAC-SHA256(webPasswordHash bytes, "timestamp:METHOD:path")
-    String message = timestamp + ":" + method + ":" + path;
+    // Build message into stack buffer: "timestamp:METHOD:path"
+    char message[256];
+    int msgLen = snprintf(message, sizeof(message), "%s:%s:%s", timestamp, method, path);
+    if (msgLen < 0 || msgLen >= (int)sizeof(message)) return false;
 
     if (webPasswordHash.length() < 64) return false;
     uint8_t key[32];
@@ -57,7 +66,7 @@ static bool verifyHmac(const String& authHeader, const String& method, const Str
     mbedtls_md_init(&ctx);
     mbedtls_md_setup(&ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 1);
     mbedtls_md_hmac_starts(&ctx, key, 32);
-    mbedtls_md_hmac_update(&ctx, (const uint8_t*)message.c_str(), message.length());
+    mbedtls_md_hmac_update(&ctx, (const uint8_t*)message, msgLen);
     mbedtls_md_hmac_finish(&ctx, hmacResult);
     mbedtls_md_free(&ctx);
 
@@ -66,15 +75,15 @@ static bool verifyHmac(const String& authHeader, const String& method, const Str
     for (int i = 0; i < 32; i++) sprintf(expected + 2 * i, "%02x", hmacResult[i]);
     expected[64] = '\0';
 
-    return constantTimeCompare(expected, clientSig.c_str(), 64);
+    return constantTimeCompare(expected, clientSig, 64);
 }
 
-static bool verifyBearer(const String& authHeader) {
-    if (!authHeader.startsWith("Bearer ")) return false;
-    String token = authHeader.substring(7);
-    if (token.length() != webPasswordHash.length()) return false;
-    // Constant-time compare for bearer token too
-    return constantTimeCompare(token.c_str(), webPasswordHash.c_str(), token.length());
+static bool verifyBearer(const char* authHeader) {
+    if (strncmp(authHeader, "Bearer ", 7) != 0) return false;
+    const char* token = authHeader + 7;
+    size_t tokenLen = strlen(token);
+    if (tokenLen != webPasswordHash.length()) return false;
+    return constantTimeCompare(token, webPasswordHash.c_str(), tokenLen);
 }
 
 bool checkApiAuth(AsyncWebServerRequest *request) {
@@ -99,12 +108,10 @@ bool checkApiAuth(AsyncWebServerRequest *request) {
     String auth = request->header("Authorization");
 
     bool ok = false;
-    if (auth.startsWith("HMAC ")) {
-        String method = request->methodToString();
-        String path = request->url();
-        ok = verifyHmac(auth, method, path);
-    } else if (auth.startsWith("Bearer ")) {
-        ok = verifyBearer(auth);
+    if (strncmp(auth.c_str(), "HMAC ", 5) == 0) {
+        ok = verifyHmac(auth.c_str(), request->methodToString(), request->url().c_str());
+    } else if (strncmp(auth.c_str(), "Bearer ", 7) == 0) {
+        ok = verifyBearer(auth.c_str());
     }
 
     if (!ok) {

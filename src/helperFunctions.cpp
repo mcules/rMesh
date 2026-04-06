@@ -249,79 +249,81 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
 // }
 
 
-void addJSONtoFileTask(void * pvParameters) {
-    FileWriteParams* p = (FileWriteParams*) pvParameters;
-    // Wait until the filesystem is free (max 30 seconds)
-    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-        // Check free space before writing (ESP32 only — nRF52 InternalFS has no totalBytes())
-        #ifndef NRF52_PLATFORM
-        size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
-        if (freeSpace < FS_MIN_FREE_BYTES) {
-            logPrintf(LOG_WARN, "FS", "Low space (%u bytes free) — skipping write, requesting trim", freeSpace);
-            trimNeeded = true;
-            xSemaphoreGive(fsMutex);
-            if (p->content != nullptr) free(p->content);
-            delete p;
-            vTaskDelete(NULL);
-            return;
-        }
-        #endif
+// ── Single file-write worker task with static ring buffer ────────────────────
+// Zero heap allocation: uses a fixed-size ring buffer in BSS instead of
+// malloc/free per write.  Each slot holds up to 1024 bytes of content.
 
-        // Open file in append mode ("a")
-        // If the file does not exist, it will be created automatically.
-        File file = LittleFS.open(p->fileName, "a");
-        if (file) {
-            if (p->content != nullptr && p->length > 0) {
-                // Write the new content to the end
-                file.write((const uint8_t*)p->content, p->length);
-                file.print("\n"); // Newline for the next entry
+#define FW_SLOTS     16
+#define FW_CONTENT   1024
+
+struct FileWriteSlot {
+    char content[FW_CONTENT];
+    char fileName[32];
+    size_t length;
+};
+
+static FileWriteSlot  fwSlots[FW_SLOTS];
+static QueueHandle_t  fwQueue = NULL;  // queue of slot indices (uint8_t)
+
+static void fileWriteWorkerTask(void *) {
+    uint8_t idx;
+    for (;;) {
+        if (xQueueReceive(fwQueue, &idx, portMAX_DELAY) != pdTRUE) continue;
+        FileWriteSlot &s = fwSlots[idx];
+        if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
+            #ifndef NRF52_PLATFORM
+            size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+            if (freeSpace < FS_MIN_FREE_BYTES) {
+                logPrintf(LOG_WARN, "FS", "Low space (%u bytes free) — skipping write, requesting trim", freeSpace);
+                trimNeeded = true;
+                xSemaphoreGive(fsMutex);
+                continue;
             }
-            file.close();
+            #endif
+
+            File file = LittleFS.open(s.fileName, "a");
+            if (file) {
+                if (s.length > 0) {
+                    file.write((const uint8_t*)s.content, s.length);
+                    file.print("\n");
+                }
+                file.close();
+            } else {
+                logPrintf(LOG_ERROR, "FS", "Could not open file %s for appending", s.fileName);
+            }
+            xSemaphoreGive(fsMutex);
         } else {
-            logPrintf(LOG_ERROR, "FS", "Could not open file %s for appending", p->fileName);
+            logPrintf(LOG_ERROR, "FS", "fsMutex timeout in fileWriteWorker");
         }
-        xSemaphoreGive(fsMutex); // Release semaphore
-    } else {
-        logPrintf(LOG_ERROR, "FS", "fsMutex timeout in addJSONtoFileTask");
     }
-   // Memory cleanup
-    if (p->content != nullptr) {
-        free(p->content);
-    }
-    delete p;
-    // End task
-    vTaskDelete(NULL);
 }
 
+void initFileWriteWorker() {
+    fwQueue = xQueueCreate(FW_SLOTS, sizeof(uint8_t));
+    xTaskCreate(fileWriteWorkerTask, "FileWriter", 4096, NULL, 1, NULL);
+}
+
+static uint8_t fwNextSlot = 0;
 
 void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
-    // Prepare parameters for the task
-    FileWriteParams* p = new FileWriteParams();
-    if (p == nullptr) {
-        logPrintf(LOG_ERROR, "FS", "addJSONtoFile: new FileWriteParams failed");
-        return;
+    if (!fwQueue) return;
+    if (length > FW_CONTENT) {
+        logPrintf(LOG_WARN, "FS", "addJSONtoFile: content too large (%u > %u)", length, FW_CONTENT);
+        length = FW_CONTENT;
     }
-    // 1. Inhalt kopieren
-    p->content = (char*)malloc(length);
-    if (p->content != nullptr) {
-        memcpy(p->content, buffer, length);
-        p->length = length;
-    } else {
-        logPrintf(LOG_ERROR, "FS", "addJSONtoFile: malloc content failed");
-        p->length = 0;
+
+    uint8_t idx = fwNextSlot;
+    fwNextSlot = (fwNextSlot + 1) % FW_SLOTS;
+
+    FileWriteSlot &s = fwSlots[idx];
+    memcpy(s.content, buffer, length);
+    s.length = length;
+    strncpy(s.fileName, file, sizeof(s.fileName) - 1);
+    s.fileName[sizeof(s.fileName) - 1] = '\0';
+
+    if (xQueueSend(fwQueue, &idx, pdMS_TO_TICKS(5000)) != pdTRUE) {
+        logPrintf(LOG_ERROR, "FS", "File write queue full after 5s, dropping write");
     }
-    // 2. Copy filename (THIS WAS MISSING)
-    strncpy(p->fileName, file, sizeof(p->fileName) - 1);
-    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Ensure null termination
-    p->maxLines = lines;
-    xTaskCreate(
-        addJSONtoFileTask, 
-        "FileWriteTask", 
-        8192,      
-        p,         
-        1,         
-        NULL
-    );
 }
 
 
@@ -340,13 +342,13 @@ void trimFileTask(void * pvParameters) {
         }
         xSemaphoreGive(fsMutex);
     } else {
-        delete p;
+        free(p);
         vTaskDelete(NULL);
         return;
     }
 
     if (lineCount <= p->maxLines) {
-        delete p;
+        free(p);
         vTaskDelete(NULL);
         return;
     }
@@ -358,20 +360,12 @@ void trimFileTask(void * pvParameters) {
         File dstFile = LittleFS.open("/temp_trim.json", "w");
 
         if (srcFile && dstFile) {
-            char* lineBuffer = (char*)malloc(4096);
-            if (lineBuffer == nullptr) {
-                srcFile.close();
-                dstFile.close();
-                xSemaphoreGive(fsMutex);
-                delete p;
-                vTaskDelete(NULL);
-                return;
-            }
-
+            // Stack buffer (task has 8192 stack) avoids heap malloc/free
+            char lineBuffer[1024];
             size_t currentLine = 0;
 
             while (srcFile.available()) {
-                int len = srcFile.readBytesUntil('\n', lineBuffer, 4096);
+                int len = srcFile.readBytesUntil('\n', lineBuffer, sizeof(lineBuffer));
 
                 if (currentLine >= linesToSkip) {
                     dstFile.write((const uint8_t*)lineBuffer, len);
@@ -382,8 +376,6 @@ void trimFileTask(void * pvParameters) {
 
             srcFile.close();
             dstFile.close();
-            free(lineBuffer);
-            lineBuffer = nullptr;
 
             LittleFS.remove(p->fileName);
             LittleFS.rename("/temp_trim.json", p->fileName);
@@ -395,19 +387,19 @@ void trimFileTask(void * pvParameters) {
         xSemaphoreGive(fsMutex);
     }
 
-    delete p;
+    free(p);
     vTaskDelete(NULL);
 }
 
 
 void trimFile(const char* fileName, size_t maxLines) {
-    FileWriteParams* p = new FileWriteParams();
+    FileWriteParams* p = (FileWriteParams*)malloc(sizeof(FileWriteParams));
     if (p == nullptr) {
-        logPrintf(LOG_ERROR, "FS", "trimFile: new FileWriteParams failed");
+        logPrintf(LOG_ERROR, "FS", "trimFile: malloc failed");
         return;
     }
     strncpy(p->fileName, fileName, sizeof(p->fileName) - 1);
-    p->fileName[sizeof(p->fileName) - 1] = '\0'; // Force null termination
+    p->fileName[sizeof(p->fileName) - 1] = '\0';
     p->maxLines = (uint16_t)maxLines;
     p->content = nullptr;
     p->length = 0;
