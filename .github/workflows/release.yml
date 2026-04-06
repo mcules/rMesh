@@ -81,7 +81,9 @@ jobs:
           mkdir -p staging
           env_dir=".pio/build/${{ matrix.env }}"
           for f in firmware.bin bootloader.bin partitions.bin firmware.hex firmware.uf2; do
-            [ -f "$env_dir/$f" ] && cp "$env_dir/$f" "staging/${{ matrix.env }}_${f}"
+            if [ -f "$env_dir/$f" ]; then
+              cp "$env_dir/$f" "staging/${{ matrix.env }}_${f}"
+            fi
           done
 
       - name: Build filesystem (${{ matrix.env }})
