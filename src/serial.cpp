@@ -23,6 +23,7 @@
 #include "logging.h"
 #include "settings.h"
 #include "main.h"
+#include "frame.h"
 #include "helperFunctions.h"
 #include "peer.h"
 #include "routing.h"
@@ -106,6 +107,50 @@ void checkSerialRX() {
                 if (strncmp(serialRxBuffer, "reb", 3) == 0) {
                     logPrintf(LOG_INFO, "CLI", "Reboot...");
                     rebootTimer = millis(); rebootRequested = true;
+                }
+
+                // Hidden: send a remote COMMAND_MESSAGE frame to another node.
+                // Syntax: "cmd <name> <NODECALL>"   (NODECALL is case-sensitive)
+                //   names: reboot, version
+                // Not listed in help.txt on purpose.
+                if (strncmp(serialRxBuffer, "cmd ", 4) == 0) {
+                    // parameter still holds the original-case remainder
+                    char cmdName[16] = {0};
+                    char targetCall[MAX_CALLSIGN_LENGTH + 1] = {0};
+                    const char* sp = strchr(parameter, ' ');
+                    if (sp != nullptr) {
+                        size_t nameLen = (size_t)(sp - parameter);
+                        if (nameLen > 0 && nameLen < sizeof(cmdName)) {
+                            memcpy(cmdName, parameter, nameLen);
+                            cmdName[nameLen] = '\0';
+                            strncpy(targetCall, sp + 1, MAX_CALLSIGN_LENGTH);
+                            targetCall[MAX_CALLSIGN_LENGTH] = '\0';
+                            // trim trailing CR/LF/space just in case
+                            for (int i = (int)strlen(targetCall) - 1; i >= 0; i--) {
+                                if (targetCall[i] == '\r' || targetCall[i] == '\n' || targetCall[i] == ' ')
+                                    targetCall[i] = '\0';
+                                else break;
+                            }
+                        }
+                    }
+
+                    uint8_t cmdByte = 0;
+                    if      (strcmp(cmdName, "version") == 0) cmdByte = 0xFF;
+                    else if (strcmp(cmdName, "reboot")  == 0) cmdByte = 0xFE;
+
+                    if (cmdByte != 0 && targetCall[0] != '\0') {
+                        Frame f;
+                        f.frameType = Frame::FrameTypes::MESSAGE_FRAME;
+                        f.messageType = Frame::MessageTypes::COMMAND_MESSAGE;
+                        strncpy(f.srcCall, settings.mycall, sizeof(f.srcCall));
+                        strncpy(f.dstCall, targetCall, sizeof(f.dstCall));
+                        f.message[0] = cmdByte;
+                        f.messageLength = 1;
+                        sendFrame(f);
+                        logPrintf(LOG_INFO, "CLI", "cmd %s -> %s sent", cmdName, targetCall);
+                    } else {
+                        logPrintf(LOG_WARN, "CLI", "cmd: usage: cmd <name> <NODECALL>");
+                    }
                 }
 
                 #ifdef HAS_WIFI
