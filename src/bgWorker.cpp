@@ -2,9 +2,15 @@
 #include "logging.h"
 #include "heapdbg.h"
 
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <freertos/queue.h>
+#ifdef ESP32
+  #include <freertos/FreeRTOS.h>
+  #include <freertos/task.h>
+  #include <freertos/queue.h>
+#else
+  #include <FreeRTOS.h>
+  #include <task.h>
+  #include <queue.h>
+#endif
 
 #define BG_QUEUE_SIZE   8
 #define BG_STACK_BYTES  8192
