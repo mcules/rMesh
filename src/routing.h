@@ -18,5 +18,6 @@ void sendRoutingList();
 void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount);
 bool checkRoute(char* srcCall, char* viaCall);
 void getRoute(const char* dstCall, char* viaCall, size_t len);
+void removeDirectRoute(const char* call);
 
 

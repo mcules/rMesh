@@ -104,6 +104,8 @@ void checkPeerList() {
                 update = true;
                 logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"snr\",\"snr\":%.1f,\"min_snr\":%d}",
                         peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
+                // Drop the direct-neighbor route so a multi-hop alternative via a stronger peer can take over
+                removeDirectRoute(peer.nodeCall);
             }
         }
     }
@@ -188,6 +190,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
         bool effectiveAvailable = available;
         if (available && it->port == 0 && extSettings.minSnr > -20 && it->snr < extSettings.minSnr) {
             effectiveAvailable = false;
+            removeDirectRoute(it->nodeCall);
         }
 
         // Reject availability while cooldown is active (retry exhaustion)

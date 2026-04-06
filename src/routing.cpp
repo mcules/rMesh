@@ -31,6 +31,21 @@ void getRoute(const char* dstCall, char* viaCall, size_t len) {
     } 
 }
 
+void removeDirectRoute(const char* call) {
+    // Remove a direct-neighbor route entry (srcCall == viaCall == call, hopCount 0)
+    // so that an alternative multi-hop route can be learned via another peer.
+    auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) {
+        return (strcmp(r.srcCall, call) == 0) && (strcmp(r.viaCall, call) == 0);
+    });
+    if (it != routingList.end()) {
+        logPrintf(LOG_INFO, "Route", "Removing direct route to %s (SNR below threshold)", call);
+        routingList.erase(it);
+        routesDirty = true;
+        sendRoutingList();
+        markTopologyChanged();
+    }
+}
+
 bool checkRoute(char* srcCall, char* viaCall) {
     //Search routing list
     auto it = std::find_if(routingList.begin(), routingList.end(), [&](const Route& r) { return (strcmp(r.srcCall, srcCall) == 0) && (strcmp(r.viaCall, viaCall) == 0); });
