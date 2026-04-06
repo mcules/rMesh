@@ -198,50 +198,146 @@ var authNonce    = "";
 
 // ── Render functions (shared between WebSocket push and API fetch) ───────────
 
+var peerSort = { key: null, dir: 1 };
+var routingSort = { key: null, dir: 1 };
+var peerFilter = "";
+var routingFilter = "";
+
+function setPeerFilter(v) {
+    peerFilter = v.toLowerCase();
+    if (lastPeerData) renderPeerList(lastPeerData);
+}
+function setRoutingFilter(v) {
+    routingFilter = v.toLowerCase();
+    if (lastRoutingData) renderRoutingList(lastRoutingData);
+}
+
+function ensureTableSkeleton(containerId, tableId, filterId, colspan, placeholder, setter) {
+    var c = document.getElementById(containerId);
+    if (document.getElementById(tableId)) return;
+    var html = "<table id='" + tableId + "' class='mesh-table' style='width:95%;max-width:800px;'>"
+             + "<thead>"
+             + "<tr class='filter-row'><th colspan='" + colspan + "' style='padding:6px 8px;background:#2e2e2e;text-transform:none;letter-spacing:normal;'>"
+             + "<input id='" + filterId + "' type='text' placeholder='" + placeholder + "' "
+             + "style='width:100%;box-sizing:border-box;padding:6px 8px;background:#1e1e1e;color:#e0e0e0;border:1px solid #555;border-radius:3px;font-size:0.95em;' />"
+             + "</th></tr>"
+             + "<tr class='header-row'></tr>"
+             + "</thead><tbody></tbody></table>";
+    c.innerHTML = html;
+    var inp = document.getElementById(filterId);
+    inp.addEventListener('input', function() { window[setter](this.value); });
+}
+
+function sortBy(arr, key, dir) {
+    if (!key) return arr;
+    return arr.slice().sort(function(a, b) {
+        var av = a[key], bv = b[key];
+        if (av == null) av = "";
+        if (bv == null) bv = "";
+        if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
+        return String(av).localeCompare(String(bv), undefined, {numeric: true}) * dir;
+    });
+}
+
+function setPeerSort(key) {
+    if (peerSort.key === key) peerSort.dir = -peerSort.dir;
+    else { peerSort.key = key; peerSort.dir = 1; }
+    if (lastPeerData) renderPeerList(lastPeerData);
+}
+
+function setRoutingSort(key) {
+    if (routingSort.key === key) routingSort.dir = -routingSort.dir;
+    else { routingSort.key = key; routingSort.dir = 1; }
+    if (lastRoutingData) renderRoutingList(lastRoutingData);
+}
+
+function sortIndicator(sort, key) {
+    if (sort.key !== key) return "";
+    return sort.dir > 0 ? " \u25B2" : " \u25BC";
+}
+
+var lastPeerData = null;
+var lastRoutingData = null;
+
 function renderPeerList(data) {
+    lastPeerData = data;
     var peerArray = data.peers || (data.peerlist && data.peerlist.peers) || [];
-    var peers = "";
-    peers += "<table class='mesh-table'>";
-    peers += "<thead><tr><th>" + t('peer.port') + "</th><th>" + t('peer.call') + "</th><th>" + t('peer.last_rx') + "</th><th>" + t('peer.rssi') + "</th><th>" + t('peer.snr') + "</th><th>" + t('peer.frq_err') + "</th></tr></thead>";
-    peers += "<tbody>";
+    // Normalize timestamp for sorting
+    peerArray = peerArray.map(function(p) {
+        var ts = p.timestamp || p.lastSeen || 0;
+        return Object.assign({}, p, { _ts: ts, _port: (p.port == 0) ? "LoRa" : "Wifi", _frq: parseInt(p.frqError || 0) });
+    });
+    if (peerFilter) {
+        peerArray = peerArray.filter(function(p) {
+            return (String(p.call || "") + " " + p._port + " " + p.rssi + " " + p.snr).toLowerCase().indexOf(peerFilter) !== -1;
+        });
+    }
+    peerArray = sortBy(peerArray, peerSort.key, peerSort.dir);
+    ensureTableSkeleton("peer", "peerTable", "peerFilterInput", 6, t('filter.search'), "setPeerFilter");
+    var headerRow = document.querySelector("#peerTable .header-row");
+    headerRow.innerHTML = ""
+        + "<th style='cursor:pointer' onclick=\"setPeerSort('_port')\">" + t('peer.port') + sortIndicator(peerSort, '_port') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setPeerSort('call')\">" + t('peer.call') + sortIndicator(peerSort, 'call') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setPeerSort('_ts')\">" + t('peer.last_rx') + sortIndicator(peerSort, '_ts') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setPeerSort('rssi')\">" + t('peer.rssi') + sortIndicator(peerSort, 'rssi') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setPeerSort('snr')\">" + t('peer.snr') + sortIndicator(peerSort, 'snr') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setPeerSort('_frq')\">" + t('peer.frq_err') + sortIndicator(peerSort, '_frq') + "</th>";
+    var body = "";
     peerArray.forEach(function(p) {
         var port = (p.port == 0) ? "LoRa" : "Wifi";
         var ts = p.timestamp || p.lastSeen || 0;
         var lastRX = new Date(ts * 1000);
-        peers += "<tr>";
-        peers += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span>";
-        if (p.preferred === true) peers += " <span class='badge-preferred' title='" + t('peer.preferred') + "'>&#9733;</span>";
-        peers += "</td>";
+        body += "<tr>";
+        body += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span>";
+        if (p.preferred === true) body += " <span class='badge-preferred' title='" + t('peer.preferred') + "'>&#9733;</span>";
+        body += "</td>";
         var cls = p.available ? 'green' : (p.preferred === false ? 'suppressed' : 'red');
-        peers += "<td class='" + cls + "'>" + esc(p.call) + "</td>";
-        peers += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "") + "</td>";
-        peers += "<td>" + p.rssi + "</td>";
-        peers += "<td>" + p.snr + "</td>";
-        peers += "<td>" + parseInt(p.frqError || 0) + "</td>";
-        peers += "</tr>";
+        body += "<td class='" + cls + "'>" + esc(p.call) + "</td>";
+        body += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "") + "</td>";
+        body += "<td>" + p.rssi + "</td>";
+        body += "<td>" + p.snr + "</td>";
+        body += "<td>" + parseInt(p.frqError || 0) + "</td>";
+        body += "</tr>";
     });
-    peers += "</tbody></table>";
-    document.getElementById("peer").innerHTML = peers;
+    document.querySelector("#peerTable tbody").innerHTML = body;
 }
 
 function renderRoutingList(data) {
+    lastRoutingData = data;
     var routeArray = data.routes || (data.routingList && data.routingList.routes) || [];
-    var routing = "";
-    routing += "<table class='mesh-table'>";
-    routing += "<thead><tr><th>" + t('route.call') + "</th><th>" + t('route.node') + "</th><th>" + t('route.hops') + "</th><th>" + t('route.last_rx') + "</th></tr></thead>";
-    routing += "<tbody>";
+    routeArray = routeArray.map(function(r) {
+        return Object.assign({}, r, {
+            _src: r.srcCall || r.dest || "",
+            _via: r.viaCall || r.via || "",
+            _hops: (r.hopCount != null ? r.hopCount : (r.hops || 0)),
+            _ts: r.timestamp || 0
+        });
+    });
+    if (routingFilter) {
+        routeArray = routeArray.filter(function(r) {
+            return (r._src + " " + r._via + " " + r._hops).toLowerCase().indexOf(routingFilter) !== -1;
+        });
+    }
+    routeArray = sortBy(routeArray, routingSort.key, routingSort.dir);
+    ensureTableSkeleton("routing", "routingTable", "routingFilterInput", 4, t('filter.search'), "setRoutingFilter");
+    var headerRow = document.querySelector("#routingTable .header-row");
+    headerRow.innerHTML = ""
+        + "<th style='cursor:pointer' onclick=\"setRoutingSort('_src')\">" + t('route.call') + sortIndicator(routingSort, '_src') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setRoutingSort('_via')\">" + t('route.node') + sortIndicator(routingSort, '_via') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setRoutingSort('_hops')\">" + t('route.hops') + sortIndicator(routingSort, '_hops') + "</th>"
+        + "<th style='cursor:pointer' onclick=\"setRoutingSort('_ts')\">" + t('route.last_rx') + sortIndicator(routingSort, '_ts') + "</th>";
+    var body = "";
     routeArray.forEach(function(r) {
         var ts = r.timestamp || 0;
         var lastRX = new Date(ts * 1000);
-        routing += "<tr>";
-        routing += "<td>" + esc(r.srcCall || r.dest || "") + "</td>";
-        routing += "<td>" + esc(r.viaCall || r.via || "") + "</td>";
-        routing += "<td>" + (r.hopCount != null ? r.hopCount : (r.hops || 0)) + "</td>";
-        routing += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "") + "</td>";
-        routing += "</tr>";
+        body += "<tr>";
+        body += "<td>" + esc(r.srcCall || r.dest || "") + "</td>";
+        body += "<td>" + esc(r.viaCall || r.via || "") + "</td>";
+        body += "<td>" + (r.hopCount != null ? r.hopCount : (r.hops || 0)) + "</td>";
+        body += "<td>" + lastRX.toLocaleString("de-DE", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit"}).replace(",", "") + "</td>";
+        body += "</tr>";
     });
-    routing += "</tbody></table>";
-    document.getElementById("routing").innerHTML = routing;
+    document.querySelector("#routingTable tbody").innerHTML = body;
 }
 
 function onSettingsReceived(s) {
