@@ -247,12 +247,16 @@ void updateStatusDisplay() {
     if (!displayDetected || !oledEnabled) return;
 
     // Auto-advance to next page unless a hold is active (e.g. after new message).
+    // Skip pages that are masked out via oledPageMask.
     uint32_t now = millis();
     if (now >= pageHoldUntil) {
         if (pageSwitchAt != 0 && now >= pageSwitchAt) {
-            currentPage = (DisplayPage)((currentPage + 1) % PAGE_COUNT);
+            for (uint8_t i = 0; i < PAGE_COUNT; ++i) {
+                currentPage = (DisplayPage)((currentPage + 1) % PAGE_COUNT);
+                if (oledPageMask & (1u << currentPage)) break;
+            }
         }
-        pageSwitchAt = now + 5000;
+        pageSwitchAt = now + (oledPageInterval ? oledPageInterval : 5000);
     }
 
     u8g2.setPowerSave(0);

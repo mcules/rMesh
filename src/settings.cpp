@@ -42,6 +42,8 @@ uint8_t displayBrightness = 200;
 uint16_t cpuFrequency = 240;
 bool oledEnabled = false;
 char oledDisplayGroup[17] = {0};
+uint16_t oledPageInterval = 5000;
+uint8_t  oledPageMask     = 0xFF;
 
 // webPasswordHash is defined in auth.cpp for both WiFi and non-WiFi builds
 
@@ -180,6 +182,10 @@ void loadSettings() {
         String grp = prefs.getString("oledGroup", "");
         strlcpy(oledDisplayGroup, grp.c_str(), sizeof(oledDisplayGroup));
     }
+    oledPageInterval = prefs.getUShort("oledPageIv", 5000);
+    if (oledPageInterval < 1000) oledPageInterval = 1000;
+    oledPageMask     = prefs.getUChar("oledPageMask", 0xFF);
+    if (oledPageMask == 0) oledPageMask = 0xFF;
     loadGroupNames();
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
@@ -405,6 +411,8 @@ void saveUdpPeers() {
 void saveOledSettings() {
     prefs.putBool("oledEnabled", oledEnabled);
     prefs.putString("oledGroup", oledDisplayGroup);
+    prefs.putUShort("oledPageIv", oledPageInterval);
+    prefs.putUChar("oledPageMask", oledPageMask);
 }
 
 void saveSettings() {
