@@ -179,10 +179,8 @@ static void drawNetworkPage() {
         u8g2.drawStr(0, 22, buf);
         snprintf(buf, sizeof(buf), "IP:   %s", WiFi.localIP().toString().c_str());
         u8g2.drawStr(0, 34, buf);
-        snprintf(buf, sizeof(buf), "GW:   %s", WiFi.gatewayIP().toString().c_str());
-        u8g2.drawStr(0, 46, buf);
         snprintf(buf, sizeof(buf), "RSSI: %d dBm", (int)WiFi.RSSI());
-        u8g2.drawStr(0, 58, buf);
+        u8g2.drawStr(0, 46, buf);
     } else {
         u8g2.drawStr(0, 22, "WiFi: disconnected");
     }
