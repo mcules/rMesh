@@ -12,7 +12,7 @@ const I18N = {
         'lora.section_freq': 'Frequency & Power', 'lora.section_mod': 'Modulation', 'lora.section_msg': 'Messages',
         // Status
         'status.dstcall': 'Dst:', 'status.mycall': 'My Call:', 'status.heap': 'Heap:',
-        'status.battery': 'Bat:', 'status.trx': 'TRX:', 'status.txbuf': 'TX-Buf:', 'status.retry': 'Retry:',
+        'status.battery': 'Bat:', 'status.trx': 'TRX:', 'status.txbuf': 'TX-Buf:', 'status.retry': 'Retry:', 'status.dropped': 'Dropped:',
         // LoRa
         'lora.preset': 'Preset:', 'lora.preset_choose': 'Choose Preset', 'lora.section_preset': 'Preset',
         'lora.frequency': 'Frequency:', 'lora.power': 'Output Power:',
@@ -84,6 +84,7 @@ const I18N = {
         'peer.preferred': 'Preferred path',
         'filter.search': 'Search...',
         'route.call': 'Call', 'route.node': 'Node', 'route.hops': 'HopCount', 'route.last_rx': 'Last RX',
+        'route.send_now': 'Send routes now',
         'settings.saved': 'Settings saved.',
         'settings.unsaved_confirm': 'There are unsaved changes. Discard and continue?',
     },
@@ -97,7 +98,7 @@ const I18N = {
         'about.cpu_freq': 'CPU-Frequenz:',
         'lora.section_freq': 'Frequenz & Leistung', 'lora.section_mod': 'Modulation', 'lora.section_msg': 'Nachrichten',
         'status.dstcall': 'Ziel:', 'status.mycall': 'Mein Call:', 'status.heap': 'Heap:',
-        'status.battery': 'Akku:', 'status.trx': 'TRX:', 'status.txbuf': 'TX-Puf:', 'status.retry': 'Retry:',
+        'status.battery': 'Akku:', 'status.trx': 'TRX:', 'status.txbuf': 'TX-Puf:', 'status.retry': 'Retry:', 'status.dropped': 'Verworfen:',
         'lora.preset': 'Preset:', 'lora.preset_choose': 'Preset wählen', 'lora.section_preset': 'Preset',
         'lora.frequency': 'Frequenz:', 'lora.power': 'Sendeleistung:',
         'lora.bandwidth': 'Bandbreite:', 'lora.coding_rate': 'Coding Rate:',
@@ -161,6 +162,7 @@ const I18N = {
         'peer.preferred': 'Bevorzugter Weg',
         'filter.search': 'Suchen...',
         'route.call': 'Call', 'route.node': 'Node', 'route.hops': 'HopCount', 'route.last_rx': 'Last RX',
+        'route.send_now': 'Routen jetzt senden',
         'settings.saved': 'Einstellungen gespeichert.',
         'settings.unsaved_confirm': 'Es gibt ungespeicherte Änderungen. Verwerfen und fortfahren?',
     }

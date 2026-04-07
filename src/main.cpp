@@ -146,6 +146,9 @@ bool rebootRequested = false;
 /** Retry counter for the frame currently being transmitted from txBuffer. */
 uint8_t currentRetry = 0;
 
+/** Lifetime counter of frames dropped because all retries were exhausted. */
+uint32_t droppedFrames = 0;
+
 /** Flux guard: earliest millis() at which the next LoRa TX is allowed.
  *  A short pause after each TX lets remote receivers settle back into RX,
  *  improving effective range. */
@@ -1036,14 +1039,14 @@ void loop() {
                                 break;
                             }
                         }
-                        txBuffer.erase(
-                            std::remove_if(txBuffer.begin(), txBuffer.end(),
+                        auto newEnd = std::remove_if(txBuffer.begin(), txBuffer.end(),
                                 [&](const Frame& txB) {
                                     return (strcmp(txB.viaCall, deadVia) == 0) && (txB.port == deadPort);
-                                }),
-                            txBuffer.end()
-                        );
+                                });
+                        droppedFrames += (uint32_t)std::distance(newEnd, txBuffer.end());
+                        txBuffer.erase(newEnd, txBuffer.end());
                     } else {
+                        droppedFrames++;
                         txBuffer.erase(txBuffer.begin() + i);
                     }
                     i = -1; // restart iteration since indices shifted
@@ -1077,22 +1080,22 @@ void loop() {
             if (batteryEnabled) {
                 len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                     "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
-                    "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"retry\":%u,\"dropped\":%lu,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
                     "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"battery\":%.2f}}",
                     (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
-                    (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
-                    ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                    (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames,
+                    ESP.getFreeHeap(), ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
                     lastResetReason, getBatteryVoltage());
             } else
             #endif
             {
                 len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                     "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
-                    "\"retry\":%u,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"retry\":%u,\"dropped\":%lu,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
                     "\"cpuFreq\":%u,\"resetReason\":\"%s\"}}",
                     (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
-                    (unsigned)txBuffer.size(), currentRetry, ESP.getFreeHeap(),
-                    ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
+                    (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames,
+                    ESP.getFreeHeap(), ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
                     lastResetReason);
             }
             if (len > 0 && (size_t)len < sizeof(jsonBuffer)) {

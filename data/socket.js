@@ -320,6 +320,29 @@ function renderRoutingList(data) {
     }
     routeArray = sortBy(routeArray, routingSort.key, routingSort.dir);
     ensureTableSkeleton("routing", "routingTable", "routingFilterInput", 4, t('filter.search'), "setRoutingFilter");
+    if (!document.getElementById("sendRoutesBtn")) {
+        var filterTh = document.querySelector("#routingTable .filter-row th");
+        var input = document.getElementById("routingFilterInput");
+        filterTh.innerHTML = "";
+        var wrap = document.createElement("div");
+        wrap.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:8px;";
+        input.style.width = "25%";
+        input.style.boxSizing = "border-box";
+        wrap.appendChild(input);
+        var btn = document.createElement("button");
+        btn.id = "sendRoutesBtn";
+        btn.type = "button";
+        btn.textContent = t('route.send_now');
+        btn.style.cssText = "padding:6px 10px;background:#1e1e1e;color:#e0e0e0;border:1px solid #555;border-radius:3px;font-size:0.9em;cursor:pointer;";
+        btn.onclick = function() {
+            sendWS(JSON.stringify({sendRoutes: true}));
+            if (typeof msgBox === "function") msgBox(t('route.send_now') + " sent.");
+        };
+        wrap.appendChild(btn);
+        filterTh.appendChild(wrap);
+    } else {
+        document.getElementById("sendRoutesBtn").textContent = t('route.send_now');
+    }
     var headerRow = document.querySelector("#routingTable .header-row");
     headerRow.innerHTML = ""
         + "<th style='cursor:pointer' onclick=\"setRoutingSort('_src')\">" + t('route.call') + sortIndicator(routingSort, '_src') + "</th>"
@@ -604,6 +627,10 @@ function onMessage(event) {
         }
         document.getElementById("txBuffer").innerHTML = d.status.txBufferCount;
         document.getElementById("retry").innerHTML = d.status.retry;
+        if (d.status.dropped != null) {
+            var dropEl = document.getElementById("dropped");
+            if (dropEl) dropEl.innerHTML = d.status.dropped;
+        }
         document.getElementById("heap").innerHTML = d.status.heap + (d.status.minHeap != null ? " (min: " + d.status.minHeap + ")" : "");
         if (d.status.uptime != null) {
             var s = d.status.uptime;
