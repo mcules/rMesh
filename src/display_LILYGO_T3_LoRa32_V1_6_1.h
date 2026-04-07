@@ -2,6 +2,9 @@
 
 #ifdef LILYGO_T3_LORA32_V1_6_1
 
+#include "displayPagesU8g2.h"
+#include "statusDisplay.h"
+
 /**
  * @brief SSD1306 OLED status display for the LILYGO T3 LoRa32 V1.6.1 (128x64).
  *

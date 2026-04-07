@@ -16,6 +16,8 @@
 #include "peer.h"
 #include "wifiFunctions.h"
 #include "logging.h"
+#include "statusDisplay.h"
+#include "version.h"
 
 #include <LilyGoLib.h>
 #include <WiFi.h>
@@ -1607,7 +1609,9 @@ void initDisplay() {
     logPrintf(LOG_INFO, "Display", "lcd.init() done"); Serial.flush();
 
     instance.setBrightness((uint8_t)dispBrightness);
-    delay(600);
+
+    // Boot splash (always shown, regardless of OLED-enable setting).
+    showStatusDisplaySplash(2500);
     needRedraw = true;
 }
 
@@ -1690,8 +1694,47 @@ void displayMonitorFrame(const Frame& f) {
     monNewData = true;
 }
 
+// ─── Splash & flashing screens (overrides weak defaults) ─────────────
+static bool flashingLock = false;
+
+void showStatusDisplaySplash(uint32_t holdMs) {
+    lcd.fillScreen(TFT_BLACK);
+    lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    lcd.setTextSize(5);
+    lcd.setCursor(DISP_W / 2 - 80, 60);
+    lcd.print("rMesh");
+    lcd.setTextSize(2);
+    lcd.setCursor(DISP_W / 2 - 60, 130);
+    lcd.print(VERSION);
+    if (settings.mycall[0] != '\0') {
+        lcd.setTextSize(3);
+        int cw = strlen(settings.mycall) * 18;
+        lcd.setCursor((DISP_W - cw) / 2, 170);
+        lcd.print(settings.mycall);
+    }
+    delay(holdMs);
+    needRedraw = true; // restore chat UI on next refresh
+}
+
+void showStatusDisplayFlashing(const char* what) {
+    flashingLock = true;
+    lcd.fillScreen(TFT_BLACK);
+    lcd.setTextColor(TFT_RED, TFT_BLACK);
+    lcd.setTextSize(5);
+    lcd.setCursor(DISP_W / 2 - 130, 40);
+    lcd.print("Flashing");
+    lcd.setTextSize(3);
+    lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    lcd.setCursor(DISP_W / 2 - 60, 110);
+    lcd.print((what && what[0]) ? what : "...");
+    lcd.setTextSize(2);
+    lcd.setCursor(DISP_W / 2 - 100, 170);
+    lcd.print("do not power off");
+}
+
 // ─── Main loop ────────────────────────────────────────────────────────
 void displayUpdateLoop() {
+    if (flashingLock) return;
     RotaryMsg_t rot = instance.getRotary();
     bool btnNow = (digitalRead(ROTARY_C) == LOW);
     bool shortPress = false, longPress = false;

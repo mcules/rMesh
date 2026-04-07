@@ -18,6 +18,8 @@
 #include "peer.h"
 #include "wifiFunctions.h"
 #include "logging.h"
+#include "statusDisplay.h"
+#include "version.h"
 
 #include <Wire.h>
 #include <WiFi.h>
@@ -1788,6 +1790,9 @@ void initDisplay() {
     // Groups laden
     loadGroups();
 
+    // Boot splash (always shown, regardless of OLED-enable setting).
+    showStatusDisplaySplash(2500);
+
     // Initiales UI zeichnen
     fullRedraw();
 
@@ -1797,7 +1802,45 @@ void initDisplay() {
     logPrintf(LOG_INFO, "Display", "SenseCAP Indicator ST7701S 480x480 bereit.");
 }
 
+// ─── Splash & flashing screens (overrides weak defaults) ─────────────
+static bool flashingLock = false;
+
+void showStatusDisplaySplash(uint32_t holdMs) {
+    lcd.fillScreen(TFT_BLACK);
+    lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    lcd.setTextSize(8);
+    lcd.setCursor(DISP_W / 2 - 130, 130);
+    lcd.print("rMesh");
+    lcd.setTextSize(3);
+    lcd.setCursor(DISP_W / 2 - 90, 240);
+    lcd.print(VERSION);
+    if (settings.mycall[0] != '\0') {
+        lcd.setTextSize(4);
+        int cw = strlen(settings.mycall) * 24;
+        lcd.setCursor((DISP_W - cw) / 2, 310);
+        lcd.print(settings.mycall);
+    }
+    delay(holdMs);
+}
+
+void showStatusDisplayFlashing(const char* what) {
+    flashingLock = true;
+    lcd.fillScreen(TFT_BLACK);
+    lcd.setTextColor(TFT_RED, TFT_BLACK);
+    lcd.setTextSize(8);
+    lcd.setCursor(DISP_W / 2 - 200, 100);
+    lcd.print("Flashing");
+    lcd.setTextColor(TFT_WHITE, TFT_BLACK);
+    lcd.setTextSize(5);
+    lcd.setCursor(DISP_W / 2 - 100, 230);
+    lcd.print((what && what[0]) ? what : "...");
+    lcd.setTextSize(3);
+    lcd.setCursor(DISP_W / 2 - 150, 320);
+    lcd.print("do not power off");
+}
+
 void displayUpdateLoop() {
+    if (flashingLock) return;
     // Uhrzeitaktualisierung
     time_t now = time(nullptr); struct tm tmNow; localtime_r(&now, &tmNow);
     if (tmNow.tm_min != lastMinute) {

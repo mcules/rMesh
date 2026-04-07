@@ -137,7 +137,7 @@ uint32_t statusTimer = 0;
 static uint32_t persistTimer = PERSIST_INTERVAL;
 
 /** Deadline for the next ROUTING_INFO_MESSAGE broadcast (24 h cycle). */
-static uint32_t routingInfoTimer = 60 * 1000; // first send 60 s after boot
+uint32_t routingInfoTimer = 60 * 1000; // first send 60 s after boot
 
 /** millis() value at which ESP.restart() is called; 0 = disabled. */
 uint32_t rebootTimer = 0;
@@ -889,8 +889,11 @@ void loop() {
     #endif
     #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(ESP32_E22_V1)
     {
+        // Always tick — drivers gate internally on oledEnabled, but the
+        // boot-splash hibernate path on Heltec/T3/T-Beam/E22 runs through
+        // updateStatusDisplay() even when the user has the OLED disabled.
         static uint32_t oledRefreshTimer = 0;
-        if (oledEnabled && timerExpired(oledRefreshTimer)) {
+        if (timerExpired(oledRefreshTimer)) {
             oledRefreshTimer = millis() + 5000;
             updateStatusDisplay();
         }

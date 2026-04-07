@@ -10,9 +10,7 @@
 
 #include "wifiFunctions.h"
 #include "serial.h"
-#ifdef ESP32_E22_V1
-#include "display_ESP32_E22_V1.h"
-#endif
+#include "statusDisplay.h"
 #include "settings.h"
 #include "logging.h"
 #include "hal.h"
@@ -33,6 +31,9 @@
 #endif
 #ifdef LILYGO_T_BEAM
 #include "display_LILYGO_T-Beam.h"
+#endif
+#ifdef ESP32_E22_V1
+#include "display_ESP32_E22_V1.h"
 #endif
 
 
@@ -163,9 +164,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     snprintf(callParam, sizeof(callParam), "&call=%s&device=%s&tag=%s",
              settings.mycall, PIO_ENV_NAME, newVersion);
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
-    #ifdef ESP32_E22_V1
     showStatusDisplayFlashing("Filesystem");
-    #endif
 
     // LittleFS – up to 3 attempts
     char spiffsUrl[256];
@@ -202,9 +201,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
         sendOtaLog("update_success", VERSION, capturedVersion, "");
     });
 
-    #ifdef ESP32_E22_V1
     showStatusDisplayFlashing("Firmware");
-    #endif
 
     // Firmware – up to 3 attempts
     char fwUrl[256];

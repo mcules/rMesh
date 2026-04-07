@@ -17,6 +17,7 @@
 #include "logging.h"
 #include "heapdbg.h"
 #include "api.h"
+#include "statusDisplay.h"
 #ifdef ESP32_E22_V1
 #include "display_ESP32_E22_V1.h"
 #endif
@@ -523,6 +524,12 @@ void startWebServer() {
             announceTimer = 0;
         }
 
+        if (json["sendRoutes"].is<JsonVariant>()) {
+            extern uint32_t routingInfoTimer;
+            logPrintf(LOG_INFO, "Web", "Send manual ROUTING_INFO...");
+            routingInfoTimer = 0;
+        }
+
         if (json["tune"].is<JsonVariant>()) {
             logPrintf(LOG_INFO, "Web", "Send tune...");
             Frame f;
@@ -636,9 +643,7 @@ void startWebServer() {
                          }
                          logPrintf(LOG_INFO, "Web", "OTA-Upload Start: %s, type: %s", filename.c_str(),
                                        updateType == U_SPIFFS ? "SPIFFS" : "Flash");
-                         #ifdef ESP32_E22_V1
                          showStatusDisplayFlashing(updateType == U_SPIFFS ? "Filesystem" : "Firmware");
-                         #endif
                          if (!Update.begin(UPDATE_SIZE_UNKNOWN, updateType)) {
                              logPrintf(LOG_ERROR, "Web", "OTA-Upload begin() error: %s", Update.errorString());
                          }

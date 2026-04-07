@@ -3,6 +3,8 @@
 #include <SPI.h>
 #include <GxEPD2_BW.h>
 #include "display_LILYGO_T-Echo.h"
+#include "displayRotation.h"
+#include "statusDisplay.h"
 #include "hal_LILYGO_T-Echo.h"
 #include "settings.h"
 #include "peer.h"
@@ -20,11 +22,18 @@ GxEPD2_BW<GxEPD2_154_D67, GxEPD2_154_D67::HEIGHT>
     display(GxEPD2_154_D67(EINK_CS, EINK_DC, EINK_RES, EINK_BUSY));
 
 static bool displayDetected = false;
-static DisplayPage currentPage = PAGE_STATUS;
+static DisplayRotator rotator;
 static uint32_t lastButtonTime = 0;
 static bool lastButtonState = true;  // Active low, so true = not pressed
 static uint32_t lastRefreshTime = 0;
 static bool backlightOn = false;
+static uint32_t splashUntil = 0;
+static bool flashingLock = false;
+
+static bool pageAvailableCb(uint8_t p) {
+    if ((oledPageMask & (1u << p)) == 0) return false;
+    return true;
+}
 
 // Backlight control (P1.11 = pin 43)
 #define PIN_EINK_BL 43
@@ -295,6 +304,8 @@ bool initStatusDisplay() {
 
     displayDetected = true;
 
+    rotator.begin(PAGE_COUNT, pageAvailableCb);
+
     // Enable display on first boot (default is off for OLED boards, but E-Paper should be on)
     if (!oledEnabled) {
         oledEnabled = true;
@@ -305,20 +316,82 @@ bool initStatusDisplay() {
         saveOledSettings();
     }
 
-    // Draw initial screen
-    updateStatusDisplay();
+    // Always show the boot splash, even when the display is disabled in
+    // settings — the regular update path will hibernate the panel afterwards.
+    showStatusDisplaySplash(5000);
 
     return true;
 }
 
+void showStatusDisplaySplash(uint32_t holdMs) {
+    if (!displayDetected) return;
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+        display.setTextColor(GxEPD_BLACK);
+        display.setTextSize(3);
+        display.setCursor(40, 60);
+        display.print("rMesh");
+        display.setTextSize(1);
+        display.setCursor(20, 110);
+        display.print(VERSION);
+        if (settings.mycall[0] != '\0') {
+            display.setTextSize(2);
+            int16_t cw = strlen(settings.mycall) * 12;
+            display.setCursor((200 - cw) / 2, 140);
+            display.print(settings.mycall);
+        }
+    } while (display.nextPage());
+    splashUntil = millis() + holdMs;
+}
+
+void showStatusDisplayFlashing(const char* what) {
+    if (!displayDetected) return;
+    flashingLock = true;
+    display.setFullWindow();
+    display.firstPage();
+    do {
+        display.fillScreen(GxEPD_WHITE);
+        display.setTextColor(GxEPD_BLACK);
+        display.setTextSize(3);
+        display.setCursor(10, 50);
+        display.print("Flashing");
+        display.setTextSize(2);
+        display.setCursor(20, 100);
+        display.print((what && what[0]) ? what : "...");
+        display.setTextSize(1);
+        display.setCursor(20, 150);
+        display.print("do not power off");
+    } while (display.nextPage());
+}
+
 void updateStatusDisplay() {
-    if (!displayDetected || !oledEnabled) return;
+    if (!displayDetected) return;
+    if (flashingLock) return;
+    if (millis() < splashUntil) return;
+
+    if (!oledEnabled) {
+        if (splashUntil != 0) {
+            splashUntil = 0;
+            display.setFullWindow();
+            display.firstPage();
+            do { display.fillScreen(GxEPD_WHITE); } while (display.nextPage());
+            display.hibernate();
+        }
+        return;
+    }
+    splashUntil = 0;
+
+    // No auto-rotate on e-paper — manual / button-driven only. Pass 0 so the
+    // rotator just honours the mask + any pending hold from a new message.
+    uint8_t page = rotator.tick(0);
 
     display.setFullWindow();
     display.firstPage();
     do {
         display.fillScreen(GxEPD_WHITE);
-        switch (currentPage) {
+        switch (page) {
             case PAGE_STATUS:   drawPageStatus();   break;
             case PAGE_PEERS:    drawPagePeers();    break;
             case PAGE_ROUTES:   drawPageRoutes();   break;
@@ -377,9 +450,9 @@ void onStatusDisplayMessage(const char* srcCall, const char* text,
 
     displayDirty = true;
 
-    // Auto-switch to messages page on new message
-    if (currentPage != PAGE_MESSAGES) {
-        currentPage = PAGE_MESSAGES;
+    // Auto-switch to messages page on new message (if MESSAGES is in mask).
+    if (oledPageMask & (1u << PAGE_MESSAGES)) {
+        rotator.forcePage((uint8_t)PAGE_MESSAGES, 30000);
     }
 
     // Trigger immediate refresh
@@ -407,7 +480,7 @@ void displayUpdateLoop() {
 
     // Button released (rising edge) - short press: cycle pages
     if (buttonState && !lastButtonState && !longPressHandled && (millis() - lastButtonTime > 50)) {
-        currentPage = (DisplayPage)((currentPage + 1) % PAGE_COUNT);
+        rotator.next();
         displayDirty = true;
     }
     lastButtonState = buttonState;
