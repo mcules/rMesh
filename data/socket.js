@@ -438,7 +438,7 @@ function onSettingsReceived(s) {
             sendWS(JSON.stringify({settings: {groupNames: pushToDevice}}));
         }
     }
-    if (init == false) {
+    if (init == false && s.wifiIP && s.mycall) {
         init = true;
         fetch(baseURL + "messages.json?" + Math.random())
             .then(function(response) {
@@ -1138,6 +1138,8 @@ function showMessages(parseAll = false) {
     
     var sound = false;
 
+    var myCall = document.getElementById("settingsMycall").value;
+
     messages.forEach(function(m) {
         //Abort if message was already displayed
         if ((m.parsed == true) && (parseAll == false)) {return;}
@@ -1170,7 +1172,7 @@ function showMessages(parseAll = false) {
         }
 
         //Messages to me -> Channel 2
-        if ((m.dstCall == document.getElementById("settingsMycall").value) && (found == false)) {
+        if (myCall && (m.dstCall == myCall) && (found == false)) {
             found = true;
             document.getElementById("channel2").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[2] = true;}
@@ -1204,7 +1206,7 @@ function showMessages(parseAll = false) {
         }
 
         //Messages that I sent -> Channel 2
-        if ((m.srcCall == document.getElementById("settingsMycall").value) && (m.dstGroup == "") && (found == false)) {
+        if (myCall && (m.srcCall == myCall) && (m.dstGroup == "") && (found == false)) {
             found = true;
             document.getElementById("channel2").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[2] = true;}
