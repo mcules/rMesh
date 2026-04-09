@@ -12,8 +12,10 @@
 #include "hal.h"
 #include "logging.h"
 #include "heapdbg.h"
+#include "bgWorker.h"
 
 #include <WiFi.h>
+#include <LittleFS.h>
 #include <cstdarg>
 #include <time.h>
 #include <esp_sntp.h>
@@ -37,6 +39,17 @@ static uint32_t nvsResetCount = 0;
 uint32_t apiTxTotal = 0;
 uint32_t apiRxTotal = 0;
 
+// Drop counters defined in main.cpp (#14)
+extern uint32_t droppedFrames;
+extern uint32_t droppedBufferFull;
+extern uint32_t droppedRetryExhaust;
+extern uint32_t droppedPeerDead;
+extern uint32_t droppedMessage;
+extern uint32_t droppedAck;
+extern uint32_t droppedAnnounce;
+extern uint32_t droppedAnnounceAck;
+extern uint32_t droppedOther;
+
 // ── Message ring buffer ─────────────────────────────────────────────────────
 static ApiMessage msgBuffer[API_MSG_BUFFER_SIZE];
 static uint8_t msgHead = 0;
@@ -47,34 +60,59 @@ static ApiEvent evtBuffer[API_EVT_BUFFER_SIZE];
 static uint8_t evtHead = 0;
 static uint8_t evtCount = 0;
 
+// ── LittleFS persistence ────────────────────────────────────────────────────
+// Only the event ring buffer is persisted to flash. The message ring buffer
+// is rebuilt at boot from /messages.json (which is also the WebUI's archive
+// source) — no separate /api_msgs.bin file.
+volatile bool apiBuffersDirty = false;
+static volatile bool apiSaveInProgress = false;
+static const char* API_EVTS_FILE = "/api_evts.bin";
+// Bump on every ApiEvent struct change so old files are rejected at load
+// time and replaced on next save.
+static const uint8_t API_FILE_VERSION = 3;
+
 // ── Static JSON build buffer ───────────────────────────────────────────────
 // AsyncWebServer dispatches one request handler at a time on the async TCP
 // task, so a single shared buffer is safe.  Writing directly into a fixed
 // buffer via snprintf eliminates the dozens of intermediate String heap
 // allocations that String += causes, preventing heap fragmentation on
 // long-running nodes.
+// Shared JSON build buffer. Sized for the largest individual endpoint
+// response (peers / routes / messages / events with full lists). The
+// aggregated /api/poll endpoint was removed to keep this at 10 KB; clients
+// fetch the individual endpoints instead.
 static char jBuf[10240];
 static int  jPos;
+// Set when any append could not fit and got dropped. Endpoints can inspect
+// this to fail loudly instead of returning malformed JSON.
+static bool jOverflow = false;
 
-static void jReset() { jPos = 0; jBuf[0] = '\0'; }
+static void jReset() { jPos = 0; jBuf[0] = '\0'; jOverflow = false; }
 
 __attribute__((format(printf, 1, 2)))
 static void jPrintf(const char *fmt, ...) {
-    if (jPos >= (int)sizeof(jBuf) - 1) return;
+    if (jPos >= (int)sizeof(jBuf) - 1) { jOverflow = true; return; }
     va_list ap;
     va_start(ap, fmt);
     int n = vsnprintf(jBuf + jPos, sizeof(jBuf) - jPos, fmt, ap);
     va_end(ap);
-    if (n > 0 && jPos + n < (int)sizeof(jBuf)) jPos += n;
+    if (n < 0) { jOverflow = true; return; }
+    if (jPos + n >= (int)sizeof(jBuf)) {
+        // vsnprintf wrote a truncated copy; rewind to last good position.
+        jBuf[jPos] = '\0';
+        jOverflow = true;
+        return;
+    }
+    jPos += n;
 }
 
 // Append a JSON-escaped, double-quoted string directly into jBuf.
 static void jStr(const char *s) {
     const int cap = (int)sizeof(jBuf);
-    if (jPos + 2 >= cap) return;
+    if (jPos + 2 >= cap) { jOverflow = true; return; }
     jBuf[jPos++] = '"';
     for (const char *p = s; *p; p++) {
-        if (jPos + 7 >= cap) break;   // room for \uXXXX + closing "
+        if (jPos + 7 >= cap) { jOverflow = true; break; }   // room for \uXXXX + closing "
         switch (*p) {
             case '"':  jBuf[jPos++] = '\\'; jBuf[jPos++] = '"';  break;
             case '\\': jBuf[jPos++] = '\\'; jBuf[jPos++] = '\\'; break;
@@ -129,12 +167,15 @@ void apiRecordMessage(const Frame &f, bool isTx) {
 
     msgHead = (msgHead + 1) % API_MSG_BUFFER_SIZE;
     if (msgCount < API_MSG_BUFFER_SIZE) msgCount++;
+    // Note: messages are not persisted to a separate .bin file — they live
+    // in /messages.json and are reseeded from there at boot.
 }
 
 static void pushEvent(const ApiEvent &e) {
     evtBuffer[evtHead] = e;
     evtHead = (evtHead + 1) % API_EVT_BUFFER_SIZE;
     if (evtCount < API_EVT_BUFFER_SIZE) evtCount++;
+    apiBuffersDirty = true;
 }
 
 void apiRecordRxEvent(const Frame &f) {
@@ -142,7 +183,7 @@ void apiRecordRxEvent(const Frame &f) {
     ApiEvent e;
     memset(&e, 0, sizeof(e));
     e.time = (uint32_t)f.timestamp;
-    strlcpy(e.event, "rx", sizeof(e.event));
+    e.eventType = API_EVT_RX;
     e.frameType = f.frameType;
     strlcpy(e.nodeCall, f.nodeCall, sizeof(e.nodeCall));
     strlcpy(e.viaCall, f.viaCall, sizeof(e.viaCall));
@@ -159,7 +200,7 @@ void apiRecordTxEvent(const Frame &f) {
     ApiEvent e;
     memset(&e, 0, sizeof(e));
     e.time = (uint32_t)time(nullptr);
-    strlcpy(e.event, "tx", sizeof(e.event));
+    e.eventType = API_EVT_TX;
     e.frameType = f.frameType;
     strlcpy(e.nodeCall, f.nodeCall, sizeof(e.nodeCall));
     strlcpy(e.viaCall, f.viaCall, sizeof(e.viaCall));
@@ -173,32 +214,10 @@ void apiRecordAckEvent(const Frame &f) {
     ApiEvent e;
     memset(&e, 0, sizeof(e));
     e.time = (uint32_t)f.timestamp;
-    strlcpy(e.event, "ack", sizeof(e.event));
+    e.eventType = API_EVT_ACK;
     strlcpy(e.srcCall, f.srcCall, sizeof(e.srcCall));
     strlcpy(e.nodeCall, f.nodeCall, sizeof(e.nodeCall));
     e.id = f.id;
-    pushEvent(e);
-}
-
-void apiRecordRoutingEvent(const char* action, const char* dest, const char* via, uint8_t hops) {
-    ApiEvent e;
-    memset(&e, 0, sizeof(e));
-    e.time = (uint32_t)time(nullptr);
-    strlcpy(e.event, "routing", sizeof(e.event));
-    strlcpy(e.action, action, sizeof(e.action));
-    strlcpy(e.dest, dest, sizeof(e.dest));
-    strlcpy(e.viaCall, via, sizeof(e.viaCall));
-    e.hops = hops;
-    pushEvent(e);
-}
-
-void apiRecordErrorEvent(const char* source, const char* text) {
-    ApiEvent e;
-    memset(&e, 0, sizeof(e));
-    e.time = (uint32_t)time(nullptr);
-    strlcpy(e.event, "error", sizeof(e.event));
-    strlcpy(e.source, source, sizeof(e.source));
-    strlcpy(e.text, text, sizeof(e.text));
     pushEvent(e);
 }
 
@@ -208,38 +227,130 @@ void apiMarkMessageAcked(const char* srcCall, uint32_t id) {
         uint8_t idx = (msgHead - msgCount + i + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
         if (msgBuffer[idx].id == id && strcmp(msgBuffer[idx].src, srcCall) == 0) {
             msgBuffer[idx].acked = true;
+            // Not persisted — ack state is rebuilt at boot from ack.json.
             return;
         }
     }
 }
 
-// ── ACK-based purge functions ──────────────────────────────────────────────
+// ── LittleFS persistence (load + save) ─────────────────────────────────────
+// The buffers are persisted so multiple REST clients can each fetch the
+// full live tail without destroying it for the others, and so the tail
+// survives reboots.
 
-static void purgeMessages(uint32_t ackTime) {
-    int purged = 0;
-    // Remove oldest entries where time <= ackTime
-    while (msgCount > 0) {
-        uint8_t tailIdx = (msgHead - msgCount + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
-        if (msgBuffer[tailIdx].time > ackTime) break;
-        msgCount--;
-        purged++;
+// Seed the in-RAM message ring buffer from /messages.json. Called at boot
+// from apiLoadBuffers(). Reads JSONL lines, keeps the last API_MSG_BUFFER_SIZE
+// (the ring buffer wraps automatically). Caller must hold fsMutex.
+static void loadMessagesFromJson() {
+    File f = LittleFS.open("/messages.json", "r");
+    if (!f) return;
+
+    int loaded = 0;
+    char line[1024];
+    while (f.available()) {
+        size_t n = f.readBytesUntil('\n', line, sizeof(line) - 1);
+        if (n == 0) continue;
+        line[n] = '\0';
+
+        JsonDocument doc;
+        if (deserializeJson(doc, line)) continue;
+        JsonObject m = doc["message"];
+        if (m.isNull()) continue;
+
+        // Only text/trace messages — matches what apiRecordMessage stores
+        uint8_t mt = m["messageType"] | 0xFF;
+        if (mt != 0 && mt != 1) continue;
+
+        ApiMessage &msg = msgBuffer[msgHead];
+        memset(&msg, 0, sizeof(msg));
+        msg.id   = m["id"]        | 0;
+        msg.time = m["timestamp"] | 0;
+        strlcpy(msg.src,   m["srcCall"]  | "", sizeof(msg.src));
+        strlcpy(msg.group, m["dstGroup"] | "", sizeof(msg.group));
+        const char* txt = m["text"] | "";
+        strlcpy(msg.text, txt, sizeof(msg.text));
+        msg.hops  = m["hopCount"] | 0;
+        msg.dir   = (m["tx"] | false) ? 1 : 0;
+        msg.acked = false;
+        // via / rssi / snr are not present in messages.json — left as 0
+
+        msgHead = (msgHead + 1) % API_MSG_BUFFER_SIZE;
+        if (msgCount < API_MSG_BUFFER_SIZE) msgCount++;
+        loaded++;
     }
-    if (purged > 0) {
-        logPrintf(LOG_DEBUG, "API", "Purged %d acked messages, heap: %u", purged, ESP.getFreeHeap());
+    f.close();
+
+    if (loaded > 0) {
+        logPrintf(LOG_INFO, "API", "Loaded %d messages from /messages.json (kept last %d)",
+                  loaded, msgCount);
     }
 }
 
-static void purgeEvents(uint32_t ackTime) {
-    int purged = 0;
-    // Remove oldest entries where time <= ackTime
-    while (evtCount > 0) {
-        uint8_t tailIdx = (evtHead - evtCount + API_EVT_BUFFER_SIZE) % API_EVT_BUFFER_SIZE;
-        if (evtBuffer[tailIdx].time > ackTime) break;
-        evtCount--;
-        purged++;
+void apiLoadBuffers() {
+    if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
+        logPrintf(LOG_ERROR, "API", "fsMutex timeout in apiLoadBuffers");
+        return;
     }
-    if (purged > 0) {
-        logPrintf(LOG_DEBUG, "API", "Purged %d acked events, heap: %u", purged, ESP.getFreeHeap());
+    // Messages: always reseed from /messages.json (no separate .bin)
+    loadMessagesFromJson();
+
+    // Events: load from /api_evts.bin if present and version matches
+    File g = LittleFS.open(API_EVTS_FILE, "r");
+    if (g) {
+        uint8_t v = 0; g.read(&v, 1);
+        if (v == API_FILE_VERSION) {
+            uint16_t n = 0; g.read((uint8_t*)&n, 2);
+            if (n > API_EVT_BUFFER_SIZE) n = API_EVT_BUFFER_SIZE;
+            evtCount = 0; evtHead = 0;
+            for (uint16_t i = 0; i < n; i++) {
+                if (g.read((uint8_t*)&evtBuffer[evtHead], sizeof(ApiEvent)) != sizeof(ApiEvent)) break;
+                evtHead = (evtHead + 1) % API_EVT_BUFFER_SIZE;
+                if (evtCount < API_EVT_BUFFER_SIZE) evtCount++;
+            }
+            logPrintf(LOG_INFO, "API", "Loaded %d events from %s", evtCount, API_EVTS_FILE);
+        }
+        g.close();
+    }
+
+    // Clean up the now-obsolete /api_msgs.bin from older firmware revisions.
+    if (LittleFS.exists("/api_msgs.bin")) {
+        LittleFS.remove("/api_msgs.bin");
+        logPrintf(LOG_INFO, "API", "Removed obsolete /api_msgs.bin");
+    }
+
+    apiBuffersDirty = false;
+    xSemaphoreGive(fsMutex);
+}
+
+static void apiSaveBuffersWork() {
+    if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
+        logPrintf(LOG_ERROR, "API", "fsMutex timeout in apiSaveBuffers");
+        apiSaveInProgress = false;
+        return;
+    }
+    File g = LittleFS.open(API_EVTS_FILE, "w");
+    if (g) {
+        g.write(&API_FILE_VERSION, 1);
+        uint16_t n = evtCount;
+        g.write((uint8_t*)&n, 2);
+        for (uint8_t i = 0; i < evtCount; i++) {
+            uint8_t idx = (evtHead - evtCount + i + API_EVT_BUFFER_SIZE) % API_EVT_BUFFER_SIZE;
+            g.write((uint8_t*)&evtBuffer[idx], sizeof(ApiEvent));
+        }
+        g.close();
+    }
+    xSemaphoreGive(fsMutex);
+    apiBuffersDirty = false;
+    apiSaveInProgress = false;
+    logPrintf(LOG_DEBUG, "API", "Persisted %d events", evtCount);
+}
+
+void apiSaveBuffers() {
+    if (apiSaveInProgress) return;
+    apiSaveInProgress = true;
+    if (!bgWorkerEnqueue(apiSaveBuffersWork)) {
+        logPrintf(LOG_WARN, "API", "apiSaveBuffers enqueue failed");
+        apiSaveInProgress = false;
     }
 }
 
@@ -289,8 +400,14 @@ static void buildStatus() {
         jPrintf(",\"rssi\":%d,\"ip\":\"%s\"", WiFi.RSSI(), WiFi.localIP().toString().c_str());
     }
     jPrintf("}");
-    jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu}",
-            (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal);
+    jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu,\"dropped\":%lu",
+            (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal,
+            (unsigned long)droppedFrames);
+    jPrintf(",\"droppedBy\":{\"bufferFull\":%lu,\"retryExhaust\":%lu,\"peerDead\":%lu,"
+            "\"msg\":%lu,\"ack\":%lu,\"ann\":%lu,\"annAck\":%lu,\"other\":%lu}}",
+            (unsigned long)droppedBufferFull, (unsigned long)droppedRetryExhaust, (unsigned long)droppedPeerDead,
+            (unsigned long)droppedMessage, (unsigned long)droppedAck,
+            (unsigned long)droppedAnnounce, (unsigned long)droppedAnnounceAck, (unsigned long)droppedOther);
     jPrintf(",\"peers\":%u,\"routes\":%u", (unsigned)peerList.size(), (unsigned)routingList.size());
     jPrintf(",\"time\":%ld", (long)time(nullptr));
 }
@@ -363,6 +480,15 @@ static void buildMessages(uint32_t since, int limit, const char* groupFilter) {
     jPrintf("]");
 }
 
+static const char* apiEventTypeName(uint8_t t) {
+    switch (t) {
+        case API_EVT_RX:  return "rx";
+        case API_EVT_TX:  return "tx";
+        case API_EVT_ACK: return "ack";
+        default:          return "?";
+    }
+}
+
 static void buildEvents(uint32_t since, int limit, const char* typeFilter) {
     jPrintf("\"events\":[");
     int count = 0;
@@ -370,31 +496,24 @@ static void buildEvents(uint32_t since, int limit, const char* typeFilter) {
         uint8_t idx = (evtHead - evtCount + i + API_EVT_BUFFER_SIZE) % API_EVT_BUFFER_SIZE;
         const ApiEvent &e = evtBuffer[idx];
         if (e.time <= since) continue;
-        if (typeFilter && strcmp(e.event, typeFilter) != 0) continue;
+        const char* evName = apiEventTypeName(e.eventType);
+        if (typeFilter && strcmp(evName, typeFilter) != 0) continue;
         if (count > 0) jPrintf(",");
-        jPrintf("{\"time\":%lu,\"event\":\"%s\"", (unsigned long)e.time, e.event);
-        if (strcmp(e.event, "rx") == 0 || strcmp(e.event, "tx") == 0) {
+        jPrintf("{\"time\":%lu,\"event\":\"%s\"", (unsigned long)e.time, evName);
+        if (e.eventType == API_EVT_RX || e.eventType == API_EVT_TX) {
             jPrintf(",\"frameType\":%u", e.frameType);
             if (e.nodeCall[0]) { jPrintf(",\"nodeCall\":"); jStr(e.nodeCall); }
             if (e.viaCall[0])  { jPrintf(",\"viaCall\":");  jStr(e.viaCall); }
             if (e.srcCall[0])  { jPrintf(",\"srcCall\":");  jStr(e.srcCall); }
             jPrintf(",\"id\":%lu", (unsigned long)e.id);
-            if (strcmp(e.event, "rx") == 0) {
+            if (e.eventType == API_EVT_RX) {
                 jPrintf(",\"rssi\":%d,\"snr\":%d", e.rssi, (int)e.snr);
             }
             jPrintf(",\"port\":%u", e.port);
-        } else if (strcmp(e.event, "ack") == 0) {
+        } else if (e.eventType == API_EVT_ACK) {
             if (e.srcCall[0])  { jPrintf(",\"srcCall\":"); jStr(e.srcCall); }
             if (e.nodeCall[0]) { jPrintf(",\"nodeCall\":"); jStr(e.nodeCall); }
             jPrintf(",\"id\":%lu", (unsigned long)e.id);
-        } else if (strcmp(e.event, "routing") == 0) {
-            jPrintf(",\"action\":\"%s\"", e.action);
-            if (e.dest[0])    { jPrintf(",\"dest\":"); jStr(e.dest); }
-            if (e.viaCall[0]) { jPrintf(",\"via\":");  jStr(e.viaCall); }
-            jPrintf(",\"hops\":%u", e.hops);
-        } else if (strcmp(e.event, "error") == 0) {
-            jPrintf(",\"source\":"); jStr(e.source);
-            jPrintf(",\"text\":"); jStr(e.text);
         }
         jPrintf("}");
         count++;
@@ -449,7 +568,6 @@ static void handleGetMessages(AsyncWebServerRequest *request) {
     const char* groupFilter = nullptr;
     uint32_t since = 0;
     int limit = 20;
-    uint32_t ack = 0;
     if (request->hasParam("group")) groupFilter = request->getParam("group")->value().c_str();
     if (request->hasParam("since")) since = request->getParam("since")->value().toInt();
     if (request->hasParam("limit")) {
@@ -457,8 +575,8 @@ static void handleGetMessages(AsyncWebServerRequest *request) {
         if (limit < 1) limit = 1;
         if (limit > API_MSG_BUFFER_SIZE) limit = API_MSG_BUFFER_SIZE;
     }
-    if (request->hasParam("ack")) ack = request->getParam("ack")->value().toInt();
-    if (ack > 0) purgeMessages(ack);
+    // Note: `ack` parameter is silently accepted but ignored — buffers are
+    // shared across multiple REST clients and must not be purged on read.
 
     jReset();
     jPrintf("{"); buildMessages(since, limit, groupFilter); jPrintf("}");
@@ -504,6 +622,109 @@ static void handlePostMessage(AsyncWebServerRequest *request, uint8_t *data, siz
     request->send(200, "application/json", resp);
 }
 
+// One-shot client → node migration: a browser whose localStorage holds
+// messages that were never persisted on the node (e.g. from before the
+// server-side persistence was added) can POST them here. Duplicates are
+// detected by (srcCall, id) and skipped.
+static void handleImportMessages(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+    if (!checkApiAuth(request)) return;
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, data, len);
+    if (err) {
+        request->send(400, "application/json", "{\"error\":\"invalid json\"}");
+        return;
+    }
+    JsonArray arr = doc["messages"].as<JsonArray>();
+    if (arr.isNull()) {
+        request->send(400, "application/json", "{\"error\":\"messages array required\"}");
+        return;
+    }
+
+    // Open /messages.json directly under fsMutex and append all imported
+    // lines synchronously. Going through addJSONtoFile() would push them
+    // through a 16-slot queue with a non-blocking round-robin allocator
+    // that overwrites unprocessed slots when the queue fills up — exactly
+    // what happens during a bulk import of 100+ messages from a browser.
+    File msgFile;
+    bool fsLocked = false;
+    if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(5000))) {
+        fsLocked = true;
+        msgFile = LittleFS.open("/messages.json", "a");
+    }
+
+    int imported = 0, skipped = 0;
+    for (JsonObject m : arr) {
+        uint8_t mt = m["messageType"] | 0xFF;
+        if (mt != 0 && mt != 1) { skipped++; continue; }
+
+        uint32_t mid = m["id"] | 0;
+        const char* src = m["srcCall"] | "";
+        if (mid == 0 || src[0] == '\0') { skipped++; continue; }
+
+        // Duplicate check against current ring buffer
+        bool dup = false;
+        for (uint8_t i = 0; i < msgCount; i++) {
+            uint8_t idx = (msgHead - msgCount + i + API_MSG_BUFFER_SIZE) % API_MSG_BUFFER_SIZE;
+            if (msgBuffer[idx].id == mid && strcmp(msgBuffer[idx].src, src) == 0) {
+                dup = true; break;
+            }
+        }
+        if (dup) { skipped++; continue; }
+
+        ApiMessage &msg = msgBuffer[msgHead];
+        memset(&msg, 0, sizeof(msg));
+        msg.id   = mid;
+        msg.time = m["timestamp"] | 0;
+        strlcpy(msg.src,   src, sizeof(msg.src));
+        strlcpy(msg.group, m["dstGroup"] | "", sizeof(msg.group));
+        strlcpy(msg.text,  m["text"]     | "", sizeof(msg.text));
+        msg.hops  = m["hopCount"] | 0;
+        msg.dir   = (m["tx"] | false) ? 1 : 0;
+        msg.acked = false;
+
+        msgHead = (msgHead + 1) % API_MSG_BUFFER_SIZE;
+        if (msgCount < API_MSG_BUFFER_SIZE) msgCount++;
+
+        // Also append to /messages.json (durable 1000-entry archive that the
+        // web client reads on init). Direct write under fsMutex — see comment
+        // above the loop for why we do not use addJSONtoFile() here.
+        if (msgFile) {
+            JsonDocument out;
+            JsonObject mo = out["message"].to<JsonObject>();
+            mo["text"]        = msg.text;
+            mo["messageType"] = mt;
+            mo["dstCall"]     = "";
+            mo["dstGroup"]    = msg.group;
+            mo["srcCall"]     = msg.src;
+            mo["id"]          = msg.id;
+            mo["tx"]          = (msg.dir != 0);
+            mo["timestamp"]   = msg.time;
+            mo["hopCount"]    = msg.hops;
+            char line[1024];
+            size_t ln = serializeJson(out, line, sizeof(line));
+            if (ln > 0 && ln < sizeof(line)) {
+                msgFile.write((const uint8_t*)line, ln);
+                msgFile.print("\n");
+            }
+        }
+
+        imported++;
+    }
+
+    if (msgFile) msgFile.close();
+    if (fsLocked) xSemaphoreGive(fsMutex);
+
+    // Trim if we exceeded the durable cap (async, queued — single trim, fine).
+    if (imported > 0) {
+        trimFile("/messages.json", MAX_STORED_MESSAGES);
+    }
+
+    char resp[96];
+    snprintf(resp, sizeof(resp), "{\"ok\":true,\"imported\":%d,\"skipped\":%d}", imported, skipped);
+    request->send(200, "application/json", resp);
+}
+
 static void handleGroups(AsyncWebServerRequest *request) {
     if (!checkApiAuth(request)) return;
     if (!heapGuard(request)) return;
@@ -519,7 +740,6 @@ static void handleEvents(AsyncWebServerRequest *request) {
     const char* typeFilter = nullptr;
     uint32_t since = 0;
     int limit = 50;
-    uint32_t ack = 0;
     if (request->hasParam("type")) typeFilter = request->getParam("type")->value().c_str();
     if (request->hasParam("since")) since = request->getParam("since")->value().toInt();
     if (request->hasParam("limit")) {
@@ -527,8 +747,7 @@ static void handleEvents(AsyncWebServerRequest *request) {
         if (limit < 1) limit = 1;
         if (limit > API_EVT_BUFFER_SIZE) limit = API_EVT_BUFFER_SIZE;
     }
-    if (request->hasParam("ack")) ack = request->getParam("ack")->value().toInt();
-    if (ack > 0) purgeEvents(ack);
+    // `ack` parameter accepted but ignored (see /api/messages above).
 
     jReset();
     jPrintf("{"); buildEvents(since, limit, typeFilter); jPrintf("}");
@@ -708,12 +927,22 @@ static void buildDiagnostics() {
     jPrintf(",\"channel\":%d,\"disconnects\":%lu,\"lastDisconnectReason\":%u,\"lastDisconnectTime\":%lu}",
             WiFi.channel(), (unsigned long)wifiDisconnectCount,
             lastWifiDisconnectReason, (unsigned long)lastWifiDisconnectTime);
-    jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu}",
-            (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal);
+    jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu,\"dropped\":%lu",
+            (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal,
+            (unsigned long)droppedFrames);
+    jPrintf(",\"droppedBy\":{\"bufferFull\":%lu,\"retryExhaust\":%lu,\"peerDead\":%lu,"
+            "\"msg\":%lu,\"ack\":%lu,\"ann\":%lu,\"annAck\":%lu,\"other\":%lu}}",
+            (unsigned long)droppedBufferFull, (unsigned long)droppedRetryExhaust, (unsigned long)droppedPeerDead,
+            (unsigned long)droppedMessage, (unsigned long)droppedAck,
+            (unsigned long)droppedAnnounce, (unsigned long)droppedAnnounceAck, (unsigned long)droppedOther);
     jPrintf(",\"mesh\":{\"peerCount\":%u,\"routeCount\":%u,\"msgBufferUsed\":%u,\"msgBufferMax\":%u,\"eventBufferUsed\":%u,\"eventBufferMax\":%u}",
             (unsigned)peerList.size(), (unsigned)routingList.size(),
             (unsigned)msgCount, (unsigned)API_MSG_BUFFER_SIZE,
             (unsigned)evtCount, (unsigned)API_EVT_BUFFER_SIZE);
+    jPrintf(",\"fileWriter\":{\"pending\":%u,\"maxPending\":%u,\"slots\":%u,\"writes\":%lu,\"dropped\":%lu}",
+            (unsigned)fileWriterPending(), (unsigned)fileWriterMaxPending(),
+            (unsigned)fileWriterSlotCount(),
+            (unsigned long)fileWriterTotal(), (unsigned long)fileWriterDropped());
     jPrintf(",\"system\":{\"version\":\"%s\",\"board\":\"%s\"", VERSION, getBoardName());
     jPrintf(",\"uptime\":%lu", millis() / 1000);
     jPrintf(",\"resetReason\":\"%s\"", apiGetResetReason());
@@ -749,48 +978,6 @@ static void handleDiagnostics(AsyncWebServerRequest *request) {
     jSend(request);
 }
 
-// ── Combined poll endpoint ──────────────────────────────────────────────────
-// Returns status + peers + routes + messages + events + diagnostics in a
-// single response.  Reduces 6 HTTP round-trips to 1, cutting heap
-// fragmentation from ESPAsyncWebServer's per-request allocations.
-
-static void handlePoll(AsyncWebServerRequest *request) {
-    if (!checkApiAuth(request)) return;
-    if (!heapGuard(request)) return;
-
-    // Parse optional message/event parameters
-    uint32_t sinceMsgs = 0, sinceEvts = 0, ackMsgs = 0, ackEvts = 0;
-    int msgLimit = 20, evtLimit = 50;
-    if (request->hasParam("since_msg")) sinceMsgs = request->getParam("since_msg")->value().toInt();
-    if (request->hasParam("since_evt")) sinceEvts = request->getParam("since_evt")->value().toInt();
-    if (request->hasParam("ack_msg"))   ackMsgs   = request->getParam("ack_msg")->value().toInt();
-    if (request->hasParam("ack_evt"))   ackEvts   = request->getParam("ack_evt")->value().toInt();
-    if (request->hasParam("msg_limit")) {
-        msgLimit = request->getParam("msg_limit")->value().toInt();
-        if (msgLimit < 1) msgLimit = 1;
-        if (msgLimit > API_MSG_BUFFER_SIZE) msgLimit = API_MSG_BUFFER_SIZE;
-    }
-    if (request->hasParam("evt_limit")) {
-        evtLimit = request->getParam("evt_limit")->value().toInt();
-        if (evtLimit < 1) evtLimit = 1;
-        if (evtLimit > API_EVT_BUFFER_SIZE) evtLimit = API_EVT_BUFFER_SIZE;
-    }
-
-    if (ackMsgs > 0) purgeMessages(ackMsgs);
-    if (ackEvts > 0) purgeEvents(ackEvts);
-
-    jReset();
-    jPrintf("{\"status\":{"); buildStatus(); jPrintf("}");
-    jPrintf(","); buildPeers();
-    jPrintf(","); buildRoutes();
-    jPrintf(","); buildMessages(sinceMsgs, msgLimit, nullptr);
-    jPrintf(","); buildEvents(sinceEvts, evtLimit, nullptr);
-    jPrintf(","); buildGroups();
-    jPrintf(","); buildDiagnostics();
-    jPrintf("}");
-    jSend(request);
-}
-
 // ── Register endpoints ──────────────────────────────────────────────────────
 
 void setupApiEndpoints(AsyncWebServer &server) {
@@ -804,7 +991,6 @@ void setupApiEndpoints(AsyncWebServer &server) {
     // Register NTP sync callback
     sntp_set_time_sync_notification_cb(onNtpSync);
 
-    server.on("/api/poll", HTTP_GET, handlePoll);
     server.on("/api/status", HTTP_GET, handleStatus);
     server.on("/api/peers", HTTP_GET, handlePeers);
     server.on("/api/routes", HTTP_GET, handleRoutes);
@@ -819,6 +1005,13 @@ void setupApiEndpoints(AsyncWebServer &server) {
         [](AsyncWebServerRequest *request) {},
         nullptr,
         handlePostMessage
+    );
+
+    // POST /api/messages/import — one-shot client → node migration
+    server.on("/api/messages/import", HTTP_POST,
+        [](AsyncWebServerRequest *request) {},
+        nullptr,
+        handleImportMessages
     );
 
     logPrintf(LOG_INFO, "API", "REST API endpoints registered");

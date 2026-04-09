@@ -1,5 +1,19 @@
 # Changelog
 
+## [v1.0.32]
+
+- FIX: REST-API-Nachrichten-/Event-Puffer werden nicht mehr bei jedem Read destruktiv geleert — der `ack`-Parameter auf `/api/messages` und `/api/events` wird nur noch akzeptiert, aber ignoriert. Mehrere Clients (Browser, Bridgeserver, …) sehen jetzt denselben Live-Tail.
+- ENTFERNT: Aggregierter `/api/poll`-Endpunkt — Clients nutzen die Einzel-Endpunkte (`/api/status`, `/api/peers`, `/api/routes`, `/api/messages`, `/api/events`, `/api/groups`, `/api/diagnostics`). Spart ~10 KB statischen JSON-Build-Buffer und damit freien Heap.
+- NEU: API-Nachrichten-Ringpuffer wird beim Boot direkt aus `/messages.json` reseedet — kein separater `/api_msgs.bin` mehr nötig. Reduziert FS-Schreiblast und entfernt eine Quelle für `fsMutex`-Konkurrenz. Alte `/api_msgs.bin` wird beim ersten Boot automatisch entfernt.
+- NEU: API-Event-Ringpuffer wird auf LittleFS persistiert (`/api_evts.bin`) und beim Boot wiederhergestellt — der Event-Tail überlebt jetzt Reboots
+- NEU: API-Puffergrößen erhöht (Messages 5 → 32, Events 10 → 64), da kein ACK-Purge mehr nötig ist
+- HEAP: `ApiEvent`-Struktur entschlackt — `source[12]`, `text[64]`, `action[8]`, `dest[7]`, `hops` und `event[8]` (jetzt 1-Byte-Enum) raus. Spart ~6,5 KB statisches BSS bei 64 Slots. `apiRecordErrorEvent` (war ungenutzt) und `apiRecordRoutingEvent` (Duplikat zum normalen Route-Log) entfernt.
+- HEAP/FS: FileWriter-Slot-Pool 16 → 8 (~8,5 KB statisches BSS frei). Allokator findet jetzt einen freien Slot statt blind den ältesten zu überschreiben — kein stiller Datenverlust mehr bei Saturation.
+- PERF/FS: FileWriter drained alle pending Slots pro `fsMutex`-Hold und gruppiert Writes nach Dateiname → 1× `open`/`close` pro Datei pro Batch statt pro Slot. Bei Bursts deutlich weniger Flash-Metadata-Flushes, niedrigere Fragmentierung, kürzere Stalls.
+- NEU: FileWriter-Diagnostik in `/api/status` (`diagnostics.fileWriter`) — `pending`, `maxPending` (Lifetime-Watermark), `slots`, `writes`, `dropped`. Vom Bridgeserver in die Telemetrie-DB übernommen und im Dashboard als sechster Chart pro Node sichtbar.
+- FIX: Routing-Update-Fall logged jetzt explizit `Updated route: …` (vorher nur „new route" wurde geloggt, Updates fielen unter den Tisch).
+- FIX: Relay-Pfad löschte beim Empfang eines Duplikats *aller* noch im `txBuffer` wartenden Relay-Kopien für dieselbe Message-ID — auch der eigenen, die noch nie gesendet wurden. Dadurch gingen Messages häufig benutzter Quellen verloren, sobald innerhalb der WiFi-Retry-Wartezeit (2 s) eine zweite Relay-Quelle dieselbe Message rebroadcastete. Der Dedup beim *neuen* Enqueue über `found` reicht aus; bestehende, schon eingestellte Kopien werden jetzt nicht mehr abgewürgt.
+
 ## [v1.0.31b]
 
 - NEU: Rotierende Multi-Screen-UI (`ID` / `NET` / `LoRa` / `MSG` / `SYS`) jetzt auch auf HELTEC WiFi LoRa 32 V3, LILYGO T3 LoRa32 V1.6.1 und LILYGO T-Beam — gemeinsame Page-Renderer und Rotations-Logik für alle U8g2-Boards

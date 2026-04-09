@@ -146,8 +146,43 @@ bool rebootRequested = false;
 /** Retry counter for the frame currently being transmitted from txBuffer. */
 uint8_t currentRetry = 0;
 
-/** Lifetime counter of frames dropped because all retries were exhausted. */
+/** Lifetime counter of frames dropped (any reason). Total = sum of all
+ *  dropped*-counters below. */
 uint32_t droppedFrames = 0;
+
+// ── Drop reason counters (#14) ────────────────────────────────────────────────
+/** Frames dropped because the TX buffer was full when trying to enqueue. */
+uint32_t droppedBufferFull   = 0;
+/** Frames dropped after all retries to a (still alive) peer were exhausted. */
+uint32_t droppedRetryExhaust = 0;
+/** Frames purged in bulk because their target peer was marked dead. */
+uint32_t droppedPeerDead     = 0;
+
+// ── Drop type counters (#14) ──────────────────────────────────────────────────
+/** Dropped MESSAGE_FRAME count. */
+uint32_t droppedMessage      = 0;
+/** Dropped MESSAGE_ACK_FRAME count. */
+uint32_t droppedAck          = 0;
+/** Dropped ANNOUNCE_FRAME count. */
+uint32_t droppedAnnounce     = 0;
+/** Dropped ANNOUNCE_ACK_FRAME count. */
+uint32_t droppedAnnounceAck  = 0;
+/** Dropped frames of any other type. */
+uint32_t droppedOther        = 0;
+
+/**
+ * @brief Account a single dropped frame in the per-type counter.
+ *        The reason counter and the global total must be updated by the caller.
+ */
+static inline void accountDroppedType(const Frame& f) {
+    switch (f.frameType) {
+        case Frame::FrameTypes::MESSAGE_FRAME:       droppedMessage++;     break;
+        case Frame::FrameTypes::MESSAGE_ACK_FRAME:   droppedAck++;         break;
+        case Frame::FrameTypes::ANNOUNCE_FRAME:      droppedAnnounce++;    break;
+        case Frame::FrameTypes::ANNOUNCE_ACK_FRAME:  droppedAnnounceAck++; break;
+        default:                                     droppedOther++;       break;
+    }
+}
 
 /** Flux guard: earliest millis() at which the next LoRa TX is allowed.
  *  A short pause after each TX lets remote receivers settle back into RX,
@@ -203,26 +238,19 @@ void processRxFrame(Frame &f) {
     // Log to monitor
     f.monitorJSON();
 
-    // Early duplicate drop for MESSAGE_FRAME: if we already have this (srcCall, id)
+    // Early duplicate skip for MESSAGE_FRAME: if we already have this (srcCall, id)
     // in the ring-buffer AND the frame is not directly addressed to us, skip the
     // expensive JSON debug serialization, addPeerList, and full case logic.
-    // Directly-addressed duplicates (viaCall == mycall) are NOT dropped so that
+    // Directly-addressed duplicates (viaCall == mycall) are NOT skipped so that
     // re-ACKs still work for retransmitting peers.
+    // NOTE: pending relay copies in txBuffer are intentionally kept here – the
+    // suppress-on-heard decision must be made directly before TX, otherwise an
+    // echo from a neighbour would prematurely cancel our own scheduled repeat.
     if (f.frameType == Frame::FrameTypes::MESSAGE_FRAME &&
         strcmp(f.viaCall, settings.mycall) != 0) {
         for (int i = 0; i < MAX_STORED_MESSAGES_RAM; i++) {
             if (messages[i].id == f.id &&
                 strcmp(messages[i].srcCall, f.srcCall) == 0) {
-                // Duplicate: remove any pending relay copies from TX buffer
-                txBuffer.erase(
-                    std::remove_if(txBuffer.begin(), txBuffer.end(),
-                        [&](const Frame& txB) {
-                            return (strcmp(txB.srcCall, f.srcCall) == 0) &&
-                                   (txB.id == f.id) &&
-                                   (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
-                        }),
-                    txBuffer.end()
-                );
                 return;
             }
         }
@@ -425,17 +453,13 @@ void processRxFrame(Frame &f) {
             // Update routing: the sender is reachable via nodeCall
             addRoutingList(f.srcCall, f.nodeCall, f.hopCount);
 
-            // Duplicate detected: remove any remaining relay copies from TX buffer
-            if (found) {
-                txBuffer.erase(
-                    std::remove_if(txBuffer.begin(), txBuffer.end(),
-                        [&](const Frame& txB) {
-                            return (strcmp(txB.srcCall, f.srcCall) == 0) && (txB.id == f.id)
-                                && (txB.frameType == Frame::FrameTypes::MESSAGE_FRAME);
-                        }),
-                    txBuffer.end()
-                );
-            }
+            // NOTE: We intentionally do NOT erase pending relay copies from
+            // txBuffer when a duplicate is seen here. A duplicate arriving
+            // from another relayer means "someone else also has it" — not
+            // "we already sent it". Wiping our own pending copies kills the
+            // very redundancy that the multi-path relay is meant to provide.
+            // The repeat block below uses `found` to skip enqueueing NEW
+            // copies for already-known IDs; that is the correct dedup point.
 
             // Check if this message is addressed to someone else (private message not for us)
             bool forOther = (strlen(f.dstCall) > 0) && (strcmp(f.dstCall, settings.mycall) != 0);
@@ -450,6 +474,7 @@ void processRxFrame(Frame &f) {
 
             if ((found == false) && (f.messageLength > 0) && (!forOther) && (f.messageType != Frame::MessageTypes::ROUTING_INFO_MESSAGE)) {
                 // ── New, unseen message addressed to us, a group, or broadcast ──
+                // (storage / display / TRACE echo / COMMAND – local consumption only)
 
                 // Record in API message ring buffer (always active)
                 #ifdef HAS_WIFI
@@ -553,6 +578,14 @@ void processRxFrame(Frame &f) {
                     }
                 }
 
+            }
+
+            // ── Repeat / relay block ─────────────────────────────────────────
+            // Runs INDEPENDENTLY of the local-consumption block above, so that
+            // unicast messages addressed to other nodes AND ROUTING_INFO_MESSAGE
+            // frames are forwarded as well. Only condition: not yet seen and
+            // has a payload.
+            if ((found == false) && (f.messageLength > 0)) {
                 // Repeat / relay the message to reachable peers
                 // Conditions: repeat enabled, hop limit not exceeded, not addressed to us
                 if ((settings.loraRepeat == true) && (f.hopCount < extSettings.maxHopMessage) && (strcmp(f.dstCall, settings.mycall) != 0)) {
@@ -576,12 +609,17 @@ void processRxFrame(Frame &f) {
                     getRoute(f.dstCall, viaCall, MAX_CALLSIGN_LENGTH + 1);
                     if (strlen(viaCall) > 0) { routing = true; }
 
-                    // Prefer WiFi: skip LoRa if the next hop is reachable via WiFi
+                    // Prefer WiFi: skip LoRa only if the next hop is reachable via WiFi
+                    // AND the WiFi heartbeat is recent (<60s). Otherwise fall back to
+                    // sending on both ports so a stale WiFi entry cannot block LoRa
+                    // delivery (#6 in .dev/message-handling-regression.idea.md).
                     bool routeViaWifi = false;
                     if (routing) {
+                        time_t nowTs = time(NULL);
                         for (size_t pi = 0; pi < peerList.size(); pi++) {
                             if (strcmp(peerList[pi].nodeCall, viaCall) == 0 &&
-                                peerList[pi].port == 1 && peerList[pi].available) {
+                                peerList[pi].port == 1 && peerList[pi].available &&
+                                (nowTs - peerList[pi].timestamp) < 60) {
                                 routeViaWifi = true; break;
                             }
                         }
@@ -652,6 +690,14 @@ void processRxFrame(Frame &f) {
                                         // Pre-record ACK so we don't send a redundant ACK
                                         // if the peer echoes the message back
                                         addACK(tf.srcCall, tf.viaCall, tf.id);
+                                    } else {
+                                        // #15 diagnostics: relay dropped because TX buffer full
+                                        droppedFrames++;
+                                        droppedBufferFull++;
+                                        accountDroppedType(tf);
+                                        logPrintf(LOG_WARN, "Repeat",
+                                            "{\"event\":\"repeat_dropped\",\"reason\":\"buffer_full\",\"src\":\"%s\",\"id\":%u,\"via\":\"%s\",\"port\":%d}",
+                                            tf.srcCall, (unsigned)tf.id, tf.viaCall, tf.port);
                                     }
                                 }
                             }
@@ -811,6 +857,9 @@ void setup() {
     // Restore persisted peers and routes from flash
     loadPeers();
     loadRoutes();
+    #ifdef HAS_WIFI
+    apiLoadBuffers();
+    #endif
 
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
@@ -1043,10 +1092,17 @@ void loop() {
                                 [&](const Frame& txB) {
                                     return (strcmp(txB.viaCall, deadVia) == 0) && (txB.port == deadPort);
                                 });
-                        droppedFrames += (uint32_t)std::distance(newEnd, txBuffer.end());
+                        uint32_t purged = (uint32_t)std::distance(newEnd, txBuffer.end());
+                        droppedFrames  += purged;
+                        droppedPeerDead += purged;
+                        for (auto it = newEnd; it != txBuffer.end(); ++it) {
+                            accountDroppedType(*it);
+                        }
                         txBuffer.erase(newEnd, txBuffer.end());
                     } else {
                         droppedFrames++;
+                        droppedRetryExhaust++;
+                        accountDroppedType(txBuffer[i]);
                         txBuffer.erase(txBuffer.begin() + i);
                     }
                     i = -1; // restart iteration since indices shifted
@@ -1074,16 +1130,26 @@ void loop() {
         // Only broadcast status if heap has enough room for the WebSocket
         // shared_ptr allocation (~400 bytes per message per client)
         if (ESP.getFreeHeap() > 40000) {
-            char jsonBuffer[384];
+            char jsonBuffer[640];
             int len;
+            // Compact dropped-frames sub-object (#14): per-reason and per-type counters
+            char droppedJson[160];
+            snprintf(droppedJson, sizeof(droppedJson),
+                "{\"total\":%lu,\"bufferFull\":%lu,\"retryExhaust\":%lu,\"peerDead\":%lu,"
+                "\"msg\":%lu,\"ack\":%lu,\"ann\":%lu,\"annAck\":%lu,\"other\":%lu}",
+                (unsigned long)droppedFrames,
+                (unsigned long)droppedBufferFull, (unsigned long)droppedRetryExhaust, (unsigned long)droppedPeerDead,
+                (unsigned long)droppedMessage, (unsigned long)droppedAck,
+                (unsigned long)droppedAnnounce, (unsigned long)droppedAnnounceAck, (unsigned long)droppedOther);
+
             #ifdef HAS_BATTERY_ADC
             if (batteryEnabled) {
                 len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                     "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
-                    "\"retry\":%u,\"dropped\":%lu,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"retry\":%u,\"dropped\":%lu,\"droppedBy\":%s,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
                     "\"cpuFreq\":%u,\"resetReason\":\"%s\",\"battery\":%.2f}}",
                     (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
-                    (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames,
+                    (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames, droppedJson,
                     ESP.getFreeHeap(), ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
                     lastResetReason, getBatteryVoltage());
             } else
@@ -1091,10 +1157,10 @@ void loop() {
             {
                 len = snprintf(jsonBuffer, sizeof(jsonBuffer),
                     "{\"status\":{\"time\":%ld,\"tx\":%s,\"rx\":%s,\"txBufferCount\":%u,"
-                    "\"retry\":%u,\"dropped\":%lu,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
+                    "\"retry\":%u,\"dropped\":%lu,\"droppedBy\":%s,\"heap\":%u,\"minHeap\":%u,\"uptime\":%lu,"
                     "\"cpuFreq\":%u,\"resetReason\":\"%s\"}}",
                     (long)time(NULL), txFlag ? "true" : "false", rxFlag ? "true" : "false",
-                    (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames,
+                    (unsigned)txBuffer.size(), currentRetry, (unsigned long)droppedFrames, droppedJson,
                     ESP.getFreeHeap(), ESP.getMinFreeHeap(), millis() / 1000, getCpuFrequencyMhz(),
                     lastResetReason);
             }
@@ -1144,6 +1210,9 @@ void loop() {
         persistTimer = millis() + PERSIST_INTERVAL;
         if (routesDirty) saveRoutes();
         if (peersDirty)  savePeers();
+        #ifdef HAS_WIFI
+        if (apiBuffersDirty) apiSaveBuffers();
+        #endif
     }
 
     // ── 8. Reboot / shutdown ──────────────────────────────────────────────────

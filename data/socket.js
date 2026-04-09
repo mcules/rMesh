@@ -11,12 +11,39 @@ function esc(s) {
 }
 
 // --- Message Cache (localStorage) ---
-var MSG_CACHE_KEY = "rmesh_messages";
-var MSG_CACHE_SAVE_INTERVAL = 60000; // save every 60s
+// Cache is scoped per node callsign so multiple nodes from the same browser
+// don't collide. Key format: "rmesh_msgs_<MYCALL>".
+// The legacy pre-scoping global key "rmesh_messages" is migrated on first
+// contact with whichever node the user opens first after the upgrade.
+var MSG_CACHE_PREFIX        = "rmesh_msgs_";
+var MSG_CACHE_LEGACY_GLOBAL = "rmesh_messages";
+var MSG_CACHE_KEY = null;
+var MSG_CACHE_SAVE_INTERVAL = 60000;
 var _msgCacheDirty = false;
+
+function _sanitizeCallForKey(s) {
+    return String(s).replace(/[^A-Za-z0-9_\-]/g, "_");
+}
+
+function setMsgCacheKey(mycall) {
+    if (!mycall) return;
+    var newKey = MSG_CACHE_PREFIX + _sanitizeCallForKey(mycall);
+    if (MSG_CACHE_KEY === newKey) return;
+    MSG_CACHE_KEY = newKey;
+    try {
+        if (localStorage.getItem(MSG_CACHE_KEY)) return;
+        var legacy = localStorage.getItem(MSG_CACHE_LEGACY_GLOBAL);
+        if (legacy) {
+            localStorage.setItem(MSG_CACHE_KEY, legacy);
+            localStorage.removeItem(MSG_CACHE_LEGACY_GLOBAL);
+            console.log("Migrated legacy global cache → " + MSG_CACHE_KEY);
+        }
+    } catch(e) {}
+}
 
 function loadCachedMessages() {
     try {
+        if (!MSG_CACHE_KEY) return [];
         var raw = localStorage.getItem(MSG_CACHE_KEY);
         if (!raw) return [];
         return JSON.parse(raw);
@@ -30,9 +57,22 @@ function isCacheableMessage(m) {
 
 function saveCachedMessages() {
     try {
-        var toSave = messages.filter(isCacheableMessage);
-        if (toSave.length > 1000) toSave = toSave.slice(toSave.length - 1000);
-        localStorage.setItem(MSG_CACHE_KEY, JSON.stringify(toSave));
+        if (!MSG_CACHE_KEY) return;
+        // Merge: never let the in-memory tail erase older entries that are
+        // still in localStorage but no longer in `messages` (e.g. when the
+        // node returned a smaller window). Old cache + current = union.
+        var prev = loadCachedMessages();
+        var byKey = {};
+        prev.forEach(function(m) {
+            if (m && m.id && m.srcCall) byKey[m.srcCall + "_" + m.id] = m;
+        });
+        messages.filter(isCacheableMessage).forEach(function(m) {
+            if (m && m.id && m.srcCall) byKey[m.srcCall + "_" + m.id] = m;
+        });
+        var merged = Object.keys(byKey).map(function(k) { return byKey[k]; });
+        merged.sort(function(a, b) { return (a.timestamp || 0) - (b.timestamp || 0); });
+        if (merged.length > 1000) merged = merged.slice(merged.length - 1000);
+        localStorage.setItem(MSG_CACHE_KEY, JSON.stringify(merged));
         _msgCacheDirty = false;
     } catch(e) { /* localStorage full or unavailable */ }
 }
@@ -313,6 +353,10 @@ function renderRoutingList(data) {
             _ts: r.timestamp || 0
         });
     });
+    // Hide direct peers (already shown in peer list): route where via == src
+    routeArray = routeArray.filter(function(r) {
+        return r._src && r._via && r._src !== r._via;
+    });
     if (routingFilter) {
         routeArray = routeArray.filter(function(r) {
             return (r._src + " " + r._via + " " + r._hops).toLowerCase().indexOf(routingFilter) !== -1;
@@ -396,6 +440,7 @@ function onSettingsReceived(s) {
     captureSettingsSnapshot();
     var chipIdEl = document.getElementById("aboutChipId");
     if (chipIdEl) chipIdEl.innerHTML = s.chipId || "";
+    if (s.mycall) setMsgCacheKey(s.mycall);
     var hwEl = document.getElementById("aboutHardware");
     if (hwEl) hwEl.innerHTML = s.hardware || "";
     var aboutVersionEl = document.getElementById("aboutVersion");
@@ -438,7 +483,7 @@ function onSettingsReceived(s) {
             sendWS(JSON.stringify({settings: {groupNames: pushToDevice}}));
         }
     }
-    if (init == false) {
+    if (init == false && s.wifiIP && s.mycall) {
         init = true;
         fetch(baseURL + "messages.json?" + Math.random())
             .then(function(response) {
@@ -458,7 +503,34 @@ function onSettingsReceived(s) {
                         } catch(e) {}
                     });
                 }
+                // Always merge with the per-callsign cache so the browser
+                // never *loses* history just because the node returned a
+                // smaller window (or was wiped). The cache is treated as the
+                // authoritative full archive on the client side; the node is
+                // the cross-client sync layer.
                 messages = mergeWithCache(loaded);
+
+                // If the cache has entries the node doesn't know about — be
+                // it because the node was wiped (FS flash, deleteMessages) or
+                // because /messages.json got truncated — push the missing
+                // ones back up so the node (and every other client) recovers.
+                try {
+                    var knownIds = {};
+                    loaded.forEach(function(m) { if (m.id) knownIds[m.srcCall + "_" + m.id] = true; });
+                    var extra = (loadCachedMessages() || []).filter(function(m) {
+                        return m.id && m.srcCall && !knownIds[m.srcCall + "_" + m.id];
+                    });
+                    if (extra.length > 0) {
+                        fetch(baseURL + "api/messages/import", {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify({messages: extra})
+                        }).then(function(r) {
+                            if (r.ok) console.log("Restored " + extra.length + " messages to node");
+                        }).catch(function(e) { console.warn("import failed:", e); });
+                    }
+                } catch(e) { /* localStorage unavailable */ }
+
                 saveCachedMessages();
                 messages.push({"delimiter": true});
                 showMessages(true);
@@ -471,6 +543,19 @@ function onSettingsReceived(s) {
                 if (cached.length > 0) {
                     cached.forEach(function(m) { m.parsed = false; });
                     messages = cached;
+                    // messages.json missing usually means the node was wiped
+                    // (filesystem flash, deleteMessages). Push the cache back
+                    // so the node and other clients can recover.
+                    var extra = cached.filter(function(m) { return m.id && m.srcCall; });
+                    if (extra.length > 0) {
+                        fetch(baseURL + "api/messages/import", {
+                            method: "POST",
+                            headers: {"Content-Type": "application/json"},
+                            body: JSON.stringify({messages: extra})
+                        }).then(function(r) {
+                            if (r.ok) console.log("Restored " + extra.length + " messages to node (catch)");
+                        }).catch(function(e) { console.warn("import failed:", e); });
+                    }
                 }
                 messages.push({"delimiter": true});
                 showMessages(true);
@@ -487,6 +572,7 @@ function onMessage(event) {
 
     // ── Auth-Flow ─────────────────────────────────────────────────────────────
     if (d.auth) {
+        if (d.auth.mycall) setMsgCacheKey(d.auth.mycall);
         if (d.auth.required) {
             authRequired = true;
             authNonce    = d.auth.nonce;
@@ -1138,6 +1224,8 @@ function showMessages(parseAll = false) {
     
     var sound = false;
 
+    var myCall = document.getElementById("settingsMycall").value;
+
     messages.forEach(function(m) {
         //Abort if message was already displayed
         if ((m.parsed == true) && (parseAll == false)) {return;}
@@ -1170,7 +1258,7 @@ function showMessages(parseAll = false) {
         }
 
         //Messages to me -> Channel 2
-        if ((m.dstCall == document.getElementById("settingsMycall").value) && (found == false)) {
+        if (myCall && (m.dstCall == myCall) && (found == false)) {
             found = true;
             document.getElementById("channel2").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[2] = true;}
@@ -1204,7 +1292,7 @@ function showMessages(parseAll = false) {
         }
 
         //Messages that I sent -> Channel 2
-        if ((m.srcCall == document.getElementById("settingsMycall").value) && (m.dstGroup == "") && (found == false)) {
+        if (myCall && (m.srcCall == myCall) && (m.dstGroup == "") && (found == false)) {
             found = true;
             document.getElementById("channel2").insertAdjacentHTML('beforeend', msg);
             if (!parseAll) {channels[2] = true;}

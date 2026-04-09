@@ -104,8 +104,10 @@ void checkPeerList() {
                 update = true;
                 logPrintf(LOG_DEBUG, "Peer", "{\"event\":\"peer\",\"action\":\"unavailable\",\"call\":\"%s\",\"port\":%d,\"reason\":\"snr\",\"snr\":%.1f,\"min_snr\":%d}",
                         peer.nodeCall, peer.port, peer.snr, extSettings.minSnr);
-                // Drop the direct-neighbor route so a multi-hop alternative via a stronger peer can take over
-                removeDirectRoute(peer.nodeCall);
+                // Note: do NOT removeDirectRoute() here. Keeping the route entry
+                // allows the LoRa link to act as a last-resort fallback if the
+                // preferred WiFi/multi-hop path disappears (#8 in
+                // .dev/message-handling-regression.idea.md).
             }
         }
     }
@@ -190,7 +192,7 @@ void availablePeerList(const char* call, bool available, uint8_t port) {
         bool effectiveAvailable = available;
         if (available && it->port == 0 && extSettings.minSnr > -20 && it->snr < extSettings.minSnr) {
             effectiveAvailable = false;
-            removeDirectRoute(it->nodeCall);
+            // Direct route intentionally kept – LoRa stays as fallback (#8).
         }
 
         // Reject availability while cooldown is active (retry exhaustion)
@@ -270,8 +272,13 @@ void addPeerList(Frame &f) {
         f.nodeCall, f.port, isNew ? "true" : "false", (int)peerList.size());
 
     if (!isNew) {
-        // Update existing peer, but keep current availability state
+        // Update existing peer
         it->timestamp = now;
+        // Receiving a frame from this peer is proof it is alive again,
+        // so any active retry-exhaustion cooldown can be cleared immediately.
+        if (it->cooldownUntil != 0) {
+            it->cooldownUntil = 0;
+        }
         // Only overwrite if new values are present (RSSI is always negative for LoRa)
         if (f.rssi != 0 || f.snr != 0 || f.frqError != 0) {
             it->rssi = f.rssi;
@@ -279,6 +286,27 @@ void addPeerList(Frame &f) {
             it->frqError = f.frqError;
         }
         it->port = f.port;
+
+        // Re-enable a peer that was previously marked unavailable (e.g. by
+        // retry-exhaustion in main.cpp). Hearing a frame from it is the
+        // strongest possible proof that it is alive. Without this, a peer
+        // can get stuck in `available=false` forever even though we keep
+        // receiving its announces, because the only paths that set
+        // available=true (ANNOUNCE_ACK / MESSAGE_ACK / MESSAGE_FRAME with
+        // viaCall==mycall) require traffic explicitly addressed to us.
+        // Skip if the SNR filter would immediately knock it out again, or
+        // if a WiFi duplicate of the same callsign is still preferred –
+        // checkPeerList() will reconcile that on its next pass.
+        bool snrBlocks = (extSettings.minSnr > -20) && (it->port == 0) &&
+                         (it->snr < extSettings.minSnr);
+        if (!it->available && !snrBlocks) {
+            it->available = true;
+            peerListDirty = true;
+            markTopologyChanged();
+            logPrintf(LOG_DEBUG, "Peer",
+                "{\"event\":\"peer\",\"action\":\"reactivate\",\"call\":\"%s\",\"port\":%d,\"reason\":\"frame_rx\",\"snr\":%.1f}",
+                it->nodeCall, it->port, it->snr);
+        }
     } else {
         // Add new peer (enforce capacity limit)
         if (peerList.size() >= PEER_LIST_SIZE) {
