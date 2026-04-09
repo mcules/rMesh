@@ -88,7 +88,7 @@ inline uint8_t syncWordForFrequency(float f) {
  * preventing the announce → relay → exhaust → re-announce cycle.
  * Default: 10 minutes.
  */
-#define PEER_RETRY_COOLDOWN (10 * 60 * 1000UL)
+#define PEER_RETRY_COOLDOWN (90 * 1000UL)
 
 /** Maximum number of messages persisted in messages.json (flash). */
 #define MAX_STORED_MESSAGES 1000
@@ -96,8 +96,8 @@ inline uint8_t syncWordForFrequency(float f) {
 /** Minimum free bytes on LittleFS before writes are skipped and a trim is triggered. */
 #define FS_MIN_FREE_BYTES (50 * 1024)
 
-/** Maximum number of messages held in the RAM message cache (reduced to save heap). */
-#define MAX_STORED_MESSAGES_RAM 30
+/** Maximum number of messages held in the RAM message cache (dedup ring buffer). */
+#define MAX_STORED_MESSAGES_RAM 60
 
 /** Maximum number of ACK frames stored in ack.json. */
 #define MAX_STORED_ACK 300

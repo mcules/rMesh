@@ -195,115 +195,144 @@ void sendGroup(const char* dst, const char* text, uint8_t messageType) {
     sendFrame(f);
 }
 
-// void addJSONtoFileTask(void * pvParameters) {
-//     FileWriteParams* p = (FileWriteParams*) pvParameters;
-
-//     // Wait until the filesystem is free (max 30 seconds)
-//     if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-//         //Zeilen zählen
-//         size_t lineCount = 0;
-//         File countFile = LittleFS.open(p->fileName, "r");
-//         if (countFile) {
-//             while (countFile.available()) {
-//                 if (countFile.read() == '\n') lineCount++;
-//             }
-//             countFile.close();
-//         }
-//         size_t linesToSkip = (lineCount >= p->maxLines) ? (lineCount - p->maxLines - 1) : 0;
-
-//         File srcFile = LittleFS.open(p->fileName, "r");   
-//         File dstFile = LittleFS.open("/temp.json", "w");   
-//         //char lineBuffer[2048]; // Puffer für eine Zeile
-//         char* lineBuffer = (char*)malloc(2048);
-//         size_t currentLine = 0;
-//         if (srcFile) {
-//             while (srcFile.available()) {
-//                 int len = srcFile.readBytesUntil('\n', lineBuffer, 2048);
-//                 // Nur Zeilen kopieren, die nach dem Skip-Limit liegen
-//                 if (currentLine >= linesToSkip) {
-//                     dstFile.write((const uint8_t*)lineBuffer, len);
-//                     dstFile.print("\n");
-//                 }
-//                 currentLine++;
-//             }
-//             srcFile.close();
-//         }
-//         free(lineBuffer);
-//         lineBuffer = nullptr;    
-
-//         if (p->content != nullptr && p->length > 0) {
-//             dstFile.write((const uint8_t*)p->content, p->length);
-//             dstFile.print("\n");
-//         }
-//         dstFile.close();
-
-//         LittleFS.remove(p->fileName);
-//         LittleFS.rename("/temp.json", p->fileName);
-
-//         xSemaphoreGive(fsMutex); //freigeben
-//     } 
-
-//     free(p->content);
-//     delete p;
-//     vTaskDelete(NULL);
-// }
-
-
 // ── Single file-write worker task with static ring buffer ────────────────────
-// Zero heap allocation: uses a fixed-size ring buffer in BSS instead of
-// malloc/free per write.  Each slot holds up to 1024 bytes of content.
+// Zero heap allocation: fixed-size slot pool in BSS instead of malloc/free.
+// Producers (addJSONtoFile) pick a free slot, fill it, and queue its index.
+// The worker drains the entire pending queue per fsMutex hold and groups
+// writes by filename so each LittleFS file is opened/closed only once per
+// batch — flash metadata flush is the dominant cost, so this dramatically
+// speeds up bursts and shortens the time the slot pool is occupied.
 
-#define FW_SLOTS     16
+#define FW_SLOTS     8
 #define FW_CONTENT   1024
 
 struct FileWriteSlot {
     char content[FW_CONTENT];
     char fileName[32];
     size_t length;
+    volatile bool inUse;   // true between addJSONtoFile() and worker completion
 };
 
 static FileWriteSlot  fwSlots[FW_SLOTS];
 static QueueHandle_t  fwQueue = NULL;  // queue of slot indices (uint8_t)
 
+// ── Diagnostics counters (exposed via /api/status) ──────────────────────────
+// Live count of pending slots and lifetime high-water mark. Updated under a
+// short critical section so the watermark is consistent across cores.
+static portMUX_TYPE fwMux = portMUX_INITIALIZER_UNLOCKED;
+static volatile uint8_t  fwPending     = 0;
+static volatile uint8_t  fwMaxPending  = 0;
+static volatile uint32_t fwDroppedFull = 0;  // queue full / no slot dropped
+static volatile uint32_t fwTotalWrites = 0;  // successful enqueues
+
+uint8_t  fileWriterPending()    { return fwPending; }
+uint8_t  fileWriterMaxPending() { return fwMaxPending; }
+uint8_t  fileWriterSlotCount()  { return FW_SLOTS; }
+uint32_t fileWriterDropped()    { return fwDroppedFull; }
+uint32_t fileWriterTotal()      { return fwTotalWrites; }
+
+static inline void fwAccountEnqueue() {
+    portENTER_CRITICAL(&fwMux);
+    fwPending++;
+    if (fwPending > fwMaxPending) fwMaxPending = fwPending;
+    fwTotalWrites++;
+    portEXIT_CRITICAL(&fwMux);
+}
+
+static inline void fwAccountDequeue() {
+    portENTER_CRITICAL(&fwMux);
+    if (fwPending > 0) fwPending--;
+    portEXIT_CRITICAL(&fwMux);
+}
+
+// Drain queued slot indices into a local array, blocking only on the first
+// receive. Returns the number drained (>=1 on success, 0 on shutdown).
+static uint8_t drainQueue(uint8_t* out, uint8_t maxN) {
+    uint8_t n = 0;
+    if (xQueueReceive(fwQueue, &out[n], portMAX_DELAY) != pdTRUE) return 0;
+    n++;
+    while (n < maxN && xQueueReceive(fwQueue, &out[n], 0) == pdTRUE) n++;
+    return n;
+}
+
 static void fileWriteWorkerTask(void *) {
-    uint8_t idx;
+    uint8_t indices[FW_SLOTS];
+    bool    handled[FW_SLOTS];
     for (;;) {
-        if (xQueueReceive(fwQueue, &idx, portMAX_DELAY) != pdTRUE) continue;
-        FileWriteSlot &s = fwSlots[idx];
-        if (xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
-            #ifndef NRF52_PLATFORM
-            size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
-            if (freeSpace < FS_MIN_FREE_BYTES) {
-                logPrintf(LOG_WARN, "FS", "Low space (%u bytes free) — skipping write, requesting trim", freeSpace);
-                trimNeeded = true;
-                xSemaphoreGive(fsMutex);
+        uint8_t n = drainQueue(indices, FW_SLOTS);
+        if (n == 0) continue;
+
+        if (!xSemaphoreTake(fsMutex, pdMS_TO_TICKS(30000))) {
+            logPrintf(LOG_ERROR, "FS", "fsMutex timeout in fileWriteWorker");
+            // Release slots so producers don't deadlock; data is lost.
+            for (uint8_t i = 0; i < n; i++) {
+                fwSlots[indices[i]].inUse = false;
+                fwAccountDequeue();
+            }
+            continue;
+        }
+
+        #ifndef NRF52_PLATFORM
+        size_t freeSpace = LittleFS.totalBytes() - LittleFS.usedBytes();
+        if (freeSpace < FS_MIN_FREE_BYTES) {
+            logPrintf(LOG_WARN, "FS", "Low space (%u bytes free) — skipping batch, requesting trim", freeSpace);
+            trimNeeded = true;
+            xSemaphoreGive(fsMutex);
+            for (uint8_t i = 0; i < n; i++) {
+                fwSlots[indices[i]].inUse = false;
+                fwAccountDequeue();
+            }
+            continue;
+        }
+        #endif
+
+        // Group by filename: for each unique filename open the file once,
+        // append all matching slots in queue order, close. Preserves order
+        // within each file. handled[] tracks which indices we already wrote.
+        for (uint8_t i = 0; i < n; i++) handled[i] = false;
+
+        for (uint8_t i = 0; i < n; i++) {
+            if (handled[i]) continue;
+            const char* fname = fwSlots[indices[i]].fileName;
+            File file = LittleFS.open(fname, "a");
+            if (!file) {
+                logPrintf(LOG_ERROR, "FS", "Could not open %s for appending", fname);
+                // Skip all slots for this file
+                for (uint8_t j = i; j < n; j++) {
+                    if (!handled[j] && strcmp(fwSlots[indices[j]].fileName, fname) == 0) {
+                        handled[j] = true;
+                    }
+                }
                 continue;
             }
-            #endif
-
-            File file = LittleFS.open(s.fileName, "a");
-            if (file) {
-                if (s.length > 0) {
-                    file.write((const uint8_t*)s.content, s.length);
+            for (uint8_t j = i; j < n; j++) {
+                if (handled[j]) continue;
+                FileWriteSlot &sj = fwSlots[indices[j]];
+                if (strcmp(sj.fileName, fname) != 0) continue;
+                if (sj.length > 0) {
+                    file.write((const uint8_t*)sj.content, sj.length);
                     file.print("\n");
                 }
-                file.close();
-            } else {
-                logPrintf(LOG_ERROR, "FS", "Could not open file %s for appending", s.fileName);
+                handled[j] = true;
             }
-            xSemaphoreGive(fsMutex);
-        } else {
-            logPrintf(LOG_ERROR, "FS", "fsMutex timeout in fileWriteWorker");
+            file.close();
+        }
+
+        xSemaphoreGive(fsMutex);
+
+        // Release slots and update accounting
+        for (uint8_t i = 0; i < n; i++) {
+            fwSlots[indices[i]].inUse = false;
+            fwAccountDequeue();
         }
     }
 }
 
 void initFileWriteWorker() {
+    for (uint8_t i = 0; i < FW_SLOTS; i++) fwSlots[i].inUse = false;
     fwQueue = xQueueCreate(FW_SLOTS, sizeof(uint8_t));
     xTaskCreate(fileWriteWorkerTask, "FileWriter", 4096, NULL, 1, NULL);
 }
-
-static uint8_t fwNextSlot = 0;
 
 void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t lines) {
     if (!fwQueue) return;
@@ -312,8 +341,28 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
         length = FW_CONTENT;
     }
 
-    uint8_t idx = fwNextSlot;
-    fwNextSlot = (fwNextSlot + 1) % FW_SLOTS;
+    // Find a free slot. Safe allocator: if all slots are in use the queue
+    // is by definition full, so we drop with a logged error instead of
+    // overwriting an unprocessed slot (which would silently lose data).
+    uint8_t idx = 0xFF;
+    portENTER_CRITICAL(&fwMux);
+    for (uint8_t i = 0; i < FW_SLOTS; i++) {
+        if (!fwSlots[i].inUse) {
+            fwSlots[i].inUse = true;
+            idx = i;
+            break;
+        }
+    }
+    portEXIT_CRITICAL(&fwMux);
+
+    if (idx == 0xFF) {
+        portENTER_CRITICAL(&fwMux);
+        fwDroppedFull++;
+        portEXIT_CRITICAL(&fwMux);
+        logPrintf(LOG_ERROR, "FS", "File write slots exhausted (%u/%u), dropping write to %s",
+                  (unsigned)fwPending, (unsigned)FW_SLOTS, file);
+        return;
+    }
 
     FileWriteSlot &s = fwSlots[idx];
     memcpy(s.content, buffer, length);
@@ -321,8 +370,17 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
     strncpy(s.fileName, file, sizeof(s.fileName) - 1);
     s.fileName[sizeof(s.fileName) - 1] = '\0';
 
-    if (xQueueSend(fwQueue, &idx, pdMS_TO_TICKS(5000)) != pdTRUE) {
-        logPrintf(LOG_ERROR, "FS", "File write queue full after 5s, dropping write");
+    fwAccountEnqueue();
+
+    if (xQueueSend(fwQueue, &idx, pdMS_TO_TICKS(1000)) != pdTRUE) {
+        // Should not happen — queue and slot pool are the same size — but
+        // be defensive: release the slot and account the drop.
+        s.inUse = false;
+        fwAccountDequeue();
+        portENTER_CRITICAL(&fwMux);
+        fwDroppedFull++;
+        portEXIT_CRITICAL(&fwMux);
+        logPrintf(LOG_ERROR, "FS", "File write queue send failed for %s", file);
     }
 }
 

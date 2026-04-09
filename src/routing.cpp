@@ -101,18 +101,14 @@ void addRoutingList(const char* srcCall, const char* viaCall, uint8_t hopCount) 
         r.hopCount = hopCount;
         routingList.push_back(r);
         routesDirty = true;
-        #ifdef HAS_WIFI
-        apiRecordRoutingEvent("new", srcCall, viaCall, hopCount);
-        #endif
         logPrintf(LOG_INFO, "Route", "New route: %s via %s (%d hops)", srcCall, viaCall, hopCount);
     } else {
         // Case B: Destination exists -> Shortest path wins
         if (hopCount < it->hopCount) {
             // Shorter path found -> Update route
             routesDirty = true;
-            #ifdef HAS_WIFI
-            apiRecordRoutingEvent("update", srcCall, viaCall, hopCount);
-            #endif
+            logPrintf(LOG_INFO, "Route", "Updated route: %s via %s (%d hops, was %d)",
+                      srcCall, viaCall, hopCount, it->hopCount);
             strncpy(it->viaCall, viaCall, MAX_CALLSIGN_LENGTH);
             it->viaCall[MAX_CALLSIGN_LENGTH] = '\0';
             it->timestamp = time(NULL);

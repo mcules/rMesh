@@ -6,9 +6,10 @@
 #include "frame.h"
 #include "settings.h"
 
-// Ring buffer sizes (emergency values: ACK-based cleanup keeps buffers near-empty)
-#define API_MSG_BUFFER_SIZE  5
-#define API_EVT_BUFFER_SIZE  10
+// Ring buffer sizes — buffers are persisted to LittleFS so multiple REST
+// clients can each fetch the full live tail without destructive ACK-purging.
+#define API_MSG_BUFFER_SIZE  32
+#define API_EVT_BUFFER_SIZE  64
 
 // Message ring buffer entry (~210 bytes each, 5 * 210 = ~1050 bytes)
 struct ApiMessage {
@@ -25,25 +26,25 @@ struct ApiMessage {
     bool acked;
 };
 
-// Event ring buffer entry (~80 bytes each, 100 * 80 = ~8 KB)
+// Event type discriminator (replaces former char event[8] field).
+enum ApiEventType : uint8_t {
+    API_EVT_RX  = 0,
+    API_EVT_TX  = 1,
+    API_EVT_ACK = 2,
+};
+
+// Event ring buffer entry. ~40 bytes each.
 struct ApiEvent {
     uint32_t time;
-    char event[8];        // "rx", "tx", "ack", "routing", "error"
-    uint8_t frameType;
+    uint8_t  eventType;   // ApiEventType
+    uint8_t  frameType;
     char nodeCall[MAX_CALLSIGN_LENGTH + 1];
     char viaCall[MAX_CALLSIGN_LENGTH + 1];
     char srcCall[MAX_CALLSIGN_LENGTH + 1];
     uint32_t id;
     int16_t rssi;
-    int8_t snr;
+    int8_t  snr;
     uint8_t port;
-    // routing-specific
-    char action[8];       // "new", "update"
-    char dest[MAX_CALLSIGN_LENGTH + 1];
-    uint8_t hops;
-    // error-specific
-    char source[12];
-    char text[64];
 };
 
 // LoRa frame counters (always active, independent of serialDebug)
@@ -62,18 +63,31 @@ void setupApiEndpoints(AsyncWebServer &server);
 void apiRecordMessage(const Frame &f, bool isTx);
 
 /**
- * @brief Record an event (rx, tx, ack, routing, error) into the event ring buffer.
- * Call from processRxFrame(), TX path, routing updates, and error handlers.
+ * @brief Record an event (rx, tx, ack) into the event ring buffer.
+ * Call from processRxFrame() and the TX path.
  */
 void apiRecordRxEvent(const Frame &f);
 void apiRecordTxEvent(const Frame &f);
 void apiRecordAckEvent(const Frame &f);
-void apiRecordRoutingEvent(const char* action, const char* dest, const char* via, uint8_t hops);
-void apiRecordErrorEvent(const char* source, const char* text);
 
 /**
  * @brief Mark a message as ACKed in the ring buffer.
  */
 void apiMarkMessageAcked(const char* srcCall, uint32_t id);
+
+/**
+ * @brief Load persisted message/event ring buffers from LittleFS.
+ * Call once in setup() after LittleFS is mounted.
+ */
+void apiLoadBuffers();
+
+/**
+ * @brief Persist the message/event ring buffers to LittleFS via bgWorker.
+ * Triggered from the main loop's periodic persistence tick when dirty.
+ */
+void apiSaveBuffers();
+
+/** Dirty flag — set when buffers have changed since last save. */
+extern volatile bool apiBuffersDirty;
 
 #endif
