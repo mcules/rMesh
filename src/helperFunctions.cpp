@@ -233,15 +233,15 @@ uint32_t fileWriterTotal()      { return fwTotalWrites; }
 
 static inline void fwAccountEnqueue() {
     portENTER_CRITICAL(&fwMux);
-    fwPending++;
+    fwPending = fwPending + 1;
     if (fwPending > fwMaxPending) fwMaxPending = fwPending;
-    fwTotalWrites++;
+    fwTotalWrites = fwTotalWrites + 1;
     portEXIT_CRITICAL(&fwMux);
 }
 
 static inline void fwAccountDequeue() {
     portENTER_CRITICAL(&fwMux);
-    if (fwPending > 0) fwPending--;
+    if (fwPending > 0) fwPending = fwPending - 1;
     portEXIT_CRITICAL(&fwMux);
 }
 
@@ -357,7 +357,7 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
 
     if (idx == 0xFF) {
         portENTER_CRITICAL(&fwMux);
-        fwDroppedFull++;
+        fwDroppedFull = fwDroppedFull + 1;
         portEXIT_CRITICAL(&fwMux);
         logPrintf(LOG_ERROR, "FS", "File write slots exhausted (%u/%u), dropping write to %s",
                   (unsigned)fwPending, (unsigned)FW_SLOTS, file);
@@ -378,7 +378,7 @@ void addJSONtoFile(char* buffer, size_t length, const char* file, const uint16_t
         s.inUse = false;
         fwAccountDequeue();
         portENTER_CRITICAL(&fwMux);
-        fwDroppedFull++;
+        fwDroppedFull = fwDroppedFull + 1;
         portEXIT_CRITICAL(&fwMux);
         logPrintf(LOG_ERROR, "FS", "File write queue send failed for %s", file);
     }
