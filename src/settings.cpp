@@ -521,37 +521,16 @@ void saveSettings() {
     logPrintf(LOG_INFO, "Settings", "Saving settings...");
 
 #ifdef HAS_WIFI
-    // Sync settings.wifiSSID <-> wifiNetworks
+    // Sync wifiNetworks -> settings.wifiSSID (wifiNetworks is authoritative)
     if (!wifiNetworks.empty()) {
         int favIdx = 0;
         for (size_t i = 0; i < wifiNetworks.size(); i++) {
             if (wifiNetworks[i].favorite) { favIdx = (int)i; break; }
         }
-        if (settings.wifiSSID[0] != '\0' && strcmp(wifiNetworks[favIdx].ssid, settings.wifiSSID) != 0) {
-            bool found = false;
-            for (size_t i = 0; i < wifiNetworks.size(); i++) {
-                if (strcmp(wifiNetworks[i].ssid, settings.wifiSSID) == 0) {
-                    strlcpy(wifiNetworks[i].password, settings.wifiPassword, sizeof(wifiNetworks[i].password));
-                    for (auto& n : wifiNetworks) n.favorite = false;
-                    wifiNetworks[i].favorite = true;
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                WifiNetwork net;
-                memset(&net, 0, sizeof(net));
-                strlcpy(net.ssid,     settings.wifiSSID,    sizeof(net.ssid));
-                strlcpy(net.password, settings.wifiPassword, sizeof(net.password));
-                net.favorite = true;
-                for (auto& n : wifiNetworks) n.favorite = false;
-                wifiNetworks.push_back(net);
-            }
-        } else {
-            strlcpy(settings.wifiSSID,     wifiNetworks[favIdx].ssid,     sizeof(settings.wifiSSID));
-            strlcpy(settings.wifiPassword, wifiNetworks[favIdx].password, sizeof(settings.wifiPassword));
-        }
+        strlcpy(settings.wifiSSID,     wifiNetworks[favIdx].ssid,     sizeof(settings.wifiSSID));
+        strlcpy(settings.wifiPassword, wifiNetworks[favIdx].password, sizeof(settings.wifiPassword));
     } else if (settings.wifiSSID[0] != '\0') {
+        // Migration: legacy single-network -> wifiNetworks list
         WifiNetwork net;
         memset(&net, 0, sizeof(net));
         strlcpy(net.ssid,     settings.wifiSSID,    sizeof(net.ssid));

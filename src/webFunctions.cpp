@@ -284,6 +284,14 @@ void startWebServer() {
                         wifiNetworks.push_back(net);
                     }
                 }
+                // Sync legacy wifiSSID/wifiPassword to new favorite
+                for (auto& net : wifiNetworks) {
+                    if (net.favorite) {
+                        strlcpy(settings.wifiSSID,     net.ssid,     sizeof(settings.wifiSSID));
+                        strlcpy(settings.wifiPassword, net.password, sizeof(settings.wifiPassword));
+                        break;
+                    }
+                }
             }
             if (json["settings"]["wifiIP"].is<JsonVariant>()) {
                 JsonArray ipArray = json["settings"]["wifiIP"];
