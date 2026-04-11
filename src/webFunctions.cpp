@@ -718,4 +718,59 @@ void startWebServer() {
 
     webServer.begin();
 }
+// ── BLE JSON command handler ────────────────────────────────────────────────
+// Processes the same JSON commands as the WebSocket handler, but without
+// authentication (BLE pairing serves as auth). Called from BLE RX callback.
+void processBleJson(const char* data, size_t len) {
+    JsonDocument json;
+    DeserializationError error = deserializeJson(json, data, len);
+    if (error) return;
+
+    if (json["sendMessage"].is<JsonVariant>()) {
+        const char* dst = json["sendMessage"]["dst"] | "";
+        const char* text = json["sendMessage"]["text"] | "";
+        sendMessage(dst, text);
+    }
+
+    if (json["sendGroup"].is<JsonVariant>()) {
+        const char* dst = json["sendGroup"]["dst"] | "";
+        const char* text = json["sendGroup"]["text"] | "";
+        sendGroup(dst, text);
+    }
+
+    if (json["announce"].is<JsonVariant>()) {
+        extern uint32_t announceTimer;
+        announceTimer = 0;
+    }
+
+    if (json["sendFrame"].is<JsonVariant>()) {
+        Frame f;
+        if (json["sendFrame"]["frameType"].is<JsonVariant>())
+            f.frameType = json["sendFrame"]["frameType"].as<uint8_t>();
+        if (json["sendFrame"]["srcCall"].is<JsonVariant>())
+            strlcpy(f.srcCall, json["sendFrame"]["srcCall"] | "", sizeof(f.srcCall));
+        if (json["sendFrame"]["dstGroup"].is<JsonVariant>())
+            strlcpy(f.dstGroup, json["sendFrame"]["dstGroup"] | "", sizeof(f.dstGroup));
+        if (json["sendFrame"]["dstCall"].is<JsonVariant>())
+            strlcpy(f.dstCall, json["sendFrame"]["dstCall"] | "", sizeof(f.dstCall));
+        if (json["sendFrame"]["messageType"].is<JsonVariant>())
+            f.messageType = json["sendFrame"]["messageType"].as<uint8_t>();
+        if (json["sendFrame"]["messageText"].is<JsonVariant>()) {
+            const char *tempText = json["sendFrame"]["messageText"];
+            size_t textLen = strlen(tempText);
+            if (textLen > sizeof(f.message)) textLen = sizeof(f.message);
+            memcpy((char *) f.message, tempText, textLen);
+            f.messageLength = textLen;
+        }
+        sendFrame(f);
+    }
+
+    if (json["time"].is<JsonVariant>()) {
+        struct timeval tv;
+        tv.tv_sec = json["time"].as<time_t>();
+        tv.tv_usec = 0;
+        settimeofday(&tv, NULL);
+    }
+}
+
 #endif // HAS_WIFI

@@ -14,6 +14,7 @@
 
 #include <Arduino.h>
 #include <vector>
+#include <string>
 #include <ArduinoJson.h>
 
 #ifdef NRF52_PLATFORM
@@ -48,6 +49,7 @@
 #include "heapdbg.h"
 #include "bgWorker.h"
 #include "api.h"
+#include "ble_transport.h"
 
 #ifdef LILYGO_T_LORA_PAGER
 #include "display_LILYGO_T-LoraPager.h"
@@ -502,6 +504,8 @@ void processRxFrame(Frame &f) {
                 size_t len = f.messageJSON(jsonBuffer, sizeof(jsonBuffer));
                 #ifdef HAS_WIFI
                 wsBroadcast(jsonBuffer, len);
+                bleTransportSend(std::string(jsonBuffer, len));
+                bleTransportNotifyNewMessage((uint8_t)f.id, f.srcCall);
                 #endif
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
                 #ifdef LILYGO_T_LORA_PAGER
@@ -882,6 +886,13 @@ void setup() {
 
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
+
+    // Initialise BLE transport (NUS) for phone connectivity
+    #ifdef HAS_WIFI
+    bleTransportInit(settings.mycall, [](const std::string& json) {
+        processBleJson(json.c_str(), json.size());
+    });
+    #endif
 
     // Initialise status display (if present)
     #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO) || defined(ESP32_E22_V1)
@@ -1337,5 +1348,6 @@ void loop() {
     reportTopologyIfChanged(); // change-driven report with 30 s debounce
     #endif
 
+    bleTransportTick();
     heapTick();
 }

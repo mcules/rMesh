@@ -721,6 +721,22 @@ function onMessage(event) {
         messages.push(d.message);
         _msgCacheDirty = true;
         showMessages();
+        // PWA: request notification permission once, fire via Service Worker
+        if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted'
+            && navigator.serviceWorker && navigator.serviceWorker.controller) {
+          var m = d.message;
+          var ntitle = 'rMesh: ' + (m.srcCall || '?');
+          if (m.dstGroup) ntitle += ' \u2192 ' + m.dstGroup;
+          navigator.serviceWorker.controller.postMessage({
+            type: 'NEW_MESSAGE',
+            title: ntitle,
+            body:  m.text || '',
+            tag:   'rmesh-' + (m.id || Date.now())
+          });
+        }
     }
 
     //Peers (legacy WebSocket push fallback)
@@ -1463,9 +1479,11 @@ function onClose(event) {
     clearTimeout(timeout);
     // save cache before reconnect so messages survive reload
     if (_msgCacheDirty) saveCachedMessages();
-    setTimeout(initWebSocket, _wsReconnectDelay);
-    // Exponential backoff: 500ms → 1s → 2s → 4s → … → 30s max
-    _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, 30000);
+    // Reconnection is handled by connection.js (if loaded) or falls back to direct retry
+    if (typeof Connection === 'undefined') {
+        setTimeout(initWebSocket, _wsReconnectDelay);
+        _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, 30000);
+    }
 }
 
 function sendWS(text) {

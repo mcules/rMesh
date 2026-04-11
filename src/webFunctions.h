@@ -14,6 +14,7 @@ void notifyPeerListChanged();
 void notifyRoutingChanged();
 void notifySettingsChanged();
 void notifyNewMessage();
+void processBleJson(const char* data, size_t len);
 
 #else
 // ── No-op stubs for non-WiFi builds ─────────────────────────────────────────
@@ -24,6 +25,7 @@ inline void notifyPeerListChanged() {}
 inline void notifyRoutingChanged() {}
 inline void notifySettingsChanged() {}
 inline void notifyNewMessage() {}
+inline void processBleJson(const char*, size_t) {}
 
 // Minimal stub so code using ws.textAll() can compile with #ifdef HAS_WIFI guards
 #endif

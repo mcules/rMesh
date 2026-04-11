@@ -8,6 +8,30 @@
   <script src="clock.js" defer></script>
   <script src="ui.js" defer></script>
   <script src="socket.js" defer></script>
+  <script src="connection.js" defer></script>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#4ecca3">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="rMesh">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('/sw.js').then(function (reg) {
+          console.log('[PWA] SW registered, scope:', reg.scope);
+          reg.addEventListener('updatefound', function () {
+            var w = reg.installing;
+            w.addEventListener('statechange', function () {
+              if (w.state === 'installed' && navigator.serviceWorker.controller)
+                console.log('[PWA] New version cached – reload to update');
+            });
+          });
+        }).catch(function (err) {
+          console.warn('[PWA] SW registration failed:', err);
+        });
+      });
+    }
+  </script>
   <title>rMesh</title>
 </head>
 <body>
@@ -878,6 +902,15 @@
 
   <div id="toast-container"></div>
 
+  <div id="pwa-install-banner" style="display:none; position:fixed; bottom:16px; left:50%;
+       transform:translateX(-50%); background:#4ecca3; color:#1a1a1a; padding:10px 20px;
+       border-radius:8px; font-weight:bold; cursor:pointer; z-index:9999; box-shadow:0 2px 8px #0006;">
+    App installieren
+  </div>
+
+  <div id="connection-status" class="conn-status conn-disconnected"></div>
+  <button id="ble-connect-btn" class="button" style="display:none; position:fixed; bottom:60px; left:50%; transform:translateX(-50%); z-index:9998;" onclick="Connection.connectBle()">Bluetooth verbinden</button>
+
   <script>
     var ui = "";
     var activeChannel = 0;
@@ -1247,7 +1280,7 @@
       loadChannelFlags();
       initUI();
       setUI(Cookie.get("ui", "monitor"));
-      initWebSocket();
+      Connection.start();
 
       // Set language selector to current language
       var langSel = document.getElementById('langSelect');
@@ -1338,6 +1371,42 @@
           e.preventDefault();
           setUI("channel" + fNumber);
         }
+      }
+    });
+
+    // ── PWA install prompt ──────────────────────────────────────────────────
+    var _installPrompt = null;
+    var installBanner  = document.getElementById('pwa-install-banner');
+
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      _installPrompt = e;
+      if (installBanner) installBanner.style.display = 'block';
+    });
+
+    if (installBanner) {
+      installBanner.addEventListener('click', function () {
+        if (!_installPrompt) return;
+        _installPrompt.prompt();
+        _installPrompt.userChoice.then(function (result) {
+          console.log('[PWA] Install result:', result.outcome);
+          installBanner.style.display = 'none';
+          _installPrompt = null;
+        });
+      });
+    }
+
+    window.addEventListener('appinstalled', function () {
+      if (installBanner) installBanner.style.display = 'none';
+      _installPrompt = null;
+      console.log('[PWA] App installed');
+      if (!localStorage.getItem('batteryHintShown')) {
+        localStorage.setItem('batteryHintShown', '1');
+        msgBox(
+          'Tipp: Damit Benachrichtigungen zuverl\u00e4ssig ankommen, ' +
+          'bitte die Akku-Optimierung f\u00fcr Chrome deaktivieren: ' +
+          'Einstellungen \u2192 Apps \u2192 Chrome \u2192 Akku \u2192 Nicht optimieren'
+        );
       }
     });
   </script>
