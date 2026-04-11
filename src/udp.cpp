@@ -78,6 +78,9 @@ bool checkUDP(Frame &f) {
             if (udpPeers[i] == senderIP) { peerIdx = (int)i; break; }
         }
 
+        // Ignore incoming traffic from disabled peers
+        if (peerIdx >= 0 && !(bool)udpPeerEnabled[peerIdx]) return false;
+
         // Limit UDP peer list to prevent unbounded growth
         static const size_t MAX_UDP_PEERS = 50;
 

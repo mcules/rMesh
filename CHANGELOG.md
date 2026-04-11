@@ -16,6 +16,7 @@
 - ENTFERNT: Aggregierter `/api/poll`-Endpunkt — Clients nutzen die Einzel-Endpunkte, spart ~10 KB Heap
 - FIX: Relay-Pfad löschte beim Empfang eines Duplikats alle noch im TX-Buffer wartenden Relay-Kopien derselben Message-ID — auch bereits eingereihte, noch nicht gesendete. Jetzt werden nur neue Kopien per Dedup verhindert, bestehende bleiben intakt
 - FIX: WiFi-Favorit wurde beim Speichern still auf das alte Netzwerk zurückgesetzt — `saveSettings()` behandelte das Legacy-Feld `settings.wifiSSID` als autoritativ und überschrieb den vom Benutzer gewählten Favoriten. Jetzt ist `wifiNetworks` die einzige Quelle der Wahrheit
+- FIX: Deaktivierte UDP-Peers wurden nur beim Senden übersprungen — eingehende Pakete von ihnen wurden weiterhin verarbeitet. Jetzt werden auch empfangene Frames von deaktivierten Peers sofort verworfen
 - FIX: Redundante DOM-Lookups für `settingsMycall` in der Nachrichtenanzeige entfernt; Race-Condition beim initialen Datenabruf behoben
 - PERF: FileWriter gruppiert Writes nach Dateiname pro Mutex-Hold — weniger Flash-Metadata-Flushes und kürzere Stalls bei Bursts
 
