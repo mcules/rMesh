@@ -1,5 +1,24 @@
 # Changelog
 
+## [v26.4.1]
+
+- NEU: Support für LILYGO T-ETH-Elite + SX1262-Shield — Ethernet (W5500), WiFi und LoRa; neuer HAL, Pin-Mapping und Board-Dokumentation
+- NEU: Ethernet-Support (W5500) — statische IP oder DHCP, eigene Settings-Sektion in der WebUI, persistiert in NVS
+- NEU: Per-Interface Service-Toggles — WiFi und LAN lassen sich einzeln für Node-Kommunikation und WebUI aktivieren/deaktivieren; primäres Interface wählbar (Auto / WiFi / LAN)
+- NEU: Port-Priorisierung — Announces und Sync-Frames werden in der Reihenfolge Primary → Secondary → LoRa eingereiht
+- NEU: Alle Settings-Sektionen in der WebUI sind per Chevron-Toggle einklappbar — Akku- und OLED-Schalter wandern in den jeweiligen Sektions-Header, Deaktivieren klappt die Sektion automatisch zu
+- NEU: Kategorisierte Dropped-Frame-Zähler — pro Verwurf-Grund und Frame-Typ aufgeschlüsselt, sichtbar in WebUI, CLI und per WebSocket
+- NEU: API-Event-Ringpuffer wird auf LittleFS persistiert (`/api_evts.bin`) und überlebt Reboots; API-Nachrichten-Puffer wird beim Boot aus `/messages.json` reseedet
+- NEU: API-Puffergrößen erhöht (Messages 5 → 32, Events 10 → 64), da kein ACK-Purge mehr nötig ist
+- NEU: TX-Puffergröße plattformabhängig — Default 20 → 64 Frames (nRF52: 32), per Board überschreibbar via `TX_BUFFER_SIZE`
+- NEU: Netzwerk-Tab in der WebUI umstrukturiert — eigene Sektionen für Allgemein, WiFi, Ethernet und UDP-Peers; Mesh-Sektion mit Sync Word, Repeat und Max-Hops aus dem LoRa-Tab hierher verschoben
+- NEU: Serielles Kommando-Interface überarbeitet — `wifi`-Befehle um `wifi 0/1`, `wifi tx`, `wifi scan` erweitert; neue `eth`-Befehlsgruppe; `show settings` mit strukturierter, kategorisierter Ausgabe
+- ENTFERNT: Aggregierter `/api/poll`-Endpunkt — Clients nutzen die Einzel-Endpunkte, spart ~10 KB Heap
+- FIX: Relay-Pfad löschte beim Empfang eines Duplikats alle noch im TX-Buffer wartenden Relay-Kopien derselben Message-ID — auch bereits eingereihte, noch nicht gesendete. Jetzt werden nur neue Kopien per Dedup verhindert, bestehende bleiben intakt
+- FIX: WiFi-Favorit wurde beim Speichern still auf das alte Netzwerk zurückgesetzt — `saveSettings()` behandelte das Legacy-Feld `settings.wifiSSID` als autoritativ und überschrieb den vom Benutzer gewählten Favoriten. Jetzt ist `wifiNetworks` die einzige Quelle der Wahrheit
+- FIX: Redundante DOM-Lookups für `settingsMycall` in der Nachrichtenanzeige entfernt; Race-Condition beim initialen Datenabruf behoben
+- PERF: FileWriter gruppiert Writes nach Dateiname pro Mutex-Hold — weniger Flash-Metadata-Flushes und kürzere Stalls bei Bursts
+
 ## [v1.0.32]
 
 - FIX: REST-API-Nachrichten-/Event-Puffer werden nicht mehr bei jedem Read destruktiv geleert — der `ack`-Parameter auf `/api/messages` und `/api/events` wird nur noch akzeptiert, aber ignoriert. Mehrere Clients (Browser, Bridgeserver, …) sehen jetzt denselben Live-Tail.
