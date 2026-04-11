@@ -236,6 +236,8 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
 }
 
 void showWiFiStatus() {
+    if (!wifiEnabled) return;
+
     // Process deferred WiFi scan actions from event callback
     processDeferredScanActions();
 
@@ -384,6 +386,13 @@ void onWiFiGotIP(WiFiEvent_t event, WiFiEventInfo_t info) {
     } else {
         logPrintf(LOG_ERROR, "mDNS", "failed to start");
     }
+#ifdef HAS_ETHERNET
+    // Set WiFi as default outbound route if configured as primary
+    if (primaryInterface == 1) {
+        WiFi.STA.setDefault();
+        logPrintf(LOG_INFO, "WiFi", "Set as primary interface (outbound route)");
+    }
+#endif
 }
 
 void onWiFiScanDone(WiFiEvent_t event, WiFiEventInfo_t info) {
@@ -498,6 +507,11 @@ static void processDeferredScanActions() {
 
 
 void wifiInit() {
+    if (!wifiEnabled) {
+        WiFi.mode(WIFI_OFF);
+        logPrintf(LOG_INFO, "WiFi", "WiFi disabled in settings.");
+        return;
+    }
     WiFi.mode(WIFI_STA);
     if (settings.apMode) {
         // Access Point mode

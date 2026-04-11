@@ -55,6 +55,16 @@ void logPrintf(LogLevel level, const char* tag, const char* fmt, ...) {
     }
 }
 
+void logRaw(const char* fmt, ...) {
+    if (serialDebug) return;  // raw output is for humans, not structured debug
+    char msg[256];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(msg, sizeof(msg), fmt, args);
+    va_end(args);
+    Serial.printf("%s\r\n", msg);
+}
+
 void logJson(const JsonDocument& doc) {
     if (!serialDebug) return;
     Serial.print("DBG:");

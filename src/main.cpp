@@ -38,6 +38,7 @@
 #include "peer.h"
 #include "ack.h"
 #include "udp.h"
+#include "ethFunctions.h"
 #include "routing.h"
 #include "reporting.h"
 #include "dutycycle.h"
@@ -77,6 +78,21 @@
 #include "display_LILYGO_T-Echo.h"
 #endif
 
+
+// ── Port iteration order ─────────────────────────────────────────────────────
+// Network first (primary interface before secondary), LoRa last.
+// Returns the number of ports written into out[] (always 3).
+#ifdef HAS_WIFI
+static uint8_t portOrder[3];
+static void buildPortOrder() {
+    // Primary network interface first, secondary second, LoRa last
+    uint8_t first  = (primaryInterface == 2) ? 2 : 1;  // LAN first if primary==2, else WiFi
+    uint8_t second = (first == 2) ? 1 : 2;             // the other network port
+    portOrder[0] = first;
+    portOrder[1] = second;
+    portOrder[2] = 0;  // LoRa always last
+}
+#endif
 
 // ── Global state ──────────────────────────────────────────────────────────────
 
@@ -822,6 +838,9 @@ void setup() {
 
     // Load user settings from NVS / InternalFS
     loadSettings();
+    #ifdef HAS_WIFI
+    buildPortOrder();
+    #endif
 
     #ifndef NRF52_PLATFORM
     // Apply CPU frequency from settings (default 240 MHz).
@@ -876,6 +895,8 @@ void setup() {
     WiFi.onEvent(onWiFiScanDone, ARDUINO_EVENT_WIFI_SCAN_DONE);
     // Connect to WiFi (AP or STA mode depending on settings)
     wifiInit();
+    // Initialise Ethernet (W5500) if the board has it
+    ethInit();
     #endif
 
     // Set system time to epoch 0 and configure NTP + timezone
@@ -965,12 +986,32 @@ void loop() {
         Frame f;
         f.frameType = Frame::FrameTypes::ANNOUNCE_FRAME;
         f.transmitMillis = 0;
+        // Enqueue in portOrder: primary network → secondary network → LoRa
         #ifdef HAS_WIFI
-        f.port = 1;
-        if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
-        #endif
+        if (loraConfigured(settings.loraFrequency)) {
+            for (int pi = 0; pi < 3; pi++) {
+                uint8_t p = portOrder[pi];
+                if (p == 0) {
+                    // LoRa — always enqueue
+                    f.port = 0;
+                    if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
+                } else if (p == 1 && wifiNodeComm) {
+                    f.port = 1;
+                    if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
+                } else if (p == 2 && ethConnected && ethNodeComm) {
+                    f.port = 2;
+                    if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
+                }
+            }
+        } else {
+            // No frequency configured — LoRa only (will be a no-op over air)
+            f.port = 0;
+            if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
+        }
+        #else
         f.port = 0;
         if (txBuffer.size() < TX_BUFFER_SIZE) txBuffer.push_back(f);
+        #endif
         sendPeerList();
     }
 
@@ -987,13 +1028,22 @@ void loop() {
 
         // Mark the first unsent sync frame per port as ready to send
         if (sendNewSyncFrame == true) {
-            for (int port = 0; port <= 1; port++) {
+            // Iterate ports in priority order: primary network → secondary → LoRa
+            #ifdef HAS_WIFI
+            const uint8_t* po = portOrder;
+            #else
+            static const uint8_t po[] = {0, 1, 2};
+            #endif
+            for (int pi = 0; pi < 3; pi++) {
+                uint8_t port = po[pi];
                 for (int i = 0; i < txBuffer.size(); i++) {
                     if ((txBuffer[i].retry > 1) && (txBuffer[i].port == port)) {
                         txBuffer[i].syncFlag = true;
                         switch (txBuffer[i].port){
                             case 0: txBuffer[i].transmitMillis = millis() + calculateRetryTime(); break;
-                            case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
+                            case 1: // WiFi
+                            case 2: // LAN
+                                txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
                         }
                         break;
                     }
@@ -1033,7 +1083,9 @@ void loop() {
                             loraFluxGuard = millis() + getTOA(10 + 2 * MAX_CALLSIGN_LENGTH);
                             break;
                         }
-                        case 1: sendUDP(txBuffer[i]); break;
+                        case 1: // WiFi UDP
+                        case 2: // LAN (Ethernet) UDP
+                            sendUDP(txBuffer[i]); break;
                     }
 
                     // Duty cycle postponed: skip retry logic, try again later
@@ -1066,7 +1118,9 @@ void loop() {
                 // Schedule next retry
                 switch (txBuffer[i].port){
                     case 0: txBuffer[i].transmitMillis = millis() + calculateRetryTime(); break;
-                    case 1: txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
+                    case 1: // WiFi
+                    case 2: // LAN
+                        txBuffer[i].transmitMillis = millis() + UDP_TX_RETRY_TIME; break;
                 }
                 // All retries exhausted: remove the frame.
                 // For multi-retry frames (initRetry > 1): the peer is unreachable,
@@ -1245,6 +1299,7 @@ void loop() {
     if (pendingSettingsSave) {
         pendingSettingsSave = false;
         saveSettings();
+        buildPortOrder();  // primaryInterface may have changed
     }
 
     // Deferred LoRa reinit after settings change

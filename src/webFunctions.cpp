@@ -17,6 +17,7 @@
 #include "logging.h"
 #include "heapdbg.h"
 #include "api.h"
+#include "apiAuth.h"
 #include "statusDisplay.h"
 #ifdef ESP32_E22_V1
 #include "display_ESP32_E22_V1.h"
@@ -433,6 +434,43 @@ void startWebServer() {
                 }
                 saveGroupNames();
             }
+
+            // ── WiFi & Ethernet & per-interface settings ────────────────────
+            if (json["settings"]["wifiEnabled"].is<JsonVariant>())
+                wifiEnabled = json["settings"]["wifiEnabled"].as<bool>();
+            if (json["settings"]["ethEnabled"].is<JsonVariant>())
+                ethEnabled = json["settings"]["ethEnabled"].as<bool>();
+            if (json["settings"]["ethDhcp"].is<JsonVariant>())
+                ethDhcp = json["settings"]["ethDhcp"].as<bool>();
+            if (json["settings"]["ethIP"].is<JsonArray>()) {
+                JsonArray a = json["settings"]["ethIP"];
+                for (int i = 0; i < 4; i++) ethIP[i] = a[i] | 0;
+            }
+            if (json["settings"]["ethNetMask"].is<JsonArray>()) {
+                JsonArray a = json["settings"]["ethNetMask"];
+                for (int i = 0; i < 4; i++) ethNetMask[i] = a[i] | 0;
+            }
+            if (json["settings"]["ethGateway"].is<JsonArray>()) {
+                JsonArray a = json["settings"]["ethGateway"];
+                for (int i = 0; i < 4; i++) ethGateway[i] = a[i] | 0;
+            }
+            if (json["settings"]["ethDNS"].is<JsonArray>()) {
+                JsonArray a = json["settings"]["ethDNS"];
+                for (int i = 0; i < 4; i++) ethDNS[i] = a[i] | 0;
+            }
+            if (json["settings"]["wifiNodeComm"].is<JsonVariant>())
+                wifiNodeComm = json["settings"]["wifiNodeComm"].as<bool>();
+            if (json["settings"]["wifiWebUI"].is<JsonVariant>())
+                wifiWebUI = json["settings"]["wifiWebUI"].as<bool>();
+            if (json["settings"]["ethNodeComm"].is<JsonVariant>())
+                ethNodeComm = json["settings"]["ethNodeComm"].as<bool>();
+            if (json["settings"]["ethWebUI"].is<JsonVariant>())
+                ethWebUI = json["settings"]["ethWebUI"].as<bool>();
+            if (json["settings"]["primaryInterface"].is<JsonVariant>()) {
+                uint8_t v = json["settings"]["primaryInterface"].as<uint8_t>();
+                if (v <= 2) primaryInterface = v;
+            }
+
             pendingSettingsSave = true;
             #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2)
             if (hasStatusDisplay()) {
@@ -570,6 +608,7 @@ void startWebServer() {
 
     // Serve files from LittleFS and fall back to 404
     webServer.onNotFound([](AsyncWebServerRequest *request) {
+        if (!checkIfaceWebUI(request)) return;
         String path = request->url();
         if (path == "/") path = "/index.html";
 

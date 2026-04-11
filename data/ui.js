@@ -222,40 +222,68 @@ function setUI(value) {
 
 
 function settingsVisibility() {
-    if (document.getElementById("settingsApMode").checked) {
-        for (e of document.getElementsByClassName('DHCP_ENABLED')) {
-            e.style.display = "none";
-        }
-        for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
-            e.style.display = "none";
-        }
-        for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
-            e.style.display = "none";
-        }
-        for (e of document.getElementsByClassName('AP_ONLY')) {
-            e.style.display = "";
-        }
-    } else {
-        for (e of document.getElementsByClassName('AP_ONLY')) {
-            e.style.display = "none";
-        }
-        for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
-            e.style.display = "";
-        }
-        if (document.getElementById("settingsDHCP").checked) {
+    // WiFi enabled toggle (only present on boards with ETH)
+    var wifiEnabledEl = document.getElementById("settingsWifiEnabled");
+    var wifiOn = wifiEnabledEl ? wifiEnabledEl.checked : true;
+    document.querySelectorAll('.WIFI_ENABLED').forEach(function(el) {
+        el.style.display = wifiOn ? "" : "none";
+    });
+
+    if (wifiOn) {
+        if (document.getElementById("settingsApMode").checked) {
             for (e of document.getElementsByClassName('DHCP_ENABLED')) {
                 e.style.display = "none";
             }
             for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
+                e.style.display = "none";
+            }
+            for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
+                e.style.display = "none";
+            }
+            for (e of document.getElementsByClassName('AP_ONLY')) {
                 e.style.display = "";
             }
         } else {
-            for (e of document.getElementsByClassName('DHCP_ENABLED')) {
-                e.style.display = "";
-            }
-            for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
+            for (e of document.getElementsByClassName('AP_ONLY')) {
                 e.style.display = "none";
             }
+            for (e of document.getElementsByClassName('AP_MODE_ENABLED')) {
+                e.style.display = "";
+            }
+            if (document.getElementById("settingsDHCP").checked) {
+                for (e of document.getElementsByClassName('DHCP_ENABLED')) {
+                    e.style.display = "none";
+                }
+                for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
+                    e.style.display = "";
+                }
+            } else {
+                for (e of document.getElementsByClassName('DHCP_ENABLED')) {
+                    e.style.display = "";
+                }
+                for (e of document.getElementsByClassName('DHCP_ACTIVE')) {
+                    e.style.display = "none";
+                }
+            }
+        }
+    }
+
+    // Ethernet settings visibility
+    var ethEnabledEl = document.getElementById("settingsEthEnabled");
+    if (ethEnabledEl) {
+        var ethOn = ethEnabledEl.checked;
+        document.querySelectorAll('.ETH_ENABLED').forEach(function(el) {
+            el.style.display = ethOn ? "" : "none";
+        });
+        var ethDhcpEl = document.getElementById("settingsEthDhcp");
+        if (ethDhcpEl && ethOn) {
+            var dhcp = ethDhcpEl.checked;
+            document.querySelectorAll('.ETH_STATIC').forEach(function(el) {
+                el.style.display = dhcp ? "none" : "";
+            });
+            document.querySelectorAll('.ETH_DHCP_ACTIVE').forEach(function(el) {
+                el.style.display = dhcp ? "" : "none";
+            });
         }
     }
 }

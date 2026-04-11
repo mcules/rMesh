@@ -23,6 +23,15 @@ void logPrintf(LogLevel level, const char* tag, const char* fmt, ...)
     __attribute__((format(printf, 3, 4)));
 
 /**
+ * @brief Printf-style output without timestamp or tag prefix.
+ *
+ * Used for human-readable output like help text and settings display.
+ * In serialDebug mode the output is suppressed (use logPrintf for structured output).
+ */
+void logRaw(const char* fmt, ...)
+    __attribute__((format(printf, 1, 2)));
+
+/**
  * @brief Emit a structured JSON debug object.
  *
  * Only produces output when serialDebug is true.

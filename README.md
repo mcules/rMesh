@@ -24,7 +24,7 @@ Das Ergebnis ist ein System, das sich auf das Wesentliche konzentriert – und g
 
 Der einfachste Weg, rMesh auf deine Hardware zu bringen: Einfach den **Webflasher** aufrufen, Gerät per USB anschließen und auf "Installieren" klicken – ganz ohne Entwicklungsumgebung oder Kommandozeile.
 
-**[Zum rMesh Webflasher](https://www.rMesh.de/)**
+**[Zum rMesh Webflasher](https://www.rmesh.de/#installer)**
 
 ## Lizenz: GNU GPLv3
 **rMesh** ist freie Software, lizenziert unter der **GNU General Public License v3.0 (GPLv3)**.

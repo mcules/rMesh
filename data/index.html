@@ -129,6 +129,7 @@
 
   <!-- ===== LORA SETTINGS ===== -->
   <div id="lora" class="settings-panel" style="display:none;">
+   <div class="settings-cols">
     <div class="settings-footer full-width" style="border-top:none; margin-top:0; margin-bottom:0;">
       <button class="button save-all-btn" onclick="saveSettings();" data-i18n="btn.save">Speichern</button>
     </div>
@@ -153,15 +154,6 @@
       <div class="section-header" data-i18n="lora.section_msg">Nachrichten</div>
       <div class="section-body">
         <table>
-          <tr>
-            <td data-i18n="lora.repeat">Nachrichten wiederholen:</td>
-            <td>
-              <label class="toggle-switch">
-                <input type="checkbox" id="settingsLoraRepeat">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </label>
-            </td>
-          </tr>
           <tr>
             <td data-i18n="lora.max_len">Max. Nachrichtenlänge:</td>
             <td><span id="settingsLoraMaxMessageLength"></span></td>
@@ -246,20 +238,18 @@
             </td>
           </tr>
           <tr>
-            <td data-i18n="lora.sync_word">Sync Word:</td>
-            <td><input class="input-box" id="settingsLoraSyncWord"></td>
-          </tr>
-          <tr>
             <td data-i18n="lora.preamble">Preamble Länge:</td>
             <td><input class="input-box" id="settingsLoraPreambleLength"></td>
           </tr>
         </table>
       </div>
     </div>
+   </div>
   </div>
 
   <!-- ===== SETUP SETTINGS ===== -->
   <div id="setup" class="settings-panel" style="display:none;">
+   <div class="settings-cols">
     <div class="settings-footer full-width" style="border-top:none; margin-top:0; margin-bottom:0;">
       <button class="button save-all-btn" onclick="saveSettings();" data-i18n="btn.save">Speichern</button>
     </div>
@@ -274,6 +264,39 @@
           <tr>
             <td data-i18n="setup.position">Position:</td>
             <td><input class="input-box" id="settingsPosition" placeholder="JN48mw oder 48.1234,11.5678"></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="section-header" data-i18n="setup.section_mesh">Mesh</div>
+      <div class="section-body">
+        <table>
+          <tr>
+            <td data-i18n="lora.sync_word">Sync Word:</td>
+            <td><input class="input-box" id="settingsLoraSyncWord"></td>
+          </tr>
+          <tr>
+            <td data-i18n="lora.repeat">Nachrichten wiederholen:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsLoraRepeat">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.max_hop_msg">Max Hops Nachrichten:</td>
+            <td><input class="input-box" type="number" id="settingsMaxHopMessage" min="0" max="15" step="1"></td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.max_hop_pos">Max Hops Position:</td>
+            <td><input class="input-box" type="number" id="settingsMaxHopPosition" min="0" max="15" step="1"></td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.max_hop_tel">Max Hops Telemetrie:</td>
+            <td><input class="input-box" type="number" id="settingsMaxHopTelemetry" min="0" max="15" step="1"></td>
           </tr>
         </table>
       </div>
@@ -329,6 +352,34 @@
     </div>
 
     <div class="settings-section">
+      <div class="section-header" data-i18n="setup.section_security">Sicherheit</div>
+      <div class="section-body">
+        <table>
+          <tr>
+            <td data-i18n="setup.pw_status">Status:</td>
+            <td><span id="settingsWebPasswordStatus">–</span></td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.pw_new">Neues Passwort:</td>
+            <td><input class="input-box" type="password" id="settingsWebPassword" placeholder="(leer = nicht ändern)" autocomplete="new-password"></td>
+          </tr>
+          <tr>
+            <td data-i18n="setup.pw_confirm">Bestätigung:</td>
+            <td><input class="input-box" type="password" id="settingsWebPasswordConfirm" placeholder="Passwort wiederholen" oninput="checkPwMatch()" autocomplete="new-password"></td>
+          </tr>
+          <tr id="settingsWebPasswordMatchRow" style="display:none;">
+            <td></td>
+            <td><span id="settingsWebPasswordMatch" style="font-size:0.82rem;"></span></td>
+          </tr>
+          <tr id="settingsWebPasswordRemoveRow" style="display:none;">
+            <td></td>
+            <td><button class="button" onclick="removeWebPassword();" data-i18n="btn.remove_password">Passwort löschen</button></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="settings-section">
       <div class="section-header" data-i18n="setup.section_update">Online Update</div>
       <div class="section-body">
         <table>
@@ -367,34 +418,6 @@
           <tr>
             <td></td>
             <td><button class="button" onclick="uploadAll()" data-i18n="btn.upload_flash">Hochladen &amp; flashen</button></td>
-          </tr>
-        </table>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_security">Sicherheit</div>
-      <div class="section-body">
-        <table>
-          <tr>
-            <td data-i18n="setup.pw_status">Status:</td>
-            <td><span id="settingsWebPasswordStatus">–</span></td>
-          </tr>
-          <tr>
-            <td data-i18n="setup.pw_new">Neues Passwort:</td>
-            <td><input class="input-box" type="password" id="settingsWebPassword" placeholder="(leer = nicht ändern)" autocomplete="new-password"></td>
-          </tr>
-          <tr>
-            <td data-i18n="setup.pw_confirm">Bestätigung:</td>
-            <td><input class="input-box" type="password" id="settingsWebPasswordConfirm" placeholder="Passwort wiederholen" oninput="checkPwMatch()" autocomplete="new-password"></td>
-          </tr>
-          <tr id="settingsWebPasswordMatchRow" style="display:none;">
-            <td></td>
-            <td><span id="settingsWebPasswordMatch" style="font-size:0.82rem;"></span></td>
-          </tr>
-          <tr id="settingsWebPasswordRemoveRow" style="display:none;">
-            <td></td>
-            <td><button class="button" onclick="removeWebPassword();" data-i18n="btn.remove_password">Passwort löschen</button></td>
           </tr>
         </table>
       </div>
@@ -497,18 +520,53 @@
         </table>
       </div>
     </div>
+   </div>
   </div>
 
   <!-- ===== NETWORK SETTINGS ===== -->
   <div id="network" class="settings-panel" style="display:none;">
+   <div class="settings-cols">
     <div class="settings-footer full-width" style="border-top:none; margin-top:0; margin-bottom:0;">
       <button class="button save-all-btn" onclick="saveSettings();" data-i18n="btn.save">Speichern</button>
     </div>
+
+    <!-- ── Allgemein + UDP-Peers ──────────────────────────────────────── -->
     <div class="settings-section">
-      <div class="section-header" data-i18n="nav.network">Netzwerk</div>
+      <div class="section-header" data-i18n="net.general">Allgemein</div>
       <div class="section-body">
         <table>
           <tr>
+            <td data-i18n="net.ntp">NTP-Server:</td>
+            <td><input class="input-box" id="settingsNTP"></td>
+          </tr>
+          <tr id="primaryIfRow" style="display:none">
+            <td data-i18n="net.primary_iface">Primäres Interface:</td>
+            <td>
+              <select class="input-box" id="settingsPrimaryInterface">
+                <option value="0" data-i18n="net.primary_auto">Automatisch</option>
+                <option value="1">WiFi</option>
+                <option value="2">LAN</option>
+              </select>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    <!-- ── 1. WiFi ──────────────────────────────────────────────────────── -->
+    <div class="settings-section">
+      <div class="section-header">WiFi</div>
+      <div class="section-body">
+        <table>
+          <tr>
+            <td data-i18n="net.wifi_enabled">WiFi:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsWifiEnabled" onchange="settingsVisibility()">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+          <tr class="WIFI_ENABLED">
             <td data-i18n="net.ap">Accesspoint:</td>
             <td>
               <label class="toggle-switch">
@@ -518,16 +576,16 @@
             </td>
           </tr>
           <!-- AP settings (visible when AP mode is ON) -->
-          <tr class="AP_ONLY" style="display:none">
+          <tr class="WIFI_ENABLED AP_ONLY" style="display:none">
             <td data-i18n="net.ap_name">AP-Name:</td>
             <td><input class="input-box" id="settingsApName" maxlength="32"></td>
           </tr>
-          <tr class="AP_ONLY" style="display:none">
+          <tr class="WIFI_ENABLED AP_ONLY" style="display:none">
             <td data-i18n="net.ap_password">AP-Passwort:</td>
             <td><input class="input-box" type="password" id="settingsApPassword" placeholder="min. 8 chars"></td>
           </tr>
           <!-- Client mode settings (visible when AP mode is OFF) -->
-          <tr class="AP_MODE_ENABLED">
+          <tr class="WIFI_ENABLED AP_MODE_ENABLED">
             <td data-i18n="net.dhcp">DHCP:</td>
             <td>
               <label class="toggle-switch">
@@ -536,53 +594,79 @@
               </label>
             </td>
           </tr>
-          <tr class="DHCP_ENABLED AP_MODE_ENABLED">
+          <tr class="WIFI_ENABLED DHCP_ENABLED AP_MODE_ENABLED" style="display:none">
             <td data-i18n="net.ip">IP-Adresse:</td>
             <td><input class="input-box" id="settingsWiFiIP"></td>
           </tr>
-          <tr class="DHCP_ENABLED AP_MODE_ENABLED">
+          <tr class="WIFI_ENABLED DHCP_ENABLED AP_MODE_ENABLED" style="display:none">
             <td data-i18n="net.subnet">Subnetz:</td>
             <td><input class="input-box" id="settingsWifiNetMask"></td>
           </tr>
-          <tr class="DHCP_ENABLED AP_MODE_ENABLED">
+          <tr class="WIFI_ENABLED DHCP_ENABLED AP_MODE_ENABLED" style="display:none">
             <td data-i18n="net.gateway">Gateway:</td>
             <td><input class="input-box" id="settingsWifiGateway"></td>
           </tr>
-          <tr class="DHCP_ENABLED AP_MODE_ENABLED">
+          <tr class="WIFI_ENABLED DHCP_ENABLED AP_MODE_ENABLED" style="display:none">
             <td data-i18n="net.dns">DNS:</td>
             <td><input class="input-box" id="settingsWifiDNS"></td>
           </tr>
-          <tr class="DHCP_ACTIVE" style="display:none">
+          <tr class="WIFI_ENABLED DHCP_ACTIVE" style="display:none">
             <td data-i18n="net.ip">IP-Adresse:</td>
             <td><span id="currentWiFiIP">-</span></td>
           </tr>
-          <tr class="DHCP_ACTIVE" style="display:none">
+          <tr class="WIFI_ENABLED DHCP_ACTIVE" style="display:none">
             <td data-i18n="net.subnet">Subnetz:</td>
             <td><span id="currentWifiNetMask">-</span></td>
           </tr>
-          <tr class="DHCP_ACTIVE" style="display:none">
+          <tr class="WIFI_ENABLED DHCP_ACTIVE" style="display:none">
             <td data-i18n="net.gateway">Gateway:</td>
             <td><span id="currentWifiGateway">-</span></td>
           </tr>
-          <tr class="DHCP_ACTIVE" style="display:none">
+          <tr class="WIFI_ENABLED DHCP_ACTIVE" style="display:none">
             <td data-i18n="net.dns">DNS:</td>
             <td><span id="currentWifiDNS">-</span></td>
           </tr>
-          <tr class="AP_MODE_ENABLED">
-            <td data-i18n="net.ntp">NTP-Server:</td>
-            <td><input class="input-box" id="settingsNTP"></td>
-          </tr>
-          <tr>
+          <tr class="WIFI_ENABLED">
             <td data-i18n="net.wifi_tx_power">WiFi Sendeleistung:</td>
             <td>
               <input type="range" id="settingsWifiTxPower" class="input-box" min="2" max="20" step="1" value="20" oninput="updateWifiTxPowerLabel(parseInt(this.value))">
               <span id="settingsWifiTxPowerValue">20 dBm</span>
             </td>
           </tr>
+          <!-- Per-interface service toggles (only shown when ETH hardware present) -->
+          <tr class="WIFI_ENABLED HAS_ETH" style="display:none">
+            <td data-i18n="net.node_comm">Node-Kommunikation:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsWifiNodeComm">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+          <tr class="WIFI_ENABLED HAS_ETH" style="display:none">
+            <td>WebUI:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsWifiWebUI">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
         </table>
+        <!-- WiFi Networks (visible when AP mode is OFF) -->
+        <div class="WIFI_ENABLED AP_MODE_ENABLED" style="margin-top:10px; border-top:1px solid #888; padding-top:10px;">
+          <div style="display:flex; gap:6px; align-items:center; margin-bottom:8px;">
+            <button class="button" id="settingsScanWifi" data-i18n="btn.scan">Suchen</button>
+            <select class="input-box" id="settingsSSIDList" style="flex:1; min-width:120px;"></select>
+            <button class="button" onclick="addWifiNetworkFromScan()" data-i18n="btn.add_from_scan">+ Hinzufügen</button>
+          </div>
+          <div id="wifiNetworkList"></div>
+          <button class="button" onclick="addWifiNetwork()" data-i18n="btn.add_wifi">+ Netzwerk</button>
+        </div>
       </div>
     </div>
 
+    <!-- ── UDP Peers (rechte Spalte) ─────────────────────────────────── -->
     <div class="settings-section">
       <div class="section-header" data-i18n="net.udp_peers">UDP Peers</div>
       <div class="section-body">
@@ -591,23 +675,93 @@
       </div>
     </div>
 
-    <!-- WiFi Networks (visible when AP mode is OFF) -->
-    <div class="settings-section AP_MODE_ENABLED">
-      <div class="section-header" data-i18n="net.wifi_networks">WLAN-Netzwerke</div>
+    <!-- ── 2. Ethernet (LAN) ── nur bei ETH-Hardware ────────────────────── -->
+    <div class="settings-section" id="ethSettingsSection" style="display:none">
+      <div class="section-header" data-i18n="net.ethernet">Ethernet (LAN)</div>
       <div class="section-body">
-        <div style="margin-bottom:8px;">
-          <select class="input-box" id="settingsSSIDList" style="width:60%;min-width:200px;"></select>
-          <button class="button" id="settingsScanWifi" data-i18n="btn.scan">Suchen</button>
-          <button class="button" onclick="addWifiNetworkFromScan()" data-i18n="btn.add_from_scan">+ Hinzufügen</button>
-        </div>
-        <div id="wifiNetworkList"></div>
-        <button class="button" onclick="addWifiNetwork()" data-i18n="btn.add_wifi">+ Netzwerk</button>
+        <table>
+          <tr>
+            <td data-i18n="net.eth_enabled">Ethernet:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsEthEnabled" onchange="settingsVisibility()">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+          <tr class="ETH_ENABLED">
+            <td data-i18n="net.eth_status">Status:</td>
+            <td><span id="ethConnectionStatus">-</span></td>
+          </tr>
+          <tr class="ETH_ENABLED">
+            <td data-i18n="net.dhcp">DHCP:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsEthDhcp" onchange="settingsVisibility()">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_STATIC">
+            <td data-i18n="net.ip">IP-Adresse:</td>
+            <td><input class="input-box" id="settingsEthIP"></td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_STATIC">
+            <td data-i18n="net.subnet">Subnetz:</td>
+            <td><input class="input-box" id="settingsEthNetMask"></td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_STATIC">
+            <td data-i18n="net.gateway">Gateway:</td>
+            <td><input class="input-box" id="settingsEthGateway"></td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_STATIC">
+            <td data-i18n="net.dns">DNS:</td>
+            <td><input class="input-box" id="settingsEthDNS"></td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_DHCP_ACTIVE">
+            <td data-i18n="net.ip">IP-Adresse:</td>
+            <td><span id="currentEthIP">-</span></td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_DHCP_ACTIVE">
+            <td data-i18n="net.subnet">Subnetz:</td>
+            <td><span id="currentEthNetMask">-</span></td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_DHCP_ACTIVE">
+            <td data-i18n="net.gateway">Gateway:</td>
+            <td><span id="currentEthGateway">-</span></td>
+          </tr>
+          <tr class="ETH_ENABLED ETH_DHCP_ACTIVE">
+            <td data-i18n="net.dns">DNS:</td>
+            <td><span id="currentEthDNS">-</span></td>
+          </tr>
+          <tr class="ETH_ENABLED">
+            <td data-i18n="net.node_comm">Node-Kommunikation:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsEthNodeComm">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+          <tr class="ETH_ENABLED">
+            <td>WebUI:</td>
+            <td>
+              <label class="toggle-switch">
+                <input type="checkbox" id="settingsEthWebUI">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+        </table>
       </div>
     </div>
+
+   </div>
   </div>
 
   <!-- ===== ABOUT PANEL ===== -->
   <div id="about" class="settings-panel" style="display:none;">
+   <div class="settings-cols">
     <div class="settings-section">
       <div class="section-header" data-i18n="nav.about">About</div>
       <div class="section-body">
@@ -648,6 +802,7 @@
         <pre id="aboutChangelog" style="white-space:pre-wrap; font-family:inherit; color:#aaa; margin:0;"></pre>
       </div>
     </div>
+   </div>
   </div>
 
   <!-- ===== DESKTOP BOTTOM BAR ===== -->

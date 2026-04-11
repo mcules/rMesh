@@ -15,7 +15,7 @@ body, button {
     font-size: 18px;
     padding: 0;
     margin: 0;
-    background: #000;
+    background: #555555;
     color: #e0e0e0;
 }
 
@@ -363,6 +363,12 @@ select.input-box {
     background: #2a5a2a;
     color: #6aff6a;
     border: 1px solid #4a8a4a;
+}
+
+.badge-lan {
+    background: #5a3a2a;
+    color: #ffaa6a;
+    border: 1px solid #8a6a4a;
 }
 
 /* ===== WIFI NETWORK TABLE ===== */
@@ -907,21 +913,17 @@ select.input-box {
         height: calc(90% - 170px);
     }
 
-    .settings-panel {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(320px, 660px));
-        justify-content: center;
-        align-items: start;
-        align-content: start;
-        grid-auto-rows: max-content;
-        gap: 8px;
+    .settings-cols {
+        columns: 2;
+        column-gap: 8px;
+        max-width: 1328px;
+        margin: 0 auto;
         padding: 8px;
     }
 
-    .settings-section.span-2,
     .settings-section.full-width,
     .settings-footer.full-width {
-        grid-column: 1 / -1;
+        column-span: all;
     }
 
     .settings-footer {
@@ -1251,16 +1253,14 @@ select.input-box {
     }
 
     /* Use a grid on mobile if width allows, else stay stack */
-    .settings-panel {
-        display: grid;
-        grid-template-columns: 1fr;
-        gap: 12px;
+    .settings-cols {
         padding: 8px;
     }
 
     @media (min-width: 640px) {
-        .settings-panel {
-            grid-template-columns: 1fr 1fr;
+        .settings-cols {
+            columns: 2;
+            column-gap: 12px;
         }
     }
 

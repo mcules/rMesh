@@ -23,7 +23,11 @@
 
 #include "wifiFunctions.h"
 #include "webFunctions.h"
+#include "ethFunctions.h"
 #include "serial.h"
+#ifdef HAS_ETHERNET
+#include <ETH.h>
+#endif
 
 // ── NTP sync tracking ──────────────────────────────────────────────────────
 static uint32_t lastNtpSyncTime = 0;
@@ -894,6 +898,38 @@ static void handleSettings(AsyncWebServerRequest *request) {
     }
     jPrintf("}");
 
+    // Ethernet & per-interface settings
+#ifdef HAS_ETHERNET
+    jPrintf(",\"hasEthernet\":true");
+    jPrintf(",\"ethConnected\":%s", ethConnected ? "true" : "false");
+    if (ethConnected) {
+        jPrintf(",\"ethCurrentIP\":[%u,%u,%u,%u]",
+                ETH.localIP()[0], ETH.localIP()[1], ETH.localIP()[2], ETH.localIP()[3]);
+        jPrintf(",\"ethCurrentNetMask\":[%u,%u,%u,%u]",
+                ETH.subnetMask()[0], ETH.subnetMask()[1], ETH.subnetMask()[2], ETH.subnetMask()[3]);
+        jPrintf(",\"ethCurrentGateway\":[%u,%u,%u,%u]",
+                ETH.gatewayIP()[0], ETH.gatewayIP()[1], ETH.gatewayIP()[2], ETH.gatewayIP()[3]);
+        jPrintf(",\"ethCurrentDNS\":[%u,%u,%u,%u]",
+                ETH.dnsIP()[0], ETH.dnsIP()[1], ETH.dnsIP()[2], ETH.dnsIP()[3]);
+        jPrintf(",\"ethLinkSpeed\":%u,\"ethFullDuplex\":%s",
+                ETH.linkSpeed(), ETH.fullDuplex() ? "true" : "false");
+    }
+#else
+    jPrintf(",\"hasEthernet\":false");
+#endif
+    jPrintf(",\"wifiEnabled\":%s", wifiEnabled ? "true" : "false");
+    jPrintf(",\"ethEnabled\":%s,\"ethDhcp\":%s",
+            ethEnabled ? "true" : "false", ethDhcp ? "true" : "false");
+    jPrintf(",\"ethIP\":[%u,%u,%u,%u]", ethIP[0], ethIP[1], ethIP[2], ethIP[3]);
+    jPrintf(",\"ethNetMask\":[%u,%u,%u,%u]", ethNetMask[0], ethNetMask[1], ethNetMask[2], ethNetMask[3]);
+    jPrintf(",\"ethGateway\":[%u,%u,%u,%u]", ethGateway[0], ethGateway[1], ethGateway[2], ethGateway[3]);
+    jPrintf(",\"ethDNS\":[%u,%u,%u,%u]", ethDNS[0], ethDNS[1], ethDNS[2], ethDNS[3]);
+    jPrintf(",\"wifiNodeComm\":%s,\"wifiWebUI\":%s",
+            wifiNodeComm ? "true" : "false", wifiWebUI ? "true" : "false");
+    jPrintf(",\"ethNodeComm\":%s,\"ethWebUI\":%s",
+            ethNodeComm ? "true" : "false", ethWebUI ? "true" : "false");
+    jPrintf(",\"primaryInterface\":%u", (unsigned)primaryInterface);
+
     jPrintf("}}");
     jSend(request);
 }
@@ -927,6 +963,15 @@ static void buildDiagnostics() {
     jPrintf(",\"channel\":%d,\"disconnects\":%lu,\"lastDisconnectReason\":%u,\"lastDisconnectTime\":%lu}",
             WiFi.channel(), (unsigned long)wifiDisconnectCount,
             lastWifiDisconnectReason, (unsigned long)lastWifiDisconnectTime);
+#ifdef HAS_ETHERNET
+    jPrintf(",\"eth\":{\"connected\":%s", ethConnected ? "true" : "false");
+    if (ethConnected) {
+        jPrintf(",\"ip\":\"%s\",\"mac\":\"%s\",\"speed\":%u,\"fullDuplex\":%s",
+                ETH.localIP().toString().c_str(), ETH.macAddress().c_str(),
+                ETH.linkSpeed(), ETH.fullDuplex() ? "true" : "false");
+    }
+    jPrintf("}");
+#endif
     jPrintf(",\"lora\":{\"txQueue\":%u,\"txTotal\":%lu,\"rxTotal\":%lu,\"dropped\":%lu",
             (unsigned)txBuffer.size(), (unsigned long)apiTxTotal, (unsigned long)apiRxTotal,
             (unsigned long)droppedFrames);

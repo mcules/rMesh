@@ -305,7 +305,8 @@ function renderPeerList(data) {
     // Normalize timestamp for sorting
     peerArray = peerArray.map(function(p) {
         var ts = p.timestamp || p.lastSeen || 0;
-        return Object.assign({}, p, { _ts: ts, _port: (p.port == 0) ? "LoRa" : "Wifi", _frq: parseInt(p.frqError || 0) });
+        var portLabel = (p.port == 0) ? "LoRa" : (p.port == 2) ? "LAN" : "WiFi";
+        return Object.assign({}, p, { _ts: ts, _port: portLabel, _frq: parseInt(p.frqError || 0) });
     });
     if (peerFilter) {
         peerArray = peerArray.filter(function(p) {
@@ -324,11 +325,12 @@ function renderPeerList(data) {
         + "<th style='cursor:pointer' onclick=\"setPeerSort('_frq')\">" + t('peer.frq_err') + sortIndicator(peerSort, '_frq') + "</th>";
     var body = "";
     peerArray.forEach(function(p) {
-        var port = (p.port == 0) ? "LoRa" : "Wifi";
+        var port = (p.port == 0) ? "LoRa" : (p.port == 2) ? "LAN" : "WiFi";
+        var badgeCls = (p.port == 0) ? "badge-lora" : (p.port == 2) ? "badge-lan" : "badge-wifi";
         var ts = p.timestamp || p.lastSeen || 0;
         var lastRX = new Date(ts * 1000);
         body += "<tr>";
-        body += "<td><span class='mesh-badge" + (p.port == 0 ? " badge-lora" : " badge-wifi") + "'>" + port + "</span>";
+        body += "<td><span class='mesh-badge " + badgeCls + "'>" + port + "</span>";
         if (p.preferred === true) body += " <span class='badge-preferred' title='" + t('peer.preferred') + "'>&#9733;</span>";
         body += "</td>";
         var cls = p.available ? 'green' : (p.preferred === false ? 'suppressed' : 'red');
@@ -434,6 +436,41 @@ function onSettingsReceived(s) {
     document.getElementById("currentWifiNetMask").textContent  = fmtIP(s.currentNetMask);
     document.getElementById("currentWifiGateway").textContent  = fmtIP(s.currentGateway);
     document.getElementById("currentWifiDNS").textContent      = fmtIP(s.currentDNS);
+
+    // Ethernet section visibility
+    var ethSection = document.getElementById("ethSettingsSection");
+    var primaryIfRow = document.getElementById("primaryIfRow");
+    if (ethSection) ethSection.style.display = s.hasEthernet ? "" : "none";
+    if (primaryIfRow) primaryIfRow.style.display = s.hasEthernet ? "" : "none";
+    // Show per-interface service toggles inside WiFi section only when ETH exists
+    document.querySelectorAll(".HAS_ETH").forEach(function(el) {
+        el.style.display = s.hasEthernet ? "" : "none";
+    });
+    if (s.hasEthernet) {
+        var ethStatusEl = document.getElementById("ethConnectionStatus");
+        if (ethStatusEl) {
+            if (s.ethConnected) {
+                var info = typeof t === 'function' ? t('net.eth_connected') : 'Connected';
+                if (s.ethLinkSpeed) info += " – " + s.ethLinkSpeed + " Mbps";
+                if (s.ethFullDuplex) info += " Full-Duplex";
+                ethStatusEl.textContent = info;
+                ethStatusEl.style.color = "#4ecca3";
+            } else {
+                ethStatusEl.textContent = typeof t === 'function' ? t('net.eth_no_link') : 'No link';
+                ethStatusEl.style.color = "#ff6b6b";
+            }
+        }
+        var currentEthIP = document.getElementById("currentEthIP");
+        if (currentEthIP) currentEthIP.textContent = s.ethConnected ? fmtIP(s.ethCurrentIP) : "-";
+        var currentEthMask = document.getElementById("currentEthNetMask");
+        if (currentEthMask) currentEthMask.textContent = s.ethConnected ? fmtIP(s.ethCurrentNetMask) : "-";
+        var currentEthGw = document.getElementById("currentEthGateway");
+        if (currentEthGw) currentEthGw.textContent = s.ethConnected ? fmtIP(s.ethCurrentGateway) : "-";
+        var currentEthDns = document.getElementById("currentEthDNS");
+        if (currentEthDns) currentEthDns.textContent = s.ethConnected ? fmtIP(s.ethCurrentDNS) : "-";
+        // Refresh all visibility toggles (WiFi, ETH, DHCP states)
+        settingsVisibility();
+    }
     if (s.udpPeers) {
         renderUdpPeers(s.udpPeers);
     }
@@ -638,7 +675,7 @@ function onMessage(event) {
         //TX-Frame gelb
         if (d.monitor.tx == true) { msg += "<span class='monitor-tx'>→ "; } else { msg += "<span>← "; }
         //Port
-        if (f.port == 0) {msg += "LoRa";} else {msg += "Wifi";}
+        if (f.port == 0) {msg += "LoRa";} else if (f.port == 2) {msg += "LAN";} else {msg += "WiFi";}
         //Time
         const date = new Date(d.monitor.timestamp * 1000);
         msg += " " + date.toLocaleString("de-DE", {hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(",", "");		
@@ -1005,6 +1042,12 @@ function fillSettingsForm(s) {
         else                                       presetEl.value = "";
     }
     document.getElementById("settingsLoraRepeat").checked = s.loraRepeat;
+    var mhmEl = document.getElementById("settingsMaxHopMessage");
+    if (mhmEl) mhmEl.value = s.maxHopMessage != null ? s.maxHopMessage : 15;
+    var mhpEl = document.getElementById("settingsMaxHopPosition");
+    if (mhpEl) mhpEl.value = s.maxHopPosition != null ? s.maxHopPosition : 1;
+    var mhtEl = document.getElementById("settingsMaxHopTelemetry");
+    if (mhtEl) mhtEl.value = s.maxHopTelemetry != null ? s.maxHopTelemetry : 3;
     document.getElementById("settingsLoraEnabled").checked = s.loraEnabled !== false;
     var minSnrEl = document.getElementById("settingsMinSnr");
     if (minSnrEl) {
@@ -1018,6 +1061,33 @@ function fillSettingsForm(s) {
     if (batEnabledEl) batEnabledEl.checked = s.batteryEnabled !== false;
     const batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) batVoltEl.value = s.batteryFullVoltage || 4.2;
+
+    // WiFi & Ethernet settings
+    var wifiEnabledEl = document.getElementById("settingsWifiEnabled");
+    if (wifiEnabledEl) wifiEnabledEl.checked = s.wifiEnabled !== false;
+    var ethEnabledEl = document.getElementById("settingsEthEnabled");
+    if (ethEnabledEl) ethEnabledEl.checked = s.ethEnabled !== false;
+    var ethDhcpEl = document.getElementById("settingsEthDhcp");
+    if (ethDhcpEl) ethDhcpEl.checked = s.ethDhcp !== false;
+    var ethIPEl = document.getElementById("settingsEthIP");
+    if (ethIPEl && s.ethIP) ethIPEl.value = s.ethIP[0]+"."+s.ethIP[1]+"."+s.ethIP[2]+"."+s.ethIP[3];
+    var ethMaskEl = document.getElementById("settingsEthNetMask");
+    if (ethMaskEl && s.ethNetMask) ethMaskEl.value = s.ethNetMask[0]+"."+s.ethNetMask[1]+"."+s.ethNetMask[2]+"."+s.ethNetMask[3];
+    var ethGwEl = document.getElementById("settingsEthGateway");
+    if (ethGwEl && s.ethGateway) ethGwEl.value = s.ethGateway[0]+"."+s.ethGateway[1]+"."+s.ethGateway[2]+"."+s.ethGateway[3];
+    var ethDnsEl = document.getElementById("settingsEthDNS");
+    if (ethDnsEl && s.ethDNS) ethDnsEl.value = s.ethDNS[0]+"."+s.ethDNS[1]+"."+s.ethDNS[2]+"."+s.ethDNS[3];
+    // Per-interface flags
+    var primaryIfEl = document.getElementById("settingsPrimaryInterface");
+    if (primaryIfEl) primaryIfEl.value = s.primaryInterface || 0;
+    var wifiNCEl = document.getElementById("settingsWifiNodeComm");
+    if (wifiNCEl) wifiNCEl.checked = s.wifiNodeComm !== false;
+    var wifiWUIEl = document.getElementById("settingsWifiWebUI");
+    if (wifiWUIEl) wifiWUIEl.checked = s.wifiWebUI !== false;
+    var ethNCEl = document.getElementById("settingsEthNodeComm");
+    if (ethNCEl) ethNCEl.checked = s.ethNodeComm !== false;
+    var ethWUIEl = document.getElementById("settingsEthWebUI");
+    if (ethWUIEl) ethWUIEl.checked = s.ethWebUI !== false;
 
     // WiFi TX power
     var wifiTxEl = document.getElementById("settingsWifiTxPower");
@@ -1144,6 +1214,12 @@ function saveSettings() {
     s["loraSpreadingFactor"] = parseInt(document.getElementById("settingsLoraSpreadingFactor").value);
     s["loraPreambleLength"] = parseInt(document.getElementById("settingsLoraPreambleLength").value);
     s["loraRepeat"] = document.getElementById("settingsLoraRepeat").checked;
+    var mhmEl = document.getElementById("settingsMaxHopMessage");
+    if (mhmEl) s["maxHopMessage"] = parseInt(mhmEl.value);
+    var mhpEl = document.getElementById("settingsMaxHopPosition");
+    if (mhpEl) s["maxHopPosition"] = parseInt(mhpEl.value);
+    var mhtEl = document.getElementById("settingsMaxHopTelemetry");
+    if (mhtEl) s["maxHopTelemetry"] = parseInt(mhtEl.value);
     s["loraEnabled"] = document.getElementById("settingsLoraEnabled").checked;
     var minSnrEl = document.getElementById("settingsMinSnr");
     if (minSnrEl) s["minSnr"] = parseInt(minSnrEl.value);
@@ -1190,6 +1266,32 @@ function saveSettings() {
         var pin = parseInt(oledBtnEl.value);
         if (!isNaN(pin)) s["oledButtonPin"] = Math.max(-1, Math.min(48, pin));
     }
+    // WiFi & Ethernet settings (only sent if elements exist, i.e. board has ETH)
+    var wifiEnabledEl = document.getElementById("settingsWifiEnabled");
+    if (wifiEnabledEl) s["wifiEnabled"] = wifiEnabledEl.checked;
+    var primaryIfEl = document.getElementById("settingsPrimaryInterface");
+    if (primaryIfEl) s["primaryInterface"] = parseInt(primaryIfEl.value);
+    var ethEnabledEl = document.getElementById("settingsEthEnabled");
+    if (ethEnabledEl) s["ethEnabled"] = ethEnabledEl.checked;
+    var ethDhcpEl = document.getElementById("settingsEthDhcp");
+    if (ethDhcpEl) s["ethDhcp"] = ethDhcpEl.checked;
+    var ethIPEl = document.getElementById("settingsEthIP");
+    if (ethIPEl && ethIPEl.value) s["ethIP"] = ethIPEl.value.split('.').map(Number);
+    var ethMaskEl = document.getElementById("settingsEthNetMask");
+    if (ethMaskEl && ethMaskEl.value) s["ethNetMask"] = ethMaskEl.value.split('.').map(Number);
+    var ethGwEl = document.getElementById("settingsEthGateway");
+    if (ethGwEl && ethGwEl.value) s["ethGateway"] = ethGwEl.value.split('.').map(Number);
+    var ethDnsEl = document.getElementById("settingsEthDNS");
+    if (ethDnsEl && ethDnsEl.value) s["ethDNS"] = ethDnsEl.value.split('.').map(Number);
+    var wifiNCEl = document.getElementById("settingsWifiNodeComm");
+    if (wifiNCEl) s["wifiNodeComm"] = wifiNCEl.checked;
+    var wifiWUIEl = document.getElementById("settingsWifiWebUI");
+    if (wifiWUIEl) s["wifiWebUI"] = wifiWUIEl.checked;
+    var ethNCEl = document.getElementById("settingsEthNodeComm");
+    if (ethNCEl) s["ethNodeComm"] = ethNCEl.checked;
+    var ethWUIEl = document.getElementById("settingsEthWebUI");
+    if (ethWUIEl) s["ethWebUI"] = ethWUIEl.checked;
+
     s["udpPeers"] = [];
     document.querySelectorAll('#udpPeerList .udpPeerRow').forEach(function(row) {
         var val = row.querySelector('.udpPeerIP').value || "0.0.0.0";

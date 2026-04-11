@@ -16,4 +16,12 @@
  */
 bool checkApiAuth(AsyncWebServerRequest *request);
 
+/**
+ * @brief Check whether the WebUI is allowed on the interface this request arrived on.
+ *
+ * Returns true if the request should be served; sends 403 and returns false
+ * if the per-interface wifiWebUI / ethWebUI setting disables it.
+ */
+bool checkIfaceWebUI(AsyncWebServerRequest *request);
+
 #endif

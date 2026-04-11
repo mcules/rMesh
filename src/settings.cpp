@@ -38,6 +38,25 @@ bool loraReady = false;
 bool batteryEnabled = true;
 float batteryFullVoltage = 4.2f;
 int8_t wifiTxPower = WIFI_MAX_TX_POWER_DBM;
+
+#ifdef HAS_WIFI
+// WiFi enable (only meaningful on boards with Ethernet as fallback)
+bool wifiEnabled     = true;
+// Ethernet settings (defaults for first boot)
+bool ethEnabled      = true;
+bool ethDhcp         = true;
+IPAddress ethIP(10, 0, 0, 100);
+IPAddress ethNetMask(255, 255, 255, 0);
+IPAddress ethGateway(10, 0, 0, 1);
+IPAddress ethDNS(10, 0, 0, 1);
+
+// Per-interface service flags
+bool wifiNodeComm = true;
+bool wifiWebUI    = true;
+bool ethNodeComm  = true;
+bool ethWebUI     = true;
+uint8_t primaryInterface = 0;  // 0=auto, 1=WiFi, 2=LAN
+#endif
 uint8_t displayBrightness = 200;
 uint16_t cpuFrequency = 240;
 bool oledEnabled = false;
@@ -69,80 +88,115 @@ void loadGroupNames() {
 }
 
 void showSettings() {
-    logPrintf(LOG_INFO, "Settings", "");
-    logPrintf(LOG_INFO, "Settings", "Settings:");
+    logRaw("");
+    logRaw("Settings:");
+    logRaw("  myCall: %s", settings.mycall);
+    logRaw("  position: %s", settings.position);
+    logRaw("  version: %s", VERSION);
+    logRaw("  updateChannel: %d", updateChannel);
+    logRaw("");
 #ifdef HAS_WIFI
-    logPrintf(LOG_INFO, "Settings", "AP Mode: %s", settings.apMode ? "true" : "false");
-    logPrintf(LOG_INFO, "Settings", "AP Name: %s", apName.c_str());
-    logPrintf(LOG_INFO, "Settings", "AP Password set: %s", apPassword.isEmpty() ? "false" : "true");
+    logRaw("  WiFi:");
+    logRaw("    wifiEnabled: %s", wifiEnabled ? "true" : "false");
+    logRaw("    apMode: %s", settings.apMode ? "true" : "false");
+    logRaw("    apName: %s", apName.c_str());
+    logRaw("    apPassword: %s", apPassword.isEmpty() ? "not set" : "set");
     if (wifiNetworks.empty()) {
-        logPrintf(LOG_INFO, "Settings", "WiFi Networks: none");
+        logRaw("    networks: none");
     } else {
         for (size_t i = 0; i < wifiNetworks.size(); i++) {
-            logPrintf(LOG_INFO, "Settings", "WiFi %zu: %s%s (pw: %s)", i + 1,
+            logRaw("    network %zu: %s%s (pw: %s)", i + 1,
                 wifiNetworks[i].ssid,
                 wifiNetworks[i].favorite ? " [favorite]" : "",
                 (wifiNetworks[i].password[0] != '\0') ? "set" : "none");
         }
     }
-    logPrintf(LOG_INFO, "Settings", "DHCP: %s", settings.dhcpActive ? "true" : "false");
+    logRaw("    dhcp: %s", settings.dhcpActive ? "true" : "false");
     if (!settings.dhcpActive) {
-        logPrintf(LOG_INFO, "Settings", "IP: %d.%d.%d.%d", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
-        logPrintf(LOG_INFO, "Settings", "Netmask: %d.%d.%d.%d", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
-        logPrintf(LOG_INFO, "Settings", "DNS: %d.%d.%d.%d", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
-        logPrintf(LOG_INFO, "Settings", "Gateway: %d.%d.%d.%d", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
+        logRaw("    ip: %d.%d.%d.%d", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
+        logRaw("    netmask: %d.%d.%d.%d", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
+        logRaw("    dns: %d.%d.%d.%d", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
+        logRaw("    gateway: %d.%d.%d.%d", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
     }
-    logPrintf(LOG_INFO, "Settings", "NTP Server: %s", settings.ntpServer);
+    logRaw("    ntpServer: %s", settings.ntpServer);
+    logRaw("    txPower: %d dBm", wifiTxPower);
+    logRaw("    wifiNodeComm: %s", wifiNodeComm ? "true" : "false");
+    logRaw("    wifiWebUI: %s", wifiWebUI ? "true" : "false");
+    logRaw("");
+#ifdef HAS_ETHERNET
+    logRaw("  Ethernet:");
+    logRaw("    ethEnabled: %s", ethEnabled ? "true" : "false");
+    logRaw("    ethDhcp: %s", ethDhcp ? "true" : "false");
+    if (!ethDhcp) {
+        logRaw("    ethIP: %d.%d.%d.%d", ethIP[0], ethIP[1], ethIP[2], ethIP[3]);
+        logRaw("    ethNetMask: %d.%d.%d.%d", ethNetMask[0], ethNetMask[1], ethNetMask[2], ethNetMask[3]);
+        logRaw("    ethGateway: %d.%d.%d.%d", ethGateway[0], ethGateway[1], ethGateway[2], ethGateway[3]);
+        logRaw("    ethDNS: %d.%d.%d.%d", ethDNS[0], ethDNS[1], ethDNS[2], ethDNS[3]);
+    }
+    logRaw("    ethNodeComm: %s", ethNodeComm ? "true" : "false");
+    logRaw("    ethWebUI: %s", ethWebUI ? "true" : "false");
+    logRaw("");
+#endif
+    logRaw("    primaryInterface: %d (%s)", primaryInterface,
+           primaryInterface == 0 ? "auto" : (primaryInterface == 1 ? "WiFi" : "LAN"));
     if (udpPeers.empty()) {
-        logPrintf(LOG_INFO, "Settings", "UDP Peers: none");
+        logRaw("    udpPeers: none");
     } else {
         for (size_t i = 0; i < udpPeers.size(); i++) {
-            logPrintf(LOG_INFO, "Settings", "UDP Peer %zu: %d.%d.%d.%d%s%s", i + 1,
+            logRaw("    udpPeer %zu: %d.%d.%d.%d%s%s", i + 1,
                 udpPeers[i][0], udpPeers[i][1], udpPeers[i][2], udpPeers[i][3],
                 udpPeerLegacy[i] ? " [legacy]" : "",
                 (bool)udpPeerEnabled[i] ? "" : " [disabled]");
         }
     }
+    logRaw("");
 #endif
-    logPrintf(LOG_INFO, "Settings", "");
-    logPrintf(LOG_INFO, "Settings", "myCall: %s", settings.mycall);
-    logPrintf(LOG_INFO, "Settings", "position: %s", settings.position);
-    logPrintf(LOG_INFO, "Settings", "loraFrequency: %f", settings.loraFrequency);
-    logPrintf(LOG_INFO, "Settings", "loraOutputPower: %d", settings.loraOutputPower);
-    logPrintf(LOG_INFO, "Settings", "loraBandwidth: %f", settings.loraBandwidth);
-    logPrintf(LOG_INFO, "Settings", "loraSyncWord: %X", settings.loraSyncWord);
-    logPrintf(LOG_INFO, "Settings", "loraCodingRate: %d", settings.loraCodingRate);
-    logPrintf(LOG_INFO, "Settings", "loraSpreadingFactor: %d", settings.loraSpreadingFactor);
-    logPrintf(LOG_INFO, "Settings", "loraPreambleLength: %d", settings.loraPreambleLength);
-    logPrintf(LOG_INFO, "Settings", "loraRepeat: %d", settings.loraRepeat);
-    logPrintf(LOG_INFO, "Settings", "version: %s", VERSION);
-    logPrintf(LOG_INFO, "Settings", "updateChannel: %d", updateChannel);
-    logPrintf(LOG_INFO, "Settings", "maxHopMessage: %d", extSettings.maxHopMessage);
-    logPrintf(LOG_INFO, "Settings", "maxHopPosition: %d", extSettings.maxHopPosition);
-    logPrintf(LOG_INFO, "Settings", "maxHopTelemetry: %d", extSettings.maxHopTelemetry);
-    logPrintf(LOG_INFO, "Settings", "minSnr: %d dB", extSettings.minSnr);
-    logPrintf(LOG_INFO, "Settings", "");
+    logRaw("  LoRa:");
+    logRaw("    loraEnabled: %s", loraEnabled ? "true" : "false");
+    logRaw("    loraReady: %s", loraReady ? "true" : "false");
+    logRaw("    frequency: %.3f MHz", settings.loraFrequency);
+    logRaw("    outputPower: %d dBm", settings.loraOutputPower);
+    logRaw("    bandwidth: %.2f kHz", settings.loraBandwidth);
+    logRaw("    syncWord: 0x%02X", settings.loraSyncWord);
+    logRaw("    codingRate: %d", settings.loraCodingRate);
+    logRaw("    spreadingFactor: %d", settings.loraSpreadingFactor);
+    logRaw("    preambleLength: %d", settings.loraPreambleLength);
+    logRaw("    repeat: %s", settings.loraRepeat ? "true" : "false");
+    logRaw("");
+    logRaw("  Mesh:");
+    logRaw("    maxHopMessage: %d", extSettings.maxHopMessage);
+    logRaw("    maxHopPosition: %d", extSettings.maxHopPosition);
+    logRaw("    maxHopTelemetry: %d", extSettings.maxHopTelemetry);
+    logRaw("    minSnr: %d dB", extSettings.minSnr);
+    logRaw("");
+    logRaw("  System:");
+    logRaw("    serialDebug: %s", serialDebug ? "true" : "false");
+    logRaw("    batteryEnabled: %s", batteryEnabled ? "true" : "false");
+    logRaw("    batteryFullVoltage: %.2f V", batteryFullVoltage);
+    logRaw("    displayBrightness: %d", displayBrightness);
+    logRaw("    cpuFrequency: %d MHz", cpuFrequency);
+    logRaw("");
 #ifdef HAS_WIFI
-    logPrintf(LOG_INFO, "Settings", "WiFi Status:");
+    logRaw("  WiFi Status:");
     switch(WiFi.status()) {
-    case 0: logPrintf(LOG_INFO, "Settings", "WL_IDLE_STATUS"); break;
-    case 1: logPrintf(LOG_INFO, "Settings", "WL_NO_SSID_AVAIL"); break;
-    case 2: logPrintf(LOG_INFO, "Settings", "WL_SCAN_COMPLETED"); break;
+    case 0: logRaw("    WL_IDLE_STATUS"); break;
+    case 1: logRaw("    WL_NO_SSID_AVAIL"); break;
+    case 2: logRaw("    WL_SCAN_COMPLETED"); break;
     case 3:
-        logPrintf(LOG_INFO, "Settings", "WL_CONNECTED");
-        logPrintf(LOG_INFO, "Settings", "IP: %d.%d.%d.%d", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
-        logPrintf(LOG_INFO, "Settings", "Netmask: %d.%d.%d.%d", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]);
-        logPrintf(LOG_INFO, "Settings", "Gateway: %d.%d.%d.%d", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
-        logPrintf(LOG_INFO, "Settings", "DNS: %d.%d.%d.%d", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
+        logRaw("    WL_CONNECTED");
+        logRaw("    IP: %d.%d.%d.%d", WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3]);
+        logRaw("    Netmask: %d.%d.%d.%d", WiFi.subnetMask()[0], WiFi.subnetMask()[1], WiFi.subnetMask()[2], WiFi.subnetMask()[3]);
+        logRaw("    Gateway: %d.%d.%d.%d", WiFi.gatewayIP()[0], WiFi.gatewayIP()[1], WiFi.gatewayIP()[2], WiFi.gatewayIP()[3]);
+        logRaw("    DNS: %d.%d.%d.%d", WiFi.dnsIP()[0], WiFi.dnsIP()[1], WiFi.dnsIP()[2], WiFi.dnsIP()[3]);
         break;
-    case 4: logPrintf(LOG_INFO, "Settings", "WL_CONNECT_FAILED"); break;
-    case 5: logPrintf(LOG_INFO, "Settings", "WL_CONNECTION_LOST"); break;
-    case 6: logPrintf(LOG_INFO, "Settings", "WL_DISCONNECTED"); break;
-    case 255: logPrintf(LOG_INFO, "Settings", "WL_NO_SHIELD"); break;
-    default: logPrintf(LOG_INFO, "Settings", "WL_AP_MODE");
+    case 4: logRaw("    WL_CONNECT_FAILED"); break;
+    case 5: logRaw("    WL_CONNECTION_LOST"); break;
+    case 6: logRaw("    WL_DISCONNECTED"); break;
+    case 255: logRaw("    WL_NO_SHIELD"); break;
+    default: logRaw("    WL_AP_MODE");
     }
 #else
-    logPrintf(LOG_INFO, "Settings", "WiFi: not available (nRF52)");
+    logRaw("  WiFi: not available (nRF52)");
 #endif
     logPrintf(LOG_INFO, "Settings", "");
 }
@@ -188,6 +242,31 @@ void loadSettings() {
     oledPageMask     = prefs.getUChar("oledPageMask", 0xFF);
     if (oledPageMask == 0) oledPageMask = 0xFF;
     oledButtonPin    = prefs.getChar("oledBtnPin", -1);
+
+#ifdef HAS_WIFI
+    // Ethernet & per-interface settings
+    wifiEnabled  = prefs.getBool("wifiEnabled", true);
+    ethEnabled   = prefs.getBool("ethEnabled", true);
+    ethDhcp      = prefs.getBool("ethDhcp", true);
+    {
+        uint8_t ipBuf[4];
+        if (prefs.getBytes("ethIP", ipBuf, 4) == 4)
+            ethIP = IPAddress(ipBuf[0], ipBuf[1], ipBuf[2], ipBuf[3]);
+        if (prefs.getBytes("ethNetMask", ipBuf, 4) == 4)
+            ethNetMask = IPAddress(ipBuf[0], ipBuf[1], ipBuf[2], ipBuf[3]);
+        if (prefs.getBytes("ethGateway", ipBuf, 4) == 4)
+            ethGateway = IPAddress(ipBuf[0], ipBuf[1], ipBuf[2], ipBuf[3]);
+        if (prefs.getBytes("ethDNS", ipBuf, 4) == 4)
+            ethDNS = IPAddress(ipBuf[0], ipBuf[1], ipBuf[2], ipBuf[3]);
+    }
+    wifiNodeComm = prefs.getBool("wifiNodeComm", true);
+    wifiWebUI    = prefs.getBool("wifiWebUI", true);
+    ethNodeComm  = prefs.getBool("ethNodeComm", true);
+    ethWebUI     = prefs.getBool("ethWebUI", true);
+    primaryInterface = prefs.getUChar("primaryIf", 0);
+    if (primaryInterface > 2) primaryInterface = 0;
+#endif
+
     loadGroupNames();
     prefs.getBytes("extSettings", &extSettings, sizeof(extSettings));
     size_t storedLen = prefs.getBytesLength("config");
@@ -358,6 +437,26 @@ void loadSettings() {
 }
 
 #ifdef HAS_WIFI
+void saveEthSettings() {
+    prefs.putBool("wifiEnabled",  wifiEnabled);
+    prefs.putBool("ethEnabled",   ethEnabled);
+    prefs.putBool("ethDhcp",      ethDhcp);
+    uint8_t ipBuf[4];
+    ipBuf[0] = ethIP[0]; ipBuf[1] = ethIP[1]; ipBuf[2] = ethIP[2]; ipBuf[3] = ethIP[3];
+    prefs.putBytes("ethIP", ipBuf, 4);
+    ipBuf[0] = ethNetMask[0]; ipBuf[1] = ethNetMask[1]; ipBuf[2] = ethNetMask[2]; ipBuf[3] = ethNetMask[3];
+    prefs.putBytes("ethNetMask", ipBuf, 4);
+    ipBuf[0] = ethGateway[0]; ipBuf[1] = ethGateway[1]; ipBuf[2] = ethGateway[2]; ipBuf[3] = ethGateway[3];
+    prefs.putBytes("ethGateway", ipBuf, 4);
+    ipBuf[0] = ethDNS[0]; ipBuf[1] = ethDNS[1]; ipBuf[2] = ethDNS[2]; ipBuf[3] = ethDNS[3];
+    prefs.putBytes("ethDNS", ipBuf, 4);
+    prefs.putBool("wifiNodeComm", wifiNodeComm);
+    prefs.putBool("wifiWebUI",    wifiWebUI);
+    prefs.putBool("ethNodeComm",  ethNodeComm);
+    prefs.putBool("ethWebUI",     ethWebUI);
+    prefs.putUChar("primaryIf",   primaryInterface);
+}
+
 void saveWifiNetworks() {
     // Limit stored networks to prevent NVS overflow
     const size_t MAX_WIFI_NETWORKS = 20;
@@ -481,6 +580,7 @@ void saveSettings() {
 #ifdef HAS_WIFI
     saveWifiNetworks();
     saveUdpPeers();
+    saveEthSettings();
 #endif
     pendingLoraReinit = true;
 }

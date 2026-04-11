@@ -103,6 +103,31 @@ extern float batteryFullVoltage;  // Voltage at 100% (V)
 // WiFi TX power (dBm, persisted, clamped to WIFI_MAX_TX_POWER_DBM per HAL)
 extern int8_t wifiTxPower;
 
+// ── Ethernet settings (persisted as individual NVS keys) ─────────────────────
+// Only meaningful on boards with HAS_ETHERNET; stubs exist on all HAS_WIFI builds
+// so that the API/WebSocket code compiles unconditionally.
+#ifdef HAS_WIFI
+extern bool wifiEnabled;           // Enable WiFi interface (only togglable on boards with ETH)
+extern bool ethEnabled;            // Enable W5500 Ethernet interface
+extern bool ethDhcp;               // Use DHCP on Ethernet (true) or static IP (false)
+extern IPAddress ethIP;
+extern IPAddress ethNetMask;
+extern IPAddress ethGateway;
+extern IPAddress ethDNS;
+
+// Per-interface service flags (only relevant when both WiFi and ETH are present)
+extern bool wifiNodeComm;          // Allow node communication (UDP) on WiFi
+extern bool wifiWebUI;             // Allow WebUI access on WiFi
+extern bool ethNodeComm;           // Allow node communication (UDP) on Ethernet
+extern bool ethWebUI;              // Allow WebUI access on Ethernet
+
+// Primary interface for outbound traffic (OTA, NTP, reporting)
+// 0 = auto, 1 = WiFi preferred, 2 = LAN preferred
+extern uint8_t primaryInterface;
+
+void saveEthSettings();
+#endif
+
 // Display brightness (0-255, persisted, applied to LCD/OLED where supported)
 extern uint8_t displayBrightness;
 

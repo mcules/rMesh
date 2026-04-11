@@ -66,6 +66,12 @@
     "image": "seeed_xiao_esp32s3_wio_sx1262.svg"
   },
   {
+    "name": "LILYGO_T-ETH-Elite_SX1262",
+    "chip": "ESP32-S3",
+    "lfs_offset": 6356992,
+    "image": "lilygo_t-eth-elite_sx1262.webp"
+  },
+  {
     "name": "LILYGO_T-Echo",
     "chip": "nRF52840",
     "image": "lilygo_t-echo.svg",

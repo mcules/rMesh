@@ -7,10 +7,39 @@
 #include "frame.h"
 #include "settings.h"
 #include "webFunctions.h"
+#include "ethFunctions.h"
 #include "logging.h"
+
+#ifdef HAS_ETHERNET
+#include <ETH.h>
+#endif
 
 
 WiFiUDP udp;
+
+// ── Per-interface helpers ────────────────────────────────────────────────────
+
+static bool inSubnet(IPAddress ip, IPAddress ifIP, IPAddress mask) {
+    for (int i = 0; i < 4; i++) {
+        if ((ip[i] & mask[i]) != (ifIP[i] & mask[i])) return false;
+    }
+    return true;
+}
+
+/** Returns true if node-communication (UDP) is allowed for the given remote IP. */
+static bool nodeCommAllowed(IPAddress remoteIP) {
+#ifdef HAS_ETHERNET
+    // If both interfaces are up, classify by subnet
+    if (ethConnected && WiFi.status() == WL_CONNECTED) {
+        if (inSubnet(remoteIP, ETH.localIP(), ETH.subnetMask()))  return ethNodeComm;
+        if (inSubnet(remoteIP, WiFi.localIP(), WiFi.subnetMask())) return wifiNodeComm;
+        // Unknown subnet (e.g. routed traffic) — allow if at least one flag is set
+        return wifiNodeComm || ethNodeComm;
+    }
+    if (ethConnected)                     return ethNodeComm;
+#endif
+    return wifiNodeComm;
+}
 
 void initUDP() {
     udp.begin(UDP_PORT);
@@ -19,7 +48,12 @@ void initUDP() {
 
 
 bool checkUDP(Frame &f) {
-    if (WiFi.status() != WL_CONNECTED) return false;
+    if (!loraConfigured(settings.loraFrequency)) return false;
+    bool anyUp = (WiFi.status() == WL_CONNECTED);
+#ifdef HAS_ETHERNET
+    anyUp = anyUp || ethConnected;
+#endif
+    if (!anyUp) return false;
     size_t packetSize = udp.parsePacket();
     if (packetSize) {
         uint8_t packetBuffer[256];
@@ -31,11 +65,14 @@ bool checkUDP(Frame &f) {
         uint8_t pktSyncword = hasSyncword ? packetBuffer[0] : AMATEUR_SYNCWORD;
         if (pktSyncword != settings.loraSyncWord) return false;
 
+        // Per-interface node-communication filter
+        IPAddress senderIP = udp.remoteIP();
+        if (!nodeCommAllowed(senderIP)) return false;
+
         f.importBinary(hasSyncword ? packetBuffer + 1 : packetBuffer,
                        hasSyncword ? len - 1 : len);
 
         // Look up sender IP in peer vector
-        IPAddress senderIP = udp.remoteIP();
         int peerIdx = -1;
         for (size_t i = 0; i < udpPeers.size(); i++) {
             if (udpPeers[i] == senderIP) { peerIdx = (int)i; break; }
@@ -84,20 +121,48 @@ bool checkUDP(Frame &f) {
         f.rssi = 0;
         f.snr = 100;
         f.frqError = 0;
+#ifdef HAS_ETHERNET
+        // Classify by interface: port 1 = WiFi, port 2 = LAN (Ethernet)
+        if (ethConnected && inSubnet(senderIP, ETH.localIP(), ETH.subnetMask()))
+            f.port = 2;
+        else
+            f.port = 1;
+#else
         f.port = 1;
+#endif
         return true;
     }
     return false;
 }
 
+/** Check whether a UDP peer's IP belongs to the interface indicated by port. */
+static bool peerMatchesPort(IPAddress peerIP, uint8_t port) {
+#ifdef HAS_ETHERNET
+    if (port == 2) {
+        // LAN: peer must be in ETH subnet
+        if (!ethConnected) return false;
+        return inSubnet(peerIP, ETH.localIP(), ETH.subnetMask());
+    }
+    if (port == 1 && ethConnected && WiFi.status() == WL_CONNECTED) {
+        // WiFi: peer must NOT be in ETH subnet (i.e. reachable via WiFi)
+        return !inSubnet(peerIP, ETH.localIP(), ETH.subnetMask());
+    }
+#endif
+    // Single interface or port 1 without ETH — all peers match
+    (void)peerIP;
+    return (port == 1);
+}
+
 void sendUDP(Frame &f) {
+    if (!loraConfigured(settings.loraFrequency)) return;
+
     uint8_t txBuffer[255];
     size_t txBufferLength;
 
     //Populate frame
     strncpy(f.nodeCall, settings.mycall, sizeof(f.nodeCall));
     f.tx = true;
-    f.port = 1;
+    // Keep f.port as-is (1 = WiFi, 2 = LAN) — set by caller / TX buffer
     f.timestamp = time(NULL);
 
     //Transmit
@@ -106,8 +171,11 @@ void sendUDP(Frame &f) {
     txBuffer[0] = settings.loraSyncWord;
     txBufferLength = f.exportBinary(txBuffer + 1, sizeof(txBuffer) - 1) + 1;
     bool udpTX = false;
+
+    // Unicast to known peers that belong to this interface
     for (size_t i = 0; i < udpPeers.size(); i++) {
-        if (!(bool)udpPeerEnabled[i]) continue;  // Skip disabled peers
+        if (!(bool)udpPeerEnabled[i]) continue;
+        if (!peerMatchesPort(udpPeers[i], f.port)) continue;
         udp.beginPacket(udpPeers[i], UDP_PORT);
         if ((bool)udpPeerLegacy[i]) {
             udp.write(txBuffer + 1, txBufferLength - 1);
@@ -118,14 +186,30 @@ void sendUDP(Frame &f) {
         udp.flush();
         udpTX = true;
     }
-    // Always send announces via broadcast too (so new nodes are discovered)
+
+    // Broadcast announces on the matching interface only
     if (f.frameType == Frame::FrameTypes::ANNOUNCE_FRAME) {
-        udp.beginPacket(settings.wifiBrodcast, UDP_PORT);
-        udp.write(txBuffer, txBufferLength);
-        udp.endPacket();
-        udp.flush();
-        udpTX = true;
+        if (f.port == 1 && wifiNodeComm && WiFi.status() == WL_CONNECTED) {
+            udp.beginPacket(settings.wifiBrodcast, UDP_PORT);
+            udp.write(txBuffer, txBufferLength);
+            udp.endPacket();
+            udp.flush();
+            udpTX = true;
+        }
+#ifdef HAS_ETHERNET
+        if (f.port == 2 && ethNodeComm && ethConnected) {
+            IPAddress ethBcast;
+            for (int i = 0; i < 4; i++)
+                ethBcast[i] = ETH.localIP()[i] | ~ETH.subnetMask()[i];
+            udp.beginPacket(ethBcast, UDP_PORT);
+            udp.write(txBuffer, txBufferLength);
+            udp.endPacket();
+            udp.flush();
+            udpTX = true;
+        }
+#endif
     }
+
     //Monitor frame
     if (udpTX) {
         f.monitorJSON();

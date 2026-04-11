@@ -19,6 +19,9 @@
 #endif
 
 #include "serial.h"
+#ifdef HAS_ETHERNET
+#include "ethFunctions.h"
+#endif
 #include "config.h"
 #include "logging.h"
 #include "settings.h"
@@ -81,7 +84,7 @@ void checkSerialRX() {
                         while (file.available()) {
                             String line = file.readStringUntil('\n');
                             line.replace("\r", "");
-                            logPrintf(LOG_INFO, "CLI", "%s", line.c_str());
+                            logRaw("%s", line.c_str());
                         }
                         file.close();
                     } else {
@@ -176,24 +179,40 @@ void checkSerialRX() {
                     logPrintf(LOG_INFO, "CLI", "Force install started (channel: %s)...", pendingForceChannel == 1 ? "dev" : "release");
                 }
 
-                //WiFi scan
-                if (strncmp(serialRxBuffer, "sc", 2) == 0) {
-                    logPrintf(LOG_INFO, "WiFi", "WiFi scan.....");
-                    pendingReconnectScan = false;
-                    WiFi.scanNetworks(true);
-                }
-
-                // WiFi network management
-                // "wifi"                    → list all networks
-                // "wifi add <SSID>"         → add open network
-                // "wifi add <SSID> <PW>"    → add network with password
-                // "wifi del <N>"            → delete network N (1-based)
-                // "wifi fav <N>"            → set network N as favorite
-                // "wifi pw <N> <PASSWORD>"  → set password for network N
-                // "wifi clear"              → delete all networks
+                // ── wifi command group ────────────────────────────────────────
                 if (strncmp(serialRxBuffer, "wifi", 4) == 0 && (serialRxBuffer[4] == ' ' || serialRxBuffer[4] == '\0')) {
-                    if (parameter[0] == '\0') {
-                        // List all networks
+                    const char* sub = serialRxBuffer + 5; // lowercased sub-command
+                    if (serialRxBuffer[4] == '\0' || parameter[0] == '\0') {
+                        logPrintf(LOG_INFO, "WiFi", "wifiEnabled: %s", wifiEnabled ? "true" : "false");
+                    } else if (sub[0] == '0' || sub[0] == '1') {
+                        wifiEnabled = (sub[0] == '1');
+                        saveEthSettings();
+                        logPrintf(LOG_INFO, "Config", "wifiEnabled: %s", wifiEnabled ? "true" : "false");
+                    } else if (strncmp(sub, "tx ", 3) == 0) {
+                        int8_t v = (int8_t)atoi(parameter + 3);
+                        if (v < 2) v = 2;
+                        if (v > 20) v = 20;
+                        wifiTxPower = v;
+                        WiFi.setTxPower((wifi_power_t)(wifiTxPower * 4));
+                        saveSettings();
+                        logPrintf(LOG_INFO, "Config", "wifiTxPower: %d dBm", wifiTxPower);
+                    } else if (strncmp(sub, "nc", 2) == 0 && (sub[2] == ' ' || sub[2] == '\0')) {
+                        if (sub[2] == ' ') {
+                            wifiNodeComm = (sub[3] == '1');
+                            saveEthSettings();
+                        }
+                        logPrintf(LOG_INFO, "Config", "wifiNodeComm: %s", wifiNodeComm ? "true" : "false");
+                    } else if (strncmp(sub, "wu", 2) == 0 && (sub[2] == ' ' || sub[2] == '\0')) {
+                        if (sub[2] == ' ') {
+                            wifiWebUI = (sub[3] == '1');
+                            saveEthSettings();
+                        }
+                        logPrintf(LOG_INFO, "Config", "wifiWebUI: %s", wifiWebUI ? "true" : "false");
+                    } else if (strncmp(sub, "scan", 4) == 0) {
+                        logPrintf(LOG_INFO, "WiFi", "WiFi scan.....");
+                        pendingReconnectScan = false;
+                        WiFi.scanNetworks(true);
+                    } else if (strncmp(sub, "list", 4) == 0) {
                         if (wifiNetworks.empty()) {
                             logPrintf(LOG_INFO, "WiFi", "WiFi networks: none");
                         } else {
@@ -204,18 +223,17 @@ void checkSerialRX() {
                                     (wifiNetworks[i].password[0] != '\0') ? "set" : "none");
                             }
                         }
-                    } else if (strncmp(parameter, "clear", 5) == 0) {
+                    } else if (strncmp(sub, "clear", 5) == 0) {
                         wifiNetworks.clear();
                         settings.wifiSSID[0] = '\0';
                         settings.wifiPassword[0] = '\0';
                         saveWifiNetworks();
                         logPrintf(LOG_INFO, "WiFi", "All WiFi networks deleted.");
-                    } else if (strncmp(parameter, "add ", 4) == 0) {
+                    } else if (strncmp(sub, "add ", 4) == 0) {
                         const char* rest = parameter + 4;
-                        // SSID = first word, password = rest (or empty)
                         WifiNetwork net;
                         memset(&net, 0, sizeof(net));
-                        net.favorite = wifiNetworks.empty(); // First network is favorite
+                        net.favorite = wifiNetworks.empty();
                         const char* sp = strchr(rest, ' ');
                         if (sp) {
                             size_t ssidLen = sp - rest;
@@ -231,7 +249,7 @@ void checkSerialRX() {
                         wifiInit();
                         logPrintf(LOG_INFO, "WiFi", "WiFi %zu added: %s%s", wifiNetworks.size(),
                             net.ssid, net.favorite ? " [favorite]" : "");
-                    } else if (strncmp(parameter, "del ", 4) == 0) {
+                    } else if (strncmp(sub, "del ", 4) == 0) {
                         int idx = atoi(parameter + 4) - 1;
                         if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
                             logPrintf(LOG_INFO, "WiFi", "WiFi %d deleted: %s", idx + 1, wifiNetworks[idx].ssid);
@@ -241,7 +259,7 @@ void checkSerialRX() {
                         } else {
                             logPrintf(LOG_ERROR, "WiFi", "Error: index 1-%zu expected!", wifiNetworks.size());
                         }
-                    } else if (strncmp(parameter, "fav ", 4) == 0) {
+                    } else if (strncmp(sub, "fav ", 4) == 0) {
                         int idx = atoi(parameter + 4) - 1;
                         if (idx >= 0 && (size_t)idx < wifiNetworks.size()) {
                             for (auto& n : wifiNetworks) n.favorite = false;
@@ -252,7 +270,7 @@ void checkSerialRX() {
                         } else {
                             logPrintf(LOG_ERROR, "WiFi", "Error: index 1-%zu expected!", wifiNetworks.size());
                         }
-                    } else if (strncmp(parameter, "pw ", 3) == 0) {
+                    } else if (strncmp(sub, "pw ", 3) == 0) {
                         const char* rest = parameter + 3;
                         char* sp = strchr((char*)rest, ' ');
                         if (sp) {
@@ -267,155 +285,70 @@ void checkSerialRX() {
                         } else {
                             logPrintf(LOG_INFO, "WiFi", "Usage: wifi pw <N> <PASSWORD>");
                         }
-                    } else {
-                        logPrintf(LOG_INFO, "WiFi", "Commands: wifi | wifi add <SSID> [<PW>] | wifi del <N> | wifi fav <N> | wifi pw <N> <PW> | wifi clear");
-                    }
-                }
-
-                // AP settings
-                // "ap"               → show AP settings
-                // "ap name <NAME>"   → set AP name
-                // "ap pw <PASSWORD>" → set AP password
-                // "ap pw -"          → clear AP password
-                if (strncmp(serialRxBuffer, "ap", 2) == 0 && (serialRxBuffer[2] == ' ' || serialRxBuffer[2] == '\0')) {
-                    if (parameter[0] == '\0') {
-                        logPrintf(LOG_INFO, "WiFi", "AP Name: %s", apName.c_str());
-                        logPrintf(LOG_INFO, "WiFi", "AP Password: %s", apPassword.isEmpty() ? "(none)" : "set");
-                    } else if (strncmp(parameter, "name ", 5) == 0) {
-                        apName = String(parameter + 5);
-                        saveSettings();
-                        if (settings.apMode) wifiInit();
-                        logPrintf(LOG_INFO, "WiFi", "AP Name: %s", apName.c_str());
-                    } else if (strncmp(parameter, "pw ", 3) == 0) {
-                        const char* pw = parameter + 3;
-                        if (strcmp(pw, "-") == 0) {
-                            apPassword = "";
-                            logPrintf(LOG_INFO, "WiFi", "AP password cleared.");
-                            saveSettings();
-                            if (settings.apMode) wifiInit();
-                        } else if (strlen(pw) < 8) {
-                            logPrintf(LOG_ERROR, "WiFi", "Error: AP password must be at least 8 characters!");
+                    } else if (strncmp(sub, "ap", 2) == 0 && (sub[2] == ' ' || sub[2] == '\0')) {
+                        if (sub[2] == '\0') {
+                            logPrintf(LOG_INFO, "WiFi", "AP Mode: %s  Name: %s  Password: %s",
+                                      settings.apMode ? "on" : "off", apName.c_str(),
+                                      apPassword.isEmpty() ? "not set" : "set");
                         } else {
-                            apPassword = String(pw);
-                            logPrintf(LOG_INFO, "WiFi", "AP password set.");
-                            saveSettings();
-                            if (settings.apMode) wifiInit();
+                            const char* apsub = sub + 3;
+                            if (apsub[0] == '0' || apsub[0] == '1') {
+                                settings.apMode = (apsub[0] == '1');
+                                saveSettings(); wifiInit();
+                                logPrintf(LOG_INFO, "Config", "apMode: %s", settings.apMode ? "true" : "false");
+                            } else if (strncmp(apsub, "name ", 5) == 0) {
+                                apName = String(parameter + 8);
+                                saveSettings();
+                                if (settings.apMode) wifiInit();
+                                logPrintf(LOG_INFO, "Config", "AP Name: %s", apName.c_str());
+                            } else if (strncmp(apsub, "pw ", 3) == 0) {
+                                const char* pw = parameter + 6;
+                                if (strcmp(pw, "-") == 0) {
+                                    apPassword = "";
+                                    saveSettings();
+                                    if (settings.apMode) wifiInit();
+                                    logPrintf(LOG_INFO, "Config", "AP password cleared.");
+                                } else if (strlen(pw) < 8) {
+                                    logPrintf(LOG_ERROR, "WiFi", "Error: AP password must be at least 8 characters!");
+                                } else {
+                                    apPassword = String(pw);
+                                    saveSettings();
+                                    if (settings.apMode) wifiInit();
+                                    logPrintf(LOG_INFO, "Config", "AP password set.");
+                                }
+                            }
                         }
-                    } else {
-                        logPrintf(LOG_INFO, "WiFi", "Commands: ap | ap name <NAME> | ap pw <PASSWORD> | ap pw -");
-                    }
-                }
-
-                // Legacy: WiFi SSID (still works, adds to network list)
-                if (strncmp(serialRxBuffer, "ss", 2) == 0 && serialRxBuffer[2] == ' ') {
-                    if (strlen(parameter) > 0) {
-                        strncpy(settings.wifiSSID, parameter, sizeof(settings.wifiSSID) - 1);
-                        settings.wifiSSID[sizeof(settings.wifiSSID) - 1] = '\0';
-                        settings.apMode = false;
-                        saveSettings();
-                        wifiInit();
-                    }
-                    logPrintf(LOG_INFO, "WiFi", "WiFi SSID: %s", settings.wifiSSID);
-                }
-
-                // Legacy: WiFi Password (still works, updates network in list)
-                if (strncmp(serialRxBuffer, "pa", 2) == 0 && serialRxBuffer[2] == ' ') {
-                    if (strlen(parameter) > 0) {
-                        strncpy(settings.wifiPassword, parameter, sizeof(settings.wifiPassword) - 1);
-                        settings.wifiPassword[sizeof(settings.wifiPassword) - 1] = '\0';
-                        settings.apMode = false;
-                        saveSettings();
-                        wifiInit();
-                    }
-                    logPrintf(LOG_INFO, "WiFi", "WiFi Password: %s", (settings.wifiPassword[0] != '\0') ? "set" : "none");
-                }            
-                
-                //IP address
-                if (strncmp(serialRxBuffer, "i", 1) == 0) {
-                    if (strlen(parameter) > 0) {
+                    } else if (strncmp(sub, "ip ", 3) == 0) {
                         IPAddress tempIP;
-                        if (tempIP.fromString(parameter)) {
-                            settings.wifiIP = tempIP;
-                            saveSettings();
-                            wifiInit();
-                        } else {
-                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
-                        }
-                    }
-                    logPrintf(LOG_INFO, "Config", "IP: %d.%d.%d.%d", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
-                }       
-                
-                //Gateway
-                if (strncmp(serialRxBuffer, "g", 1) == 0) {
-                    if (strlen(parameter) > 0) {
+                        if (tempIP.fromString(parameter + 3)) {
+                            settings.wifiIP = tempIP; saveSettings(); wifiInit();
+                        } else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "WiFi IP: %d.%d.%d.%d", settings.wifiIP[0], settings.wifiIP[1], settings.wifiIP[2], settings.wifiIP[3]);
+                    } else if (strncmp(sub, "dns ", 4) == 0) {
                         IPAddress tempIP;
-                        if (tempIP.fromString(parameter)) {
-                            settings.wifiGateway = tempIP;
-                            saveSettings();
-                            wifiInit();
-                        } else {
-                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
-                        }
-                    }
-                    logPrintf(LOG_INFO, "Config", "Gateway: %d.%d.%d.%d", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
-                }
-
-                //DNS address
-                if (strncmp(serialRxBuffer, "dn", 2) == 0) {
-                    if (strlen(parameter) > 0) {
+                        if (tempIP.fromString(parameter + 4)) {
+                            settings.wifiDNS = tempIP; saveSettings(); wifiInit();
+                        } else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "WiFi DNS: %d.%d.%d.%d", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
+                    } else if (strncmp(sub, "gateway ", 8) == 0) {
                         IPAddress tempIP;
-                        if (tempIP.fromString(parameter)) {
-                            settings.wifiDNS = tempIP;
-                            saveSettings();
-                            wifiInit();
-                        } else {
-                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
-                        }
-                    }
-                    logPrintf(LOG_INFO, "Config", "DNS: %d.%d.%d.%d", settings.wifiDNS[0], settings.wifiDNS[1], settings.wifiDNS[2], settings.wifiDNS[3]);
-                }
-
-                //Netmask
-                if (strncmp(serialRxBuffer, "ne", 2) == 0) {
-                    if (strlen(parameter) > 0) {
+                        if (tempIP.fromString(parameter + 8)) {
+                            settings.wifiGateway = tempIP; saveSettings(); wifiInit();
+                        } else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "WiFi Gateway: %d.%d.%d.%d", settings.wifiGateway[0], settings.wifiGateway[1], settings.wifiGateway[2], settings.wifiGateway[3]);
+                    } else if (strncmp(sub, "netmask ", 8) == 0) {
                         IPAddress tempIP;
-                        if (tempIP.fromString(parameter)) {
-                            settings.wifiNetMask = tempIP;
-                            saveSettings();
-                            wifiInit();
-                        } else {
-                            logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!");
+                        if (tempIP.fromString(parameter + 8)) {
+                            settings.wifiNetMask = tempIP; saveSettings(); wifiInit();
+                        } else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "WiFi Netmask: %d.%d.%d.%d", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
+                    } else if (strncmp(sub, "dhcp", 4) == 0 && (sub[4] == ' ' || sub[4] == '\0')) {
+                        if (sub[4] == ' ') {
+                            settings.dhcpActive = (sub[5] == '1');
+                            saveSettings(); wifiInit();
                         }
+                        logPrintf(LOG_INFO, "Config", "WiFi DHCP: %s", settings.dhcpActive ? "true" : "false");
                     }
-                    logPrintf(LOG_INFO, "Config", "Netmask: %d.%d.%d.%d", settings.wifiNetMask[0], settings.wifiNetMask[1], settings.wifiNetMask[2], settings.wifiNetMask[3]);
-                }
-
-                //AP-Mode toggle (legacy: "a 1" / "a 0")
-                if (serialRxBuffer[0] == 'a' && (serialRxBuffer[1] == ' ' || serialRxBuffer[1] == '\0')) {
-                    if (strlen(parameter) > 0) {
-                        bool value = false;
-                        if (parameter[0] == '1') value = true;
-                        if (parameter[0] == 'e') value = true;
-                        if (parameter[0] == 't') value = true;
-                        settings.apMode = value;
-                        saveSettings();
-                        wifiInit();
-                    }
-                    logPrintf(LOG_INFO, "Config", "AP-Mode: %s", settings.apMode ? "true" : "false");
-                }
-
-                //DHCP mode
-                if (strncmp(serialRxBuffer, "dh", 2) == 0) {
-                    if (strlen(parameter) > 0) {
-                        bool value = false;
-                        if (parameter[0] == '1') value = true;
-                        if (parameter[0] == 'e') value = true;
-                        if (parameter[0] == 't') value = true;
-                        settings.dhcpActive = value;
-                        saveSettings();
-                        wifiInit();
-                    }
-                    logPrintf(LOG_INFO, "Config", "DHCP: %s", settings.dhcpActive ? "true" : "false");
                 }
                 #endif // HAS_WIFI
 
@@ -432,39 +365,57 @@ void checkSerialRX() {
                     rebootTimer = millis(); rebootRequested = true;
                 }
 
-                // Frequency preset
-                // "freq 433" → 433 MHz amateur radio preset
-                // "freq 868" → 868 MHz public preset (sub-band P, 500 mW)
-                if (strncmp(serialRxBuffer, "fr", 2) == 0) {
-                    if (strncmp(parameter, "433", 3) == 0) {
-                        settings.loraFrequency       = 434.850f;
-                        settings.loraBandwidth       = 62.5f;
-                        settings.loraSpreadingFactor = 7;
-                        settings.loraCodingRate      = 6;
-                        settings.loraOutputPower     = 20;
-                        settings.loraPreambleLength  = 10;
-                        settings.loraSyncWord        = syncWordForFrequency(settings.loraFrequency);
+                // ── lora command group ────────────────────────────────────────
+                if (strncmp(serialRxBuffer, "lora", 4) == 0 && (serialRxBuffer[4] == ' ' || serialRxBuffer[4] == '\0')) {
+                    const char* sub = serialRxBuffer + 5;
+                    if (serialRxBuffer[4] == '\0' || parameter[0] == '\0') {
+                        logPrintf(LOG_INFO, "LoRa", "loraEnabled: %s  loraReady: %s", loraEnabled ? "true" : "false", loraReady ? "true" : "false");
+                    } else if (sub[0] == '0' || sub[0] == '1') {
+                        loraEnabled = (sub[0] == '1');
                         saveSettings();
-                        logPrintf(LOG_INFO, "Config", "Preset 433 MHz (amateur radio) applied.");
-                    } else if (strncmp(parameter, "868", 3) == 0) {
-                        settings.loraFrequency       = 869.525f;
-                        settings.loraBandwidth       = 125.0f;
-                        settings.loraSpreadingFactor = 7;
-                        settings.loraCodingRate      = 5;
-                        settings.loraOutputPower     = 27;
-                        settings.loraPreambleLength  = 10;
-                        settings.loraSyncWord        = syncWordForFrequency(settings.loraFrequency);
-                        saveSettings();
-                        logPrintf(LOG_INFO, "Config", "Preset 868 MHz (public, 500 mW) applied.");
-                    } else {
-                        logPrintf(LOG_INFO, "Config", "Current frequency: %.3f MHz", settings.loraFrequency);
-                        logPrintf(LOG_INFO, "Config", "Usage: freq 433  or  freq 868");
+                        logPrintf(LOG_INFO, "Config", "loraEnabled: %s", loraEnabled ? "true" : "false");
+                    } else if (strncmp(sub, "minsnr", 6) == 0 && (sub[6] == ' ' || sub[6] == '\0')) {
+                        if (sub[6] == ' ') { extSettings.minSnr = (int8_t)atoi(parameter + 7); saveSettings(); }
+                        logPrintf(LOG_INFO, "Config", "minSnr: %d dB", extSettings.minSnr);
+                    } else if (strncmp(sub, "freq ", 5) == 0) {
+                        if (strncmp(sub + 5, "433", 3) == 0) {
+                            settings.loraFrequency = 434.850f; settings.loraBandwidth = 62.5f;
+                            settings.loraSpreadingFactor = 7; settings.loraCodingRate = 6;
+                            settings.loraOutputPower = 20; settings.loraPreambleLength = 10;
+                            settings.loraSyncWord = syncWordForFrequency(settings.loraFrequency);
+                            saveSettings();
+                            logPrintf(LOG_INFO, "Config", "Preset 433 MHz (amateur radio) applied.");
+                        } else if (strncmp(sub + 5, "868", 3) == 0) {
+                            settings.loraFrequency = 869.525f; settings.loraBandwidth = 125.0f;
+                            settings.loraSpreadingFactor = 7; settings.loraCodingRate = 5;
+                            settings.loraOutputPower = 27; settings.loraPreambleLength = 10;
+                            settings.loraSyncWord = syncWordForFrequency(settings.loraFrequency);
+                            saveSettings();
+                            logPrintf(LOG_INFO, "Config", "Preset 868 MHz (public, 500 mW) applied.");
+                        } else {
+                            logPrintf(LOG_INFO, "Config", "Current frequency: %.3f MHz  Usage: lora freq 433 | lora freq 868", settings.loraFrequency);
+                        }
+                    } else if (strncmp(sub, "op ", 3) == 0) {
+                        int8_t txp = (int8_t)atoi(parameter + 3);
+                        if (isPublicBand(settings.loraFrequency) && txp > PUBLIC_MAX_TX_POWER) txp = PUBLIC_MAX_TX_POWER;
+                        settings.loraOutputPower = txp; saveSettings();
+                        logPrintf(LOG_INFO, "Config", "TX Power: %d dBm", settings.loraOutputPower);
+                    } else if (strncmp(sub, "bw ", 3) == 0) {
+                        settings.loraBandwidth = atof(parameter + 3); saveSettings();
+                        logPrintf(LOG_INFO, "Config", "Bandwidth: %.2f kHz", settings.loraBandwidth);
+                    } else if (strncmp(sub, "sf ", 3) == 0) {
+                        settings.loraSpreadingFactor = (uint8_t)atoi(parameter + 3); saveSettings();
+                        logPrintf(LOG_INFO, "Config", "Spreading Factor: %d", settings.loraSpreadingFactor);
+                    } else if (strncmp(sub, "cr ", 3) == 0) {
+                        settings.loraCodingRate = (uint8_t)atoi(parameter + 3); saveSettings();
+                        logPrintf(LOG_INFO, "Config", "Coding Rate: %d", settings.loraCodingRate);
+                    } else if (strncmp(sub, "pl ", 3) == 0) {
+                        settings.loraPreambleLength = (int16_t)atoi(parameter + 3); saveSettings();
+                        logPrintf(LOG_INFO, "Config", "Preamble Length: %d", settings.loraPreambleLength);
                     }
                 }
 
-
                 // Callsign
-                // "call DL1ABC-1" → Set callsign
                 if (strncmp(serialRxBuffer, "call", 4) == 0) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.mycall, parameter, sizeof(settings.mycall) - 1);
@@ -476,7 +427,6 @@ void checkSerialRX() {
                 }
 
                 // Position
-                // "pos JN48mw" or "pos 48.1234,11.5678"
                 if (strncmp(serialRxBuffer, "pos", 3) == 0) {
                     if (strlen(parameter) > 0) {
                         strncpy(settings.position, parameter, sizeof(settings.position) - 1);
@@ -486,64 +436,27 @@ void checkSerialRX() {
                     logPrintf(LOG_INFO, "Config", "Position: %s", settings.position);
                 }
 
-                // NTP-Server
-                if (strncmp(serialRxBuffer, "ntp", 3) == 0) {
-                    if (strlen(parameter) > 0) {
-                        strncpy(settings.ntpServer, parameter, sizeof(settings.ntpServer) - 1);
-                        settings.ntpServer[sizeof(settings.ntpServer) - 1] = '\0';
-                        saveSettings();
+                // ── net command group ────────────────────────────────────────
+                if (strncmp(serialRxBuffer, "net ", 4) == 0) {
+                    const char* sub = serialRxBuffer + 4;
+                    if (strncmp(sub, "ntp", 3) == 0 && (sub[3] == ' ' || sub[3] == '\0')) {
+                        if (sub[3] == ' ') {
+                            strncpy(settings.ntpServer, parameter + 4, sizeof(settings.ntpServer) - 1);
+                            settings.ntpServer[sizeof(settings.ntpServer) - 1] = '\0';
+                            saveSettings();
+                        }
+                        logPrintf(LOG_INFO, "Config", "NTP: %s", settings.ntpServer);
                     }
-                    logPrintf(LOG_INFO, "Config", "NTP: %s", settings.ntpServer);
-                }
-
-                // TX-Power (Output Power in dBm)
-                // "op 20" → TX-Power auf 20 dBm setzen
-                if (strncmp(serialRxBuffer, "op", 2) == 0) {
-                    if (strlen(parameter) > 0) {
-                        int8_t txp = (int8_t)atoi(parameter);
-                        if (isPublicBand(settings.loraFrequency) && txp > PUBLIC_MAX_TX_POWER) { txp = PUBLIC_MAX_TX_POWER; }
-                        settings.loraOutputPower = txp;
-                        saveSettings();
+#ifdef HAS_WIFI
+                    else if (strncmp(sub, "pri", 3) == 0 && (sub[3] == ' ' || sub[3] == '\0')) {
+                        if (sub[3] == ' ') {
+                            uint8_t v = (uint8_t)atoi(parameter + 4);
+                            if (v <= 2) { primaryInterface = v; saveEthSettings(); }
+                        }
+                        logPrintf(LOG_INFO, "Config", "primaryInterface: %d (%s)", primaryInterface,
+                                  primaryInterface == 0 ? "auto" : (primaryInterface == 1 ? "WiFi" : "LAN"));
                     }
-                    logPrintf(LOG_INFO, "Config", "TX Power: %d dBm", settings.loraOutputPower);
-                }
-
-                // Bandwidth in kHz
-                // "bw 62.5"
-                if (strncmp(serialRxBuffer, "bw", 2) == 0) {
-                    if (strlen(parameter) > 0) {
-                        settings.loraBandwidth = atof(parameter);
-                        saveSettings();
-                    }
-                    logPrintf(LOG_INFO, "Config", "Bandwidth: %.2f kHz", settings.loraBandwidth);
-                }
-
-                // Spreading Factor (6–12)
-                if (strncmp(serialRxBuffer, "sf", 2) == 0) {
-                    if (strlen(parameter) > 0) {
-                        settings.loraSpreadingFactor = (uint8_t)atoi(parameter);
-                        saveSettings();
-                    }
-                    logPrintf(LOG_INFO, "Config", "Spreading Factor: %d", settings.loraSpreadingFactor);
-                }
-
-                // Coding Rate (5–8)
-                if (strncmp(serialRxBuffer, "cr", 2) == 0) {
-                    if (strlen(parameter) > 0) {
-                        settings.loraCodingRate = (uint8_t)atoi(parameter);
-                        saveSettings();
-                    }
-                    logPrintf(LOG_INFO, "Config", "Coding Rate: %d", settings.loraCodingRate);
-                }
-
-                // Preamble Length
-                // "pl 10"
-                if (strncmp(serialRxBuffer, "pl", 2) == 0) {
-                    if (strlen(parameter) > 0) {
-                        settings.loraPreambleLength = (int16_t)atoi(parameter);
-                        saveSettings();
-                    }
-                    logPrintf(LOG_INFO, "Config", "Preamble Length: %d", settings.loraPreambleLength);
+#endif
                 }
 
                 // Sync Word (hexadecimal, e.g. "sw 2B")
@@ -722,6 +635,48 @@ void checkSerialRX() {
                         }
                     }
                 }
+                // ── lan command group (Ethernet) ─────────────────────────────
+#ifdef HAS_ETHERNET
+                if (strncmp(serialRxBuffer, "lan", 3) == 0 && (serialRxBuffer[3] == ' ' || serialRxBuffer[3] == '\0')) {
+                    const char* sub = serialRxBuffer + 4;
+                    if (serialRxBuffer[3] == '\0' || parameter[0] == '\0') {
+                        logPrintf(LOG_INFO, "ETH", "ethEnabled: %s  ethConnected: %s", ethEnabled ? "true" : "false", ethConnected ? "true" : "false");
+                    } else if (sub[0] == '0' || sub[0] == '1') {
+                        ethEnabled = (sub[0] == '1');
+                        saveEthSettings();
+                        logPrintf(LOG_INFO, "Config", "ethEnabled: %s", ethEnabled ? "true" : "false");
+                    } else if (strncmp(sub, "nc", 2) == 0 && (sub[2] == ' ' || sub[2] == '\0')) {
+                        if (sub[2] == ' ') { ethNodeComm = (sub[3] == '1'); saveEthSettings(); }
+                        logPrintf(LOG_INFO, "Config", "ethNodeComm: %s", ethNodeComm ? "true" : "false");
+                    } else if (strncmp(sub, "wu", 2) == 0 && (sub[2] == ' ' || sub[2] == '\0')) {
+                        if (sub[2] == ' ') { ethWebUI = (sub[3] == '1'); saveEthSettings(); }
+                        logPrintf(LOG_INFO, "Config", "ethWebUI: %s", ethWebUI ? "true" : "false");
+                    } else if (strncmp(sub, "ip ", 3) == 0) {
+                        IPAddress tempIP;
+                        if (tempIP.fromString(parameter + 3)) { ethIP = tempIP; saveEthSettings(); }
+                        else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "LAN IP: %d.%d.%d.%d", ethIP[0], ethIP[1], ethIP[2], ethIP[3]);
+                    } else if (strncmp(sub, "dns ", 4) == 0) {
+                        IPAddress tempIP;
+                        if (tempIP.fromString(parameter + 4)) { ethDNS = tempIP; saveEthSettings(); }
+                        else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "LAN DNS: %d.%d.%d.%d", ethDNS[0], ethDNS[1], ethDNS[2], ethDNS[3]);
+                    } else if (strncmp(sub, "gateway ", 8) == 0) {
+                        IPAddress tempIP;
+                        if (tempIP.fromString(parameter + 8)) { ethGateway = tempIP; saveEthSettings(); }
+                        else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "LAN Gateway: %d.%d.%d.%d", ethGateway[0], ethGateway[1], ethGateway[2], ethGateway[3]);
+                    } else if (strncmp(sub, "netmask ", 8) == 0) {
+                        IPAddress tempIP;
+                        if (tempIP.fromString(parameter + 8)) { ethNetMask = tempIP; saveEthSettings(); }
+                        else { logPrintf(LOG_ERROR, "Config", "Error: Invalid IP format!"); }
+                        logPrintf(LOG_INFO, "Config", "LAN Netmask: %d.%d.%d.%d", ethNetMask[0], ethNetMask[1], ethNetMask[2], ethNetMask[3]);
+                    } else if (strncmp(sub, "dhcp", 4) == 0 && (sub[4] == ' ' || sub[4] == '\0')) {
+                        if (sub[4] == ' ') { ethDhcp = (sub[5] == '1'); saveEthSettings(); }
+                        logPrintf(LOG_INFO, "Config", "LAN DHCP: %s", ethDhcp ? "true" : "false");
+                    }
+                }
+#endif
                 #endif // HAS_WIFI (webpw + udp)
 
                 // Debug mode toggle

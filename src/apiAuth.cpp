@@ -2,9 +2,15 @@
 
 #include "apiAuth.h"
 #include "auth.h"
+#include "settings.h"
+#include "ethFunctions.h"
 #include "logging.h"
+#include <WiFi.h>
 #include <mbedtls/md.h>
 #include <time.h>
+#ifdef HAS_ETHERNET
+#include <ETH.h>
+#endif
 
 // Convert hex string to byte array
 static void hexToBytes(const char* hex, uint8_t* bytes, size_t len) {
@@ -87,6 +93,9 @@ static bool verifyBearer(const char* authHeader) {
 }
 
 bool checkApiAuth(AsyncWebServerRequest *request) {
+    // Per-interface WebUI filter (before auth, so blocked interfaces can't even try)
+    if (!checkIfaceWebUI(request)) return false;
+
     // No password set -> open access
     if (webPasswordHash.isEmpty()) return true;
 
@@ -118,6 +127,25 @@ bool checkApiAuth(AsyncWebServerRequest *request) {
         request->send(401, "application/json", "{\"error\":\"unauthorized\"}");
     }
     return ok;
+}
+
+bool checkIfaceWebUI(AsyncWebServerRequest *request) {
+#ifdef HAS_ETHERNET
+    if (!ethConnected) return true;  // Single interface — always allow
+    IPAddress local = request->client()->localIP();
+    if (local == WiFi.localIP() || local == WiFi.softAPIP()) {
+        if (!wifiWebUI) {
+            request->send(403, "application/json", "{\"error\":\"WebUI disabled on WiFi\"}");
+            return false;
+        }
+    } else if (local == ETH.localIP()) {
+        if (!ethWebUI) {
+            request->send(403, "application/json", "{\"error\":\"WebUI disabled on Ethernet\"}");
+            return false;
+        }
+    }
+#endif
+    return true;
 }
 
 #endif

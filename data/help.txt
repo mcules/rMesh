@@ -1,77 +1,94 @@
 Befehlsuebersicht:
 
   System:
-  h                    Hilfe
-  settings             Einstellungen anzeigen
-  version              Version anzeigen
-  reboot               Neustart
-  defaults             Standardeinstellungen laden
-  dbg <1/0>            Debug-Modus ein/aus
+  h                            Hilfe
+  settings                     Einstellungen anzeigen
+  version                      Version anzeigen
+  reboot                       Neustart
+  defaults                     Standardeinstellungen laden
+  dbg <1/0>                    Debug-Modus ein/aus
 
   WiFi & Netzwerk:
-  scan                 Wifi scannen
-  wifi                 Alle WLAN-Netzwerke anzeigen
-  wifi add <SSID> [<PW>]  Netzwerk hinzufuegen (PW optional)
-  wifi del <N>         Netzwerk N loeschen (1-basiert)
-  wifi fav <N>         Netzwerk N als Favorit setzen
-  wifi pw <N> <PW>     Passwort von Netzwerk N aendern
-  wifi clear           Alle Netzwerke loeschen
-  ap                   AP-Einstellungen anzeigen
-  ap name <NAME>       AP-Name setzen
-  ap pw <PASSWORT>     AP-Passwort setzen (min. 8 Zeichen)
-  ap pw -              AP-Passwort loeschen
-  a <1/0>              AP-Mode ein/aus
-  ip <ip>              WiFi IP setzen
-  dns <ip>             WiFi DNS setzen
-  gateway <ip>         WiFi Gateway setzen
-  netmask <maske>      WiFi Netzmaske setzen
-  dhcp <1/0>           DHCP-Client ein/aus
-  ntp <server>         NTP-Server setzen
+  wifi <1/0>                   WiFi ein/aus
+  wifi tx <dBm>                WiFi Sendeleistung (2-20 dBm)
+  wifi nc <1/0>                WiFi Node-Kommunikation ein/aus
+  wifi wu <1/0>                WiFi WebUI ein/aus
+  wifi scan                    Wifi scannen
+  wifi list                    Alle WLAN-Netzwerke anzeigen
+  wifi add <SSID> [<PW>]       Netzwerk hinzufuegen (PW optional)
+  wifi del <N>                 Netzwerk N loeschen (1-basiert)
+  wifi fav <N>                 Netzwerk N als Favorit setzen
+  wifi pw <N> <PW>             Passwort von Netzwerk N aendern
+  wifi ap <1/0>                AP-Mode ein/aus
+  wifi ap name <NAME>          AP-Name setzen
+  wifi ap pw <PASSWORT>        AP-Passwort setzen (min. 8 Zeichen)
+  wifi ap pw -                 AP-Passwort loeschen
+  wifi ip <ip>                 WiFi IP setzen
+  wifi dns <ip>                WiFi DNS setzen
+  wifi gateway <ip>            WiFi Gateway setzen
+  wifi netmask <maske>         WiFi Netzmaske setzen
+  wifi dhcp <1/0>              DHCP-Client ein/aus
+
+  Netzwerk allgemein:
+  net ntp <server>             NTP-Server setzen
+  net pri <0/1/2>              Primaeres Interface (0=Auto, 1=WiFi, 2=LAN)
+
+  Ethernet (nur bei ETH-Hardware):
+  lan <1/0>                    Ethernet ein/aus
+  lan nc <1/0>                 ETH Node-Kommunikation ein/aus
+  lan wu <1/0>                 ETH WebUI ein/aus
+  lan ip <ip>                  LAN IP setzen
+  lan dns <ip>                 LAN DNS setzen
+  lan gateway <ip>             LAN Gateway setzen
+  lan netmask <maske>          LAN Netzmaske setzen
+  lan dhcp <1/0>               LAN DHCP-Client ein/aus
 
   UDP-Peers:
-  udp                  Alle UDP-Peers anzeigen
-  udp add <ip>         UDP-Peer hinzufuegen
-  udp add <ip> legacy  Legacy-Peer hinzufuegen (kein SyncWord)
-  udp del <N>          UDP-Peer N loeschen (1-basiert)
-  udp <N> <ip>         IP von Peer N aendern
-  udp <N> legacy       Legacy-Flag von Peer N umschalten
-  udp <N> enabled      Aktivierung von Peer N umschalten
-  udp clear            Alle UDP-Peers loeschen
+  udp                          Alle UDP-Peers anzeigen
+  udp add <ip>                 UDP-Peer hinzufuegen
+  udp add <ip> legacy          Legacy-Peer hinzufuegen (kein SyncWord)
+  udp del <N>                  UDP-Peer N loeschen (1-basiert)
+  udp <N> <ip>                 IP von Peer N aendern
+  udp <N> legacy               Legacy-Flag von Peer N umschalten
+  udp <N> enabled              Aktivierung von Peer N umschalten
+  udp clear                    Alle UDP-Peers loeschen
 
-  LoRa & Funk:
-  freq <433|868>       Frequenz-Preset (433=Amateurfunk, 868=Public)
-  op <dBm>             TX-Power in dBm
-  bw <kHz>             Bandbreite setzen (z.B. 62.5 oder 125)
-  sf <6-12>            Spreading Factor setzen
-  cr <5-8>             Coding Rate setzen
-  pl <laenge>          Preamble Length setzen
-  sw <hex>             Sync Word setzen (z.B. 2B oder 12)
-  rep <1/0>            Nachrichten wiederholen ein/aus
-  mhm <hops>           Max Hops fuer Messages
-  mhp <hops>           Max Hops fuer Position
-  mht <hops>           Max Hops fuer Telemetrie
+  LoRa:
+  lora <1/0>                   LoRa-Modul ein/aus
+  lora minsnr <dB>             Min. SNR Schwelle (-30 = deaktiviert)
+  lora freq <433|868>          Frequenz-Preset (433=Amateurfunk, 868=Public)
+  lora op <dBm>                TX-Power in dBm
+  lora bw <kHz>                Bandbreite setzen (z.B. 62.5 oder 125)
+  lora sf <6-12>               Spreading Factor setzen
+  lora cr <5-8>                Coding Rate setzen
+  lora pl <laenge>             Preamble Length setzen
 
   Setup:
-  call <rufzeichen>    Rufzeichen setzen
-  pos <position>       Position setzen (JN48mw oder 48.1234,11.5678)
+  call <rufzeichen>            Rufzeichen setzen
+  pos <position>               Position setzen (JN48mw oder 48.1234,11.5678)
+  sw <hex>                     Sync Word setzen (z.B. 2B oder 12)
+  rep <1/0>                    Nachrichten wiederholen ein/aus
+  mhm <hops>                   Max Hops fuer Messages
+  mhp <hops>                   Max Hops fuer Position
+  mht <hops>                   Max Hops fuer Telemetrie
 
   Nachrichten:
-  msg <CALL> <TEXT>    Direktnachricht senden
-  xgrp <GROUP> <TEXT>  Gruppennachricht senden
-  xtrace <CALL>        Trace-Nachricht senden
-  announce             Announce-Bake manuell ausloesen
+  msg <CALL> <TEXT>            Direktnachricht senden
+  xgrp <GROUP> <TEXT>          Gruppennachricht senden
+  xtrace <CALL>                Trace-Nachricht senden
+  announce                     Announce-Bake manuell ausloesen
 
   Sicherheit:
-  webpw <passwort>     WebUI-Passwort setzen
-  webpw -              WebUI-Passwort loeschen
+  webpw <passwort>             WebUI-Passwort setzen
+  webpw -                      WebUI-Passwort loeschen
 
   Update:
-  update               OTA-Update starten
-  uc <0/1>             Update-Kanal (0=Release, 1=Dev)
-  updf [0/1]           Force-Install (optional: Kanal)
+  update                       OTA-Update starten
+  uc <0/1>                     Update-Kanal (0=Release, 1=Dev)
+  updf [0/1]                   Force-Install (optional: Kanal)
 
   Abfragen (JSON):
-  peers                Peer-Liste abfragen
-  routes               Routing-Tabelle abfragen
-  acks                 ACK-Liste abfragen
-  xtxbuf               TX-Buffer-Status abfragen
+  peers                        Peer-Liste abfragen
+  routes                       Routing-Tabelle abfragen
+  acks                         ACK-Liste abfragen
+  xtxbuf                       TX-Buffer-Status abfragen
