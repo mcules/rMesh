@@ -410,9 +410,9 @@ void loadSettings() {
         prefs.putBytes("config", &settings, sizeof(settings));
     }
 
-    // Clamp TX power to hardware and regulatory limits after loading
+    // Warn if TX power exceeds hardware recommendation
     if (settings.loraOutputPower > LORA_MAX_TX_POWER) {
-        settings.loraOutputPower = LORA_MAX_TX_POWER;
+        logPrintf(LOG_WARN, "Config", "TX Power %d dBm exceeds board max (%d dBm).", settings.loraOutputPower, LORA_MAX_TX_POWER);
     }
     if (loraConfigured(settings.loraFrequency)) {
         if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {

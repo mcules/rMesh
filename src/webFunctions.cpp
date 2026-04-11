@@ -343,7 +343,7 @@ void startWebServer() {
                 settings.loraOutputPower = json["settings"]["loraOutputPower"].as<int8_t>();
 
                 if (settings.loraOutputPower > LORA_MAX_TX_POWER) {
-                    settings.loraOutputPower = LORA_MAX_TX_POWER;
+                    logPrintf(LOG_WARN, "Config", "TX Power %d dBm exceeds board max (%d dBm).", settings.loraOutputPower, LORA_MAX_TX_POWER);
                 }
                 if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
                     settings.loraOutputPower = PUBLIC_MAX_TX_POWER;

@@ -102,6 +102,7 @@ const I18N = {
         'route.send_now': 'Send routes now',
         'settings.saved': 'Settings saved.',
         'settings.unsaved_confirm': 'There are unsaved changes. Discard and continue?',
+        'settings.tx_power_warn': 'TX Power {0} dBm exceeds the board maximum of {1} dBm. This may damage the hardware. Continue anyway?',
     },
     de: {
         'nav.monitor': 'Monitor', 'nav.peers': 'Peers', 'nav.routing': 'Routing',
@@ -195,6 +196,7 @@ const I18N = {
         'route.send_now': 'Routen jetzt senden',
         'settings.saved': 'Einstellungen gespeichert.',
         'settings.unsaved_confirm': 'Es gibt ungespeicherte Änderungen. Verwerfen und fortfahren?',
+        'settings.tx_power_warn': 'TX Power {0} dBm überschreitet das Board-Maximum von {1} dBm. Das kann die Hardware beschädigen. Trotzdem fortfahren?',
     }
 };
 

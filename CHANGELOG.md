@@ -1,5 +1,12 @@
 # Changelog
 
+## [v26.4.1a]
+
+- GEÄNDERT: ESP32_E22_V1 — maximale TX-Leistung auf 33 dBm angehoben (E22-Modul mit PA)
+- GEÄNDERT: TX-Power über Board-Maximum wird nicht mehr still begrenzt — stattdessen Warnung in Serial, WebUI und beim Laden aus NVS
+- NEU: WebUI zeigt beim Speichern einen Bestätigungsdialog wenn TX-Power das Board-Maximum überschreitet
+- FIX: Duplizierte `handleImportMessages`-Funktion in api.cpp entfernt (Merge-Artefakt)
+
 ## [v26.4.1]
 
 - NEU: Support für LILYGO T-ETH-Elite + SX1262-Shield — Ethernet (W5500), WiFi und LoRa; neuer HAL, Pin-Mapping und Board-Dokumentation

@@ -1030,9 +1030,8 @@ function fillSettingsForm(s) {
     document.getElementById("settingsLoraFrequency").value = s.loraFrequency;
     document.getElementById("settingsLoraOutputPower").value = s.loraOutputPower;
     if (s.loraMaxTxPower !== undefined) {
-        var pwrInput = document.getElementById("settingsLoraOutputPower");
-        pwrInput.max = s.loraMaxTxPower;
-        document.getElementById("loraMaxTxPowerHint").textContent = "(max " + s.loraMaxTxPower + " dBm)";
+        window._loraMaxTxPower = s.loraMaxTxPower;
+        document.getElementById("loraMaxTxPowerHint").textContent = "(Board max " + s.loraMaxTxPower + " dBm)";
     }
     document.getElementById("settingsLoraBandwidth").value = s.loraBandwidth;
     document.getElementById("settingsLoraSyncWord").value = s.loraSyncWord.toString(16).padStart(2, '0').toUpperCase();
@@ -1219,6 +1218,9 @@ function saveSettings() {
     s["wifiDNS"] = document.getElementById("settingsWifiDNS").value.split('.').map(Number);
     s["loraFrequency"] = parseFloat(document.getElementById("settingsLoraFrequency").value);
     s["loraOutputPower"] = parseInt(document.getElementById("settingsLoraOutputPower").value);
+    if (window._loraMaxTxPower !== undefined && s["loraOutputPower"] > window._loraMaxTxPower) {
+        if (!confirm(t('settings.tx_power_warn').replace('{0}', s["loraOutputPower"]).replace('{1}', window._loraMaxTxPower))) return;
+    }
     s["loraBandwidth"] = parseFloat(document.getElementById("settingsLoraBandwidth").value);
     s["loraSyncWord"] = parseInt(document.getElementById("settingsLoraSyncWord").value, 16);
     s["loraCodingRate"] = parseInt(document.getElementById("settingsLoraCodingRate").value);
