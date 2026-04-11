@@ -42,8 +42,15 @@ void initHal() {
     // Inputs
     pinMode(PIN_AP_MODE_SWITCH, INPUT_PULLUP);
 
-    // Initialise the dedicated LoRa SPI bus (separate from ETH/SD SPI)
-    loraSPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, LORA_NSS);
+    // Initialise the dedicated LoRa SPI bus only once (separate from ETH/SD SPI).
+    // Pass -1 for SS because RadioLib controls the CS pin itself.
+    // Re-calling begin() on ESP32-S3 during LoRa reinit can leave the SPI
+    // peripheral in a broken state, causing radio.begin() to return -2.
+    static bool spiInited = false;
+    if (!spiInited) {
+        spiInited = true;
+        loraSPI.begin(LORA_SCK, LORA_MISO, LORA_MOSI, -1);
+    }
 
     // Only initialize the radio if a frequency has been configured
     if (!loraConfigured(settings.loraFrequency)) {
@@ -52,11 +59,18 @@ void initHal() {
         return;
     }
 
-    radio.reset();
-    delay(100);
-    int beginState = radio.begin();
+    int beginState = RADIOLIB_ERR_CHIP_NOT_FOUND;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        radio.reset();
+        delay(100 * attempt);
+        beginState = radio.begin();
+        if (beginState == RADIOLIB_ERR_NONE) break;
+        logPrintf(LOG_WARN, "LoRa", "radio.begin() attempt %d/3 failed (code %d)", attempt, beginState);
+    }
     if (beginState != RADIOLIB_ERR_NONE) {
         logPrintf(LOG_ERROR, "LoRa", "radio.begin() failed (code %d) – check wiring!", beginState);
+        spiInited = false;
+        loraSPI.end();
         loraReady = false;
         return;
     }

@@ -18,6 +18,7 @@
 #define LORA_DIO1    14   // IRQ
 
 #define LORA_DEFAULT_TX_POWER 22
+#define LORA_MAX_TX_POWER     22  // SX1262 hardware limit
 #define WIFI_MAX_TX_POWER_DBM 20
 
 // No dedicated WiFi LED on this board

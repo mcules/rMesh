@@ -839,8 +839,8 @@ static void handleSettings(AsyncWebServerRequest *request) {
     }
 
     // LoRa settings
-    jPrintf(",\"loraFrequency\":%.4f,\"loraOutputPower\":%d,\"loraBandwidth\":%.1f",
-            settings.loraFrequency, (int)settings.loraOutputPower, settings.loraBandwidth);
+    jPrintf(",\"loraFrequency\":%.4f,\"loraOutputPower\":%d,\"loraMaxTxPower\":%d,\"loraBandwidth\":%.1f",
+            settings.loraFrequency, (int)settings.loraOutputPower, (int)LORA_MAX_TX_POWER, settings.loraBandwidth);
     jPrintf(",\"loraSyncWord\":%u,\"loraCodingRate\":%u,\"loraSpreadingFactor\":%u",
             (unsigned)settings.loraSyncWord, (unsigned)settings.loraCodingRate, (unsigned)settings.loraSpreadingFactor);
     jPrintf(",\"loraPreambleLength\":%d,\"loraRepeat\":%s,\"loraMaxMessageLength\":%u",

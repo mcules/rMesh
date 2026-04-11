@@ -17,6 +17,7 @@
 #define PIN_AP_MODE_SWITCH 0     //Boot button for WiFi mode switch (long press) and display toggle (short press)
 
 #define LORA_DEFAULT_TX_POWER 20
+#define LORA_MAX_TX_POWER     20  // SX1278 hardware limit
 #define WIFI_MAX_TX_POWER_DBM 20
 
 

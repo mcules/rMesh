@@ -1308,6 +1308,15 @@ void loop() {
         initHal();
     }
 
+    // Periodic LoRa recovery: if radio failed to init, retry every 30 s
+    static uint32_t loraRecoveryTimer = 0;
+    if (!loraReady && loraEnabled && loraConfigured(settings.loraFrequency)
+        && timerExpired(loraRecoveryTimer)) {
+        loraRecoveryTimer = millis() + 30000;
+        logPrintf(LOG_INFO, "LoRa", "Attempting radio recovery...");
+        initHal();
+    }
+
     // ── 10. messages.json housekeeping ────────────────────────────────────────
     if (trimNeeded) {
         trimNeeded = false;

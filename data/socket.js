@@ -1029,6 +1029,11 @@ function fillSettingsForm(s) {
     }
     document.getElementById("settingsLoraFrequency").value = s.loraFrequency;
     document.getElementById("settingsLoraOutputPower").value = s.loraOutputPower;
+    if (s.loraMaxTxPower !== undefined) {
+        var pwrInput = document.getElementById("settingsLoraOutputPower");
+        pwrInput.max = s.loraMaxTxPower;
+        document.getElementById("loraMaxTxPowerHint").textContent = "(max " + s.loraMaxTxPower + " dBm)";
+    }
     document.getElementById("settingsLoraBandwidth").value = s.loraBandwidth;
     document.getElementById("settingsLoraSyncWord").value = s.loraSyncWord.toString(16).padStart(2, '0').toUpperCase();
     document.getElementById("settingsLoraCodingRate").value = s.loraCodingRate;

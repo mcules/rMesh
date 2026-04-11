@@ -25,6 +25,7 @@
 #include "config.h"
 #include "logging.h"
 #include "settings.h"
+#include "hal.h"
 #include "main.h"
 #include "frame.h"
 #include "helperFunctions.h"
@@ -397,6 +398,10 @@ void checkSerialRX() {
                         }
                     } else if (strncmp(sub, "op ", 3) == 0) {
                         int8_t txp = (int8_t)atoi(parameter + 3);
+                        if (txp > LORA_MAX_TX_POWER) {
+                            logPrintf(LOG_WARN, "Config", "TX Power %d dBm exceeds hardware max (%d dBm), clamped.", txp, LORA_MAX_TX_POWER);
+                            txp = LORA_MAX_TX_POWER;
+                        }
                         if (isPublicBand(settings.loraFrequency) && txp > PUBLIC_MAX_TX_POWER) txp = PUBLIC_MAX_TX_POWER;
                         settings.loraOutputPower = txp; saveSettings();
                         logPrintf(LOG_INFO, "Config", "TX Power: %d dBm", settings.loraOutputPower);

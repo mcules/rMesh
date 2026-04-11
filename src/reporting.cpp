@@ -57,12 +57,13 @@ static void reportTopologyWork() {
     pos += snprintf(body + pos, sizeof(body) - pos,
         "{\"call\":\"%s\",\"position\":\"%s\",\"timestamp\":%u,"
         "\"chip_id\":\"%02X%02X%02X%02X%02X%02X\","
-        "\"is_afu\":%s,\"band\":\"%s\",\"peers\":[",
+        "\"is_afu\":%s,\"band\":\"%s\",\"version\":\"%s\",\"device\":\"%s\",\"peers\":[",
         settings.mycall, settings.position, (unsigned)time(NULL),
         (uint8_t)(mac >> 40), (uint8_t)(mac >> 32), (uint8_t)(mac >> 24),
         (uint8_t)(mac >> 16), (uint8_t)(mac >> 8), (uint8_t)mac,
         isAmateurBand(settings.loraFrequency) ? "true" : "false",
-        isPublicBand(settings.loraFrequency) ? "868" : "433");
+        isPublicBand(settings.loraFrequency) ? "868" : "433",
+        VERSION, PIO_ENV_NAME);
 
     // Iterate peer/route lists directly under mutex — no heap snapshot.
     if (xSemaphoreTake(listMutex, pdMS_TO_TICKS(1000))) {

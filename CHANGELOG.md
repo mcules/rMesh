@@ -17,7 +17,12 @@
 - FIX: Relay-Pfad löschte beim Empfang eines Duplikats alle noch im TX-Buffer wartenden Relay-Kopien derselben Message-ID — auch bereits eingereihte, noch nicht gesendete. Jetzt werden nur neue Kopien per Dedup verhindert, bestehende bleiben intakt
 - FIX: WiFi-Favorit wurde beim Speichern still auf das alte Netzwerk zurückgesetzt — `saveSettings()` behandelte das Legacy-Feld `settings.wifiSSID` als autoritativ und überschrieb den vom Benutzer gewählten Favoriten. Jetzt ist `wifiNetworks` die einzige Quelle der Wahrheit
 - FIX: Deaktivierte UDP-Peers wurden nur beim Senden übersprungen — eingehende Pakete von ihnen wurden weiterhin verarbeitet. Jetzt werden auch empfangene Frames von deaktivierten Peers sofort verworfen
+- FIX: T-ETH-Elite Pin-Mapping für SX1262-Shield korrigiert (CS, RST, IRQ, BUSY, SD_CS) — Quelle jetzt offizielles LilyGO `utilities.h`
 - FIX: Redundante DOM-Lookups für `settingsMycall` in der Nachrichtenanzeige entfernt; Race-Condition beim initialen Datenabruf behoben
+- NEU: TX-Leistung wird pro Board auf das Hardware-Maximum begrenzt (`LORA_MAX_TX_POWER`) — Clamping beim Laden, in Serial, WebUI und API; WebUI zeigt den erlaubten Maximalwert als Hinweis an
+- NEU: LoRa-Recovery — schlägt die Radio-Initialisierung fehl, wird alle 30 s automatisch ein erneuter Versuch unternommen; Radio-Init auf T-ETH-Elite mit bis zu 3 Versuchen und SPI-Guard gegen blockiertes SPI-Peripheral
+- NEU: Topologie-Report sendet Firmware-Version und Device-Typ an den Bridgeserver
+- FIX: OTA-Update nutzt HTTP statt HTTPS — entfernt unnötigen TLS-Overhead und `WiFiClientSecure`-Heap-Verbrauch
 - PERF: FileWriter gruppiert Writes nach Dateiname pro Mutex-Hold — weniger Flash-Metadata-Flushes und kürzere Stalls bei Bursts
 
 ## [v1.0.32]

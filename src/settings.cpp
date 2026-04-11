@@ -410,7 +410,10 @@ void loadSettings() {
         prefs.putBytes("config", &settings, sizeof(settings));
     }
 
-    // Band-specific corrections after loading
+    // Clamp TX power to hardware and regulatory limits after loading
+    if (settings.loraOutputPower > LORA_MAX_TX_POWER) {
+        settings.loraOutputPower = LORA_MAX_TX_POWER;
+    }
     if (loraConfigured(settings.loraFrequency)) {
         if (isPublicBand(settings.loraFrequency) && settings.loraOutputPower > PUBLIC_MAX_TX_POWER) {
             settings.loraOutputPower = PUBLIC_MAX_TX_POWER;

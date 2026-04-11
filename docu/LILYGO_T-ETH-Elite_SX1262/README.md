@@ -12,7 +12,7 @@
 
 ## Pin-Mapping
 
-Quelle: [LilyGO-T-ETH-Series/boards.h](https://github.com/Xinyuan-LilyGO/LilyGO-T-ETH-Series)
+Quelle: [LilyGO T-ETH-Elite-LoRa-Shield/utilities.h](https://github.com/Xinyuan-LilyGO/LilyGO-T-ETH-Series/blob/master/examples/T-ETH-ELite-Shield/T-ETH-Elite-LoRa-Shield/utilities.h)
 
 ### SX1262 LoRa Shield
 
@@ -21,10 +21,10 @@ Quelle: [LilyGO-T-ETH-Series/boards.h](https://github.com/Xinyuan-LilyGO/LilyGO-
 | SCK      | 10   |
 | MISO     | 9    |
 | MOSI     | 11   |
-| CS/NSS   | 12   |
-| RST      | 8    |
-| DIO1/IRQ | 13   |
-| BUSY     | 3    |
+| CS/NSS   | 40   |
+| RST      | 46   |
+| DIO1/IRQ | 8    |
+| BUSY     | 16   |
 
 ### W5500 Ethernet
 
@@ -38,14 +38,11 @@ Quelle: [LilyGO-T-ETH-Series/boards.h](https://github.com/Xinyuan-LilyGO/LilyGO-
 | RST      | -1 (kein HW-Reset) |
 | PHY_ADDR | 1    |
 
-### SD-Card (shared SPI mit W5500)
+### SD-Card
 
 | Funktion | GPIO |
 |----------|------|
-| SCK      | 48   |
-| MISO     | 47   |
-| MOSI     | 21   |
-| CS       | 41   |
+| CS       | 12   |
 
 ## SPI-Bus-Zuordnung
 
@@ -114,4 +111,4 @@ unterschiedliche Treiber und Pin-Belegungen verwenden:
 - Kein Hardware-Reset-Pin für den W5500 (`ETH_RST_PIN = -1`).
 - SD-Card und W5500 teilen sich denselben SPI-Bus; Zugriff muss ggf. per Mutex serialisiert werden sobald SD genutzt wird.
 - USB-CDC muss aktiv sein (`ARDUINO_USB_CDC_ON_BOOT=1`), sonst kein Serial-Output.
-- LoRa- und ETH-Pins sind **nicht** intuitiv zugeordnet (LoRa nutzt die niedrigen GPIOs 3-13, ETH die höheren 14-48). Verwechslung führt zu SPI-Timeouts auf beiden Bussen gleichzeitig.
+- LoRa-Shield und ETH nutzen getrennte SPI-Busse (HSPI vs FSPI). SPI-Datenpins (SCK/MISO/MOSI) sind niedrig (9-11), aber CS/RST/IRQ/BUSY liegen auf höheren GPIOs (8, 16, 40, 46).

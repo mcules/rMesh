@@ -6,7 +6,6 @@
 #include <HTTPClient.h>
 #include "heapdbg.h"
 #include <HTTPUpdate.h>
-#include <WiFiClientSecure.h>
 
 #include "wifiFunctions.h"
 #include "serial.h"
@@ -179,8 +178,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
             sendUpdateStatus(retryMsg);
             delay(3000);
         }
-        WiFiClientSecure spiffsClient;
-        spiffsClient.setInsecure();
+        WiFiClient spiffsClient;
         spiffsClient.setTimeout(120000);
         spiffsResult = httpUpdate.updateSpiffs(spiffsClient, spiffsUrl);
         if (spiffsResult != HTTP_UPDATE_FAILED) break;
@@ -216,8 +214,7 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
             sendUpdateStatus(retryMsg);
             delay(3000);
         }
-        WiFiClientSecure fwClient;
-        fwClient.setInsecure();
+        WiFiClient fwClient;
         fwClient.setTimeout(120000);
         fwResult = httpUpdate.update(fwClient, fwUrl);
         if (fwResult != HTTP_UPDATE_FAILED) break;

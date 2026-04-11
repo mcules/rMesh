@@ -14,6 +14,7 @@
 #define SPI_SS          18
 
 #define LORA_DEFAULT_TX_POWER 20
+#define LORA_MAX_TX_POWER     20  // SX1278 hardware limit
 #define WIFI_MAX_TX_POWER_DBM 20
 
 //#define PIN_WIFI_LED 25      //LED WiFi status (on = AP mode, blinking = client mode, off = not connected)

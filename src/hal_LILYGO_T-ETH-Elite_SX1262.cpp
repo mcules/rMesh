@@ -59,11 +59,20 @@ void initHal() {
         return;
     }
 
-    radio.reset();
-    delay(100);
-    int beginState = radio.begin();
+    int beginState = RADIOLIB_ERR_CHIP_NOT_FOUND;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+        radio.reset();
+        delay(100 * attempt);
+        beginState = radio.begin();
+        if (beginState == RADIOLIB_ERR_NONE) break;
+        logPrintf(LOG_WARN, "LoRa", "radio.begin() attempt %d/3 failed (code %d)", attempt, beginState);
+    }
     if (beginState != RADIOLIB_ERR_NONE) {
         logPrintf(LOG_ERROR, "LoRa", "radio.begin() failed (code %d) – check wiring!", beginState);
+        // Allow SPI re-initialisation on next attempt — the peripheral may
+        // be in a bad state after a watchdog reset or brownout.
+        spiInited = false;
+        loraSPI.end();
         loraReady = false;
         return;
     }
