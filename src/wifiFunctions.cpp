@@ -66,6 +66,17 @@ static void sendOtaLog(const char* event, const char* versionFrom, const char* v
     logHttp.end();
 }
 
+// URL-encode characters that are unsafe in query parameters (+ → %2B, space → %20)
+static void urlEncodeParam(const char* src, char* dst, size_t dstLen) {
+    size_t j = 0;
+    for (size_t i = 0; src[i] && j + 3 < dstLen; i++) {
+        if (src[i] == '+') { dst[j++] = '%'; dst[j++] = '2'; dst[j++] = 'B'; }
+        else if (src[i] == ' ') { dst[j++] = '%'; dst[j++] = '2'; dst[j++] = '0'; }
+        else { dst[j++] = src[i]; }
+    }
+    dst[j] = '\0';
+}
+
 static void sendUpdateStatus(const char* msg) {
     char buf[128];
     snprintf(buf, sizeof(buf), "{\"updateStatus\":\"%s\"}", msg);
@@ -108,10 +119,12 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     HTTPClient http;
     http.setTimeout(10000);  // 10s HTTP timeout
     uint8_t activeChannel = force ? forceChannel : updateChannel;
+    char versionEnc[64];
+    urlEncodeParam(VERSION, versionEnc, sizeof(versionEnc));
     char latestUrl[256];
     snprintf(latestUrl, sizeof(latestUrl),
              "http://www.rMesh.de:8082/latest.php?call=%s&device=%s&version=%s&channel=%s",
-             settings.mycall, PIO_ENV_NAME, VERSION,
+             settings.mycall, PIO_ENV_NAME, versionEnc,
              (activeChannel == 1) ? "dev" : "release");
     if (!http.begin(client, latestUrl)) {
         sendUpdateStatus("Update server unreachable.");
@@ -152,16 +165,18 @@ void checkForUpdates(bool force, uint8_t forceChannel) {
     http.end();
 
     // New update found
-    char newVersion[32];
+    char newVersion[64];
     strlcpy(newVersion, latestTag, sizeof(newVersion));
     {
         char msg[64];
         snprintf(msg, sizeof(msg), "Installing update %s...", newVersion);
         sendUpdateStatus(msg);
     }
+    char tagEnc[64];
+    urlEncodeParam(newVersion, tagEnc, sizeof(tagEnc));
     char callParam[128];
     snprintf(callParam, sizeof(callParam), "&call=%s&device=%s&tag=%s",
-             settings.mycall, PIO_ENV_NAME, newVersion);
+             settings.mycall, PIO_ENV_NAME, tagEnc);
     httpUpdate.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);
     showStatusDisplayFlashing("Filesystem");
 
