@@ -489,7 +489,7 @@ function onSettingsReceived(s) {
     var batGpRow = document.getElementById("batteryGpRow");
     if (batGpRow) batGpRow.style.display = (hasBat && batEnabled) ? "" : "none";
     var batSettingsSection = document.getElementById("batterySettingsSection");
-    if (batSettingsSection) batSettingsSection.style.display = hasBat ? "" : "none";
+    if (batSettingsSection && !hasBat) toggleSection('batterySettingsSection', false);
     var pwStatus = document.getElementById("settingsWebPasswordStatus");
     var pwRemoveRow = document.getElementById("settingsWebPasswordRemoveRow");
     if (pwStatus) {
@@ -1058,7 +1058,10 @@ function fillSettingsForm(s) {
     }
     document.getElementById("settingsUpdateChannel").value = s.updateChannel || 0;
     const batEnabledEl = document.getElementById("settingsBatteryEnabled");
-    if (batEnabledEl) batEnabledEl.checked = s.batteryEnabled !== false;
+    if (batEnabledEl) {
+        batEnabledEl.checked = s.batteryEnabled !== false;
+        toggleSection('batterySettingsSection', batEnabledEl.checked);
+    }
     const batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) batVoltEl.value = s.batteryFullVoltage || 4.2;
 
@@ -1119,7 +1122,10 @@ function fillSettingsForm(s) {
 
     // OLED display settings
     var oledEnabledEl = document.getElementById("settingsOledEnabled");
-    if (oledEnabledEl) oledEnabledEl.checked = s.oledEnabled === true;
+    if (oledEnabledEl) {
+        oledEnabledEl.checked = s.oledEnabled === true;
+        toggleSection('oledSettingsSection', oledEnabledEl.checked);
+    }
     var oledGroupEl = document.getElementById("settingsOledDisplayGroup");
     if (oledGroupEl) {
         var saved = s.oledDisplayGroup || "";

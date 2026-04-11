@@ -133,8 +133,8 @@
     <div class="settings-footer full-width" style="border-top:none; margin-top:0; margin-bottom:0;">
       <button class="button save-all-btn" onclick="saveSettings();" data-i18n="btn.save">Speichern</button>
     </div>
-    <div class="settings-section">
-      <div class="section-header" data-i18n="lora.section_preset">Preset</div>
+    <div class="settings-section" id="secLoraPreset">
+      <div class="section-header" onclick="toggleSection('secLoraPreset')"><span data-i18n="lora.section_preset">Preset</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -150,8 +150,8 @@
         </table>
       </div>
     </div>
-    <div class="settings-section">
-      <div class="section-header" data-i18n="lora.section_msg">Nachrichten</div>
+    <div class="settings-section" id="secLoraMsg">
+      <div class="section-header" onclick="toggleSection('secLoraMsg')"><span data-i18n="lora.section_msg">Nachrichten</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -168,8 +168,8 @@
         </table>
       </div>
     </div>
-    <div class="settings-section">
-      <div class="section-header" data-i18n="lora.section_freq">Frequenz &amp; Leistung</div>
+    <div class="settings-section" id="secLoraFreq">
+      <div class="section-header" onclick="toggleSection('secLoraFreq')"><span data-i18n="lora.section_freq">Frequenz &amp; Leistung</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -208,8 +208,8 @@
         </table>
       </div>
     </div>
-    <div class="settings-section">
-      <div class="section-header" data-i18n="lora.section_mod">Modulation</div>
+    <div class="settings-section" id="secLoraMod">
+      <div class="section-header" onclick="toggleSection('secLoraMod')"><span data-i18n="lora.section_mod">Modulation</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -253,8 +253,8 @@
     <div class="settings-footer full-width" style="border-top:none; margin-top:0; margin-bottom:0;">
       <button class="button save-all-btn" onclick="saveSettings();" data-i18n="btn.save">Speichern</button>
     </div>
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.general">Allgemein</div>
+    <div class="settings-section" id="secGeneral">
+      <div class="section-header" onclick="toggleSection('secGeneral')"><span data-i18n="setup.general">Allgemein</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -269,8 +269,8 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_mesh">Mesh</div>
+    <div class="settings-section" id="secMesh">
+      <div class="section-header" onclick="toggleSection('secMesh')"><span data-i18n="setup.section_mesh">Mesh</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -302,8 +302,8 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_system">System</div>
+    <div class="settings-section" id="secSystem">
+      <div class="section-header" onclick="toggleSection('secSystem')"><span data-i18n="setup.section_system">System</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -351,8 +351,8 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_security">Sicherheit</div>
+    <div class="settings-section" id="secSecurity">
+      <div class="section-header" onclick="toggleSection('secSecurity')"><span data-i18n="setup.section_security">Sicherheit</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -379,8 +379,8 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_update">Online Update</div>
+    <div class="settings-section" id="secUpdate">
+      <div class="section-header" onclick="toggleSection('secUpdate')"><span data-i18n="setup.section_update">Online Update</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -403,8 +403,8 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_firmware">Firmware Upload</div>
+    <div class="settings-section" id="secFirmware">
+      <div class="section-header" onclick="toggleSection('secFirmware')"><span data-i18n="setup.section_firmware">Firmware Upload</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -423,19 +423,17 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_battery">Akku</div>
+    <div class="settings-section" id="batterySettingsSection">
+      <div class="section-header" onclick="toggleSection('batterySettingsSection')">
+        <span data-i18n="setup.section_battery">Akku</span>
+        <label class="toggle-switch header-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="settingsBatteryEnabled" onchange="toggleSectionSwitch('batterySettingsSection',this)">
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        </label>
+        <span class="chevron">&#x25BC;</span>
+      </div>
       <div class="section-body">
         <table>
-          <tr>
-            <td data-i18n="setup.bat_show">Akkustand anzeigen:</td>
-            <td>
-              <label class="toggle-switch">
-                <input type="checkbox" id="settingsBatteryEnabled">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </label>
-            </td>
-          </tr>
           <tr>
             <td data-i18n="setup.bat_full">Spannung bei 100%:</td>
             <td><input class="input-box" id="settingsBatteryFullVoltage" type="number" step="0.05" min="3.5" max="4.4" style="width:5em"> V</td>
@@ -445,18 +443,16 @@
     </div>
 
     <div id="oledSettingsSection" class="settings-section">
-      <div class="section-header" data-i18n="setup.section_oled">OLED Display</div>
+      <div class="section-header" onclick="toggleSection('oledSettingsSection')">
+        <span data-i18n="setup.section_oled">OLED Display</span>
+        <label class="toggle-switch header-toggle" onclick="event.stopPropagation()">
+          <input type="checkbox" id="settingsOledEnabled" onchange="toggleSectionSwitch('oledSettingsSection',this)">
+          <span class="toggle-track"><span class="toggle-thumb"></span></span>
+        </label>
+        <span class="chevron">&#x25BC;</span>
+      </div>
       <div class="section-body">
         <table>
-          <tr>
-            <td data-i18n="setup.oled_enabled">Display enabled:</td>
-            <td>
-              <label class="toggle-switch">
-                <input type="checkbox" id="settingsOledEnabled">
-                <span class="toggle-track"><span class="toggle-thumb"></span></span>
-              </label>
-            </td>
-          </tr>
           <tr>
             <td data-i18n="setup.oled_group">Message group:</td>
             <td><select class="input-box" id="settingsOledDisplayGroup" style="width:10em"></select></td>
@@ -495,8 +491,8 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="setup.section_debug">Debug</div>
+    <div class="settings-section" id="secDebug">
+      <div class="section-header" onclick="toggleSection('secDebug')"><span data-i18n="setup.section_debug">Debug</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -531,8 +527,8 @@
     </div>
 
     <!-- ── Allgemein + UDP-Peers ──────────────────────────────────────── -->
-    <div class="settings-section">
-      <div class="section-header" data-i18n="net.general">Allgemein</div>
+    <div class="settings-section" id="secNetGeneral">
+      <div class="section-header" onclick="toggleSection('secNetGeneral')"><span data-i18n="net.general">Allgemein</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -553,8 +549,8 @@
       </div>
     </div>
     <!-- ── 1. WiFi ──────────────────────────────────────────────────────── -->
-    <div class="settings-section">
-      <div class="section-header">WiFi</div>
+    <div class="settings-section" id="secWifi">
+      <div class="section-header" onclick="toggleSection('secWifi')"><span>WiFi</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -667,8 +663,8 @@
     </div>
 
     <!-- ── UDP Peers (rechte Spalte) ─────────────────────────────────── -->
-    <div class="settings-section">
-      <div class="section-header" data-i18n="net.udp_peers">UDP Peers</div>
+    <div class="settings-section" id="secUdpPeers">
+      <div class="section-header" onclick="toggleSection('secUdpPeers')"><span data-i18n="net.udp_peers">UDP Peers</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <div id="udpPeerList"></div>
         <button class="button" onclick="addUdpPeer()" data-i18n="btn.add_peer">+ Peer</button>
@@ -677,7 +673,7 @@
 
     <!-- ── 2. Ethernet (LAN) ── nur bei ETH-Hardware ────────────────────── -->
     <div class="settings-section" id="ethSettingsSection" style="display:none">
-      <div class="section-header" data-i18n="net.ethernet">Ethernet (LAN)</div>
+      <div class="section-header" onclick="toggleSection('ethSettingsSection')"><span data-i18n="net.ethernet">Ethernet (LAN)</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -762,8 +758,8 @@
   <!-- ===== ABOUT PANEL ===== -->
   <div id="about" class="settings-panel" style="display:none;">
    <div class="settings-cols">
-    <div class="settings-section">
-      <div class="section-header" data-i18n="nav.about">About</div>
+    <div class="settings-section" id="secAbout">
+      <div class="section-header" onclick="toggleSection('secAbout')"><span data-i18n="nav.about">About</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <table>
           <tr>
@@ -785,8 +781,8 @@
         </table>
       </div>
     </div>
-    <div class="settings-section">
-      <div class="section-header">CPU</div>
+    <div class="settings-section" id="secCpu">
+      <div class="section-header" onclick="toggleSection('secCpu')"><span>CPU</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
           <span style="color:#aaa;font-size:0.85rem;" data-i18n="about.cpu_freq">CPU-Frequenz:</span>
@@ -796,8 +792,8 @@
       </div>
     </div>
 
-    <div class="settings-section">
-      <div class="section-header" data-i18n="about.changelog">Changelog</div>
+    <div class="settings-section" id="secChangelog">
+      <div class="section-header" onclick="toggleSection('secChangelog')"><span data-i18n="about.changelog">Changelog</span><span class="chevron">&#x25BC;</span></div>
       <div class="section-body">
         <pre id="aboutChangelog" style="white-space:pre-wrap; font-family:inherit; color:#aaa; margin:0;"></pre>
       </div>

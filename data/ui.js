@@ -1,6 +1,21 @@
 var settingsDirty = false;
 var _settingsSnapshot = null;
 
+/* ── Section collapse ──────────────────────────────────────────────────── */
+function toggleSection(id, forceOpen) {
+    var sec = document.getElementById(id);
+    if (!sec) return;
+    if (typeof forceOpen === 'boolean') {
+        sec.classList.toggle('collapsed', !forceOpen);
+    } else {
+        sec.classList.toggle('collapsed');
+    }
+}
+
+function toggleSectionSwitch(id, cb) {
+    toggleSection(id, cb.checked);
+}
+
 const SETTINGS_PANELS = ['lora', 'setup', 'network'];
 
 // On mobile, use "block" so content flows top-to-bottom; on desktop, use "flex" for column layout

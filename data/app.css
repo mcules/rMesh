@@ -430,10 +430,50 @@ select.input-box {
     padding: 8px 14px;
     border-bottom: 1px solid #888;
     border-radius: 3px 3px 0 0;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+
+.section-header .chevron {
+    margin-left: auto;
+    transition: transform 0.2s;
+    font-size: 0.7rem;
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+.settings-section.collapsed .section-header {
+    border-bottom: none;
+    border-radius: 3px;
+}
+
+.settings-section.collapsed .section-header .chevron {
+    transform: rotate(-90deg);
+}
+
+.section-header .header-toggle {
+    margin-left: auto;
+}
+
+.section-header .header-toggle + .chevron {
+    margin-left: 8px;
 }
 
 .section-body {
     padding: 12px 14px 14px;
+    overflow: hidden;
+    transition: max-height 0.25s ease, padding 0.25s ease, opacity 0.2s ease;
+    max-height: 2000px;
+    opacity: 1;
+}
+
+.settings-section.collapsed .section-body {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    opacity: 0;
 }
 
 .section-body table {
@@ -964,7 +1004,7 @@ select.input-box {
     }
 
     #batterySettingsSection {
-        display: contents;
+        break-inside: avoid;
     }
 
     /* Bottom bar */
