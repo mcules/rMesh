@@ -204,9 +204,10 @@ void showSettings() {
 
 void sendSettings() {
 #ifdef HAS_WIFI
-    // Replaced: no longer serializes full JSON on heap (~17 KB malloc).
-    // Sends lightweight notification; WebUI fetches /api/settings instead.
-    notifySettingsChanged();
+    // Only notify if WiFi is active (BT EXCLUSIVE mode may have stopped it)
+    if (WiFi.getMode() != WIFI_OFF) {
+        notifySettingsChanged();
+    }
 #else
     // On non-WiFi boards, settings are only shown via serial
     (void)0;
