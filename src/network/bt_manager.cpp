@@ -1,4 +1,4 @@
-#ifdef HAS_WIFI
+#ifdef HAS_BLE
 
 #include "bt_manager.h"
 #include <Arduino.h>

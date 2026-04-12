@@ -1189,7 +1189,7 @@ void loop() {
     {
         uint32_t freeHeap = ESP.getFreeHeap();
         uint32_t maxAlloc = ESP.getMaxAllocHeap();
-        if ((freeHeap < 10000 || maxAlloc < 4096) && !rebootRequested) {
+        if ((freeHeap < 8000 || maxAlloc < 2048) && !rebootRequested) {
             logPrintf(LOG_ERROR, "HEAP", "Critical: %u bytes free, largest block %u — rebooting",
                       freeHeap, maxAlloc);
             rebootTimer = millis() + 500;

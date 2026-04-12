@@ -1,4 +1,4 @@
-#ifdef HAS_WIFI
+#ifdef HAS_BLE
 
 #include <Arduino.h>
 #include <NimBLEDevice.h>
@@ -180,4 +180,4 @@ void bleTransportSetConnectCallback(BleConnectCallback cb) {
     s_connectCb = cb;
 }
 
-#endif // HAS_WIFI
+#endif // HAS_BLE

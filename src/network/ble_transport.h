@@ -1,6 +1,6 @@
 #pragma once
 
-#ifdef HAS_WIFI  // ESP32 boards only (NimBLE); nRF52 uses its own BLE stack
+#ifdef HAS_BLE  // ESP32 boards only (NimBLE); nRF52 uses its own BLE stack
 
 #include <functional>
 #include <string>
