@@ -1,5 +1,20 @@
 # Changelog
 
+## [v26.4.2]
+
+- NEU: Board Support Package (BSP) — abstraktes `IBoardConfig`-Interface ersetzt verstreute `#ifdef BOARD_XYZ`-Abfragen; Board-Fähigkeiten werden zur Laufzeit abgefragt statt zur Compile-Zeit
+- NEU: `BoardFactory` als einzige Stelle im Projekt mit Board-Identitätsprüfung — aller übriger Code fragt Fähigkeiten über das Interface ab
+- NEU: Display-Treiber nach Display-Typ statt Board-Name — drei identische SSD1306-U8g2-Treiber zu einem generischen konsolidiert; Treiber für ThingPulse-SSD1306, ST7735-TFT und GxEPD2-E-Paper jeweils als eigenständige, wiederverwendbare Module
+- NEU: `IBoardConfig` um TFT- und E-Paper-Pin-Methoden erweitert — Display-Treiber sind damit vollständig board-unabhängig
+- NEU: Shared Utilities `matchesDisplayGroup()` und `utf8ToCP437()` eliminieren duplizierten Code in 6 bzw. 2 Display-Treibern
+- GEÄNDERT: Source-Tree komplett reorganisiert — `src/bsp/boards/` mit per-Board-Ordnern, `src/display/` für Display-Treiber, `src/mesh/`, `src/network/`, `src/hal/`, `src/util/` für thematische Gruppierung; `src/`-Root enthält nur noch 4 Dateien
+- GEÄNDERT: `platformio.ini` mit `[esp32_base]` extends-Pattern konsolidiert — gemeinsame lib_deps, build_flags und Platform-Version zentral definiert
+- GEÄNDERT: `build_src_filter` pro Environment steuert, welche HAL- und Display-Dateien kompiliert werden — ersetzt die bisherigen `#ifdef`-Kompilierungsguards
+- GEÄNDERT: Dateinamen normalisiert — Bindestriche durch Unterstriche ersetzt für konsistente Benennung
+- FIX: nRF52-Kompatibilität für `portENTER_CRITICAL` (Single-Core vs Multi-Core API-Unterschied)
+- FIX: nRF52 `Preferences::getUShort` nicht verfügbar — Fallback auf `getUChar` mit Skalierung
+- ENTFERNT: T-ETH-Elite Board ohne SX1262 (orphaned, kein PlatformIO-Environment)
+
 ## [v26.4.1a]
 
 - GEÄNDERT: ESP32_E22_V1 — maximale TX-Leistung auf 33 dBm angehoben (E22-Modul mit PA)
