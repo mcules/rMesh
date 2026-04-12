@@ -686,6 +686,25 @@
       </div>
     </div>
 
+    <!-- ── Bluetooth ────────────────────────────────────────────────── -->
+    <div class="settings-section" id="secBluetooth">
+      <div class="section-header" onclick="toggleSection('secBluetooth')"><span data-i18n="net.bluetooth">Bluetooth</span><span class="chevron">&#x25BC;</span></div>
+      <div class="section-body">
+        <table>
+          <tr>
+            <td data-i18n="net.bt_mode">Modus:</td>
+            <td>
+              <select class="input-box" id="settingsBtMode">
+                <option value="0" data-i18n="net.bt_off">Aus</option>
+                <option value="1" data-i18n="net.bt_coex">WiFi + BLE</option>
+                <option value="2" data-i18n="net.bt_exclusive">BLE exklusiv</option>
+              </select>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
     <!-- ── UDP Peers (rechte Spalte) ─────────────────────────────────── -->
     <div class="settings-section" id="secUdpPeers">
       <div class="section-header" onclick="toggleSection('secUdpPeers')"><span data-i18n="net.udp_peers">UDP Peers</span><span class="chevron">&#x25BC;</span></div>

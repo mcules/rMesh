@@ -18,6 +18,7 @@
 #include "util/heapdbg.h"
 #include "network/api.h"
 #include "network/apiAuth.h"
+#include "network/bt_manager.h"
 #include "display/statusDisplay.h"
 
 AsyncWebServer webServer(80);
@@ -418,6 +419,12 @@ void startWebServer() {
                 int pin = json["settings"]["oledButtonPin"].as<int>();
                 if (pin < -1 || pin > 48) pin = -1;
                 oledButtonPin = (int8_t)pin;
+            }
+            if (json["settings"]["btMode"].is<JsonVariant>()) {
+                uint8_t m = json["settings"]["btMode"].as<uint8_t>();
+                if (m <= 2) {
+                    btManagerSetMode((BtMode)m);
+                }
             }
             if (json["settings"]["groupNames"].is<JsonObject>()) {
                 JsonObject gn = json["settings"]["groupNames"];

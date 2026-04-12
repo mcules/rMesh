@@ -1198,6 +1198,11 @@ function fillSettingsForm(s) {
         oledBtnEl.value = s.oledButtonPin;
     }
 
+    var btModeEl = document.getElementById("settingsBtMode");
+    if (btModeEl && typeof s.btMode === "number") {
+        btModeEl.value = s.btMode;
+    }
+
     settingsVisibility();
 }
 
@@ -1295,6 +1300,9 @@ function saveSettings() {
         var pin = parseInt(oledBtnEl.value);
         if (!isNaN(pin)) s["oledButtonPin"] = Math.max(-1, Math.min(48, pin));
     }
+    var btModeEl = document.getElementById("settingsBtMode");
+    if (btModeEl) s["btMode"] = parseInt(btModeEl.value);
+
     // WiFi & Ethernet settings (only sent if elements exist, i.e. board has ETH)
     var wifiEnabledEl = document.getElementById("settingsWifiEnabled");
     if (wifiEnabledEl) s["wifiEnabled"] = wifiEnabledEl.checked;

@@ -929,6 +929,7 @@ static void handleSettings(AsyncWebServerRequest *request) {
     jPrintf(",\"ethNodeComm\":%s,\"ethWebUI\":%s",
             ethNodeComm ? "true" : "false", ethWebUI ? "true" : "false");
     jPrintf(",\"primaryInterface\":%u", (unsigned)primaryInterface);
+    jPrintf(",\"btMode\":%u", (unsigned)btMode);
 
     jPrintf("}}");
     jSend(request);
