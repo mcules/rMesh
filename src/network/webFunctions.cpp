@@ -122,6 +122,13 @@ static void sendInitialDataToClient(AsyncWebSocketClient *client) {
 /**
  * Initializes and starts the web server and WebSocket handlers.
  */
+void stopWebServer() {
+    ws.closeAll();
+    ws.cleanupClients();
+    webServer.end();
+    delay(100);  // let AsyncTCP drain pending events
+}
+
 void startWebServer() {
     //---------------------- WEBSOCKET -------------------------
 

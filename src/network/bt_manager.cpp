@@ -24,6 +24,7 @@ static void onBleConnect(bool connected) {
     if (connected && !s_wifiStopped) {
         // BLE client connected in EXCLUSIVE mode → pause WiFi
         logPrintf(LOG_INFO, "BT", "EXCLUSIVE: pausing WiFi for BLE");
+        stopWebServer();
         WiFi.mode(WIFI_OFF);
         s_wifiStopped = true;
     }
@@ -129,6 +130,7 @@ void btManagerSetMode(BtMode mode) {
         case BtMode::EXCLUSIVE:
             logPrintf(LOG_INFO, "BT", "Switching to EXCLUSIVE — stopping WiFi, starting BLE");
             if (!s_wifiStopped) {
+                stopWebServer();   // close WebSocket + HTTP before killing WiFi
                 WiFi.mode(WIFI_OFF);
                 s_wifiStopped = true;
             }

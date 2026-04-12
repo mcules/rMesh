@@ -7,6 +7,7 @@
 extern AsyncWebSocket ws;
 
 void startWebServer();
+void stopWebServer();
 void wsBroadcast(const char* buf, size_t len);
 
 // Lightweight WebSocket notifications — tell the UI "data changed, re-fetch via API"
@@ -20,6 +21,7 @@ void processBleJson(const char* data, size_t len);
 // ── No-op stubs for non-WiFi builds ─────────────────────────────────────────
 
 inline void startWebServer() {}
+inline void stopWebServer() {}
 inline void wsBroadcast(const char*, size_t) {}
 inline void notifyPeerListChanged() {}
 inline void notifyRoutingChanged() {}
