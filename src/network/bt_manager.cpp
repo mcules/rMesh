@@ -70,13 +70,13 @@ void btManagerInit() {
             logPrintf(LOG_INFO, "BT", "Mode OFF");
             break;
         case BtMode::COEX:
-            if (ESP.getFreeHeap() < 80000) {
-                logPrintf(LOG_WARN, "BT", "Heap too low for COEX (%u bytes) — falling back to OFF", ESP.getFreeHeap());
-                s_mode = BtMode::OFF;
-                btMode = 0;
-                break;
+            if (!psramFound()) {
+                logPrintf(LOG_WARN, "BT", "COEX requires PSRAM — falling back to EXCLUSIVE on this board");
+                s_mode = BtMode::EXCLUSIVE;
+                btMode = (uint8_t)BtMode::EXCLUSIVE;
+            } else {
+                logPrintf(LOG_INFO, "BT", "Mode COEX (WiFi + BLE, PSRAM available)");
             }
-            logPrintf(LOG_INFO, "BT", "Mode COEX (WiFi + BLE)");
             startBle();
             break;
         case BtMode::EXCLUSIVE:
@@ -109,6 +109,13 @@ void btManagerSetMode(BtMode mode) {
             stopBle();
             break;
         case BtMode::COEX:
+            if (!psramFound()) {
+                logPrintf(LOG_WARN, "BT", "COEX requires PSRAM — using EXCLUSIVE instead");
+                s_mode = BtMode::EXCLUSIVE;
+                btMode = (uint8_t)BtMode::EXCLUSIVE;
+                if (old == BtMode::OFF) startBle();
+                break;
+            }
             logPrintf(LOG_INFO, "BT", "Switching to COEX");
             if (old == BtMode::OFF) startBle();
             // If WiFi was stopped (from EXCLUSIVE), restore
