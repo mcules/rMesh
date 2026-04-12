@@ -51,7 +51,10 @@
 #include "network/api.h"
 #include "bsp/BoardFactory.h"
 #include "display/statusDisplay.h"
-#include "ble_transport.h"
+#include "network/bt_manager.h"
+#include "network/ble_transport.h"
+#include "util/button_manager.h"
+#include "util/led_feedback.h"
 
 
 // ── Port iteration order ─────────────────────────────────────────────────────
@@ -838,12 +841,8 @@ void setup() {
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
 
-    // Initialise BLE transport (NUS) for phone connectivity
-    #ifdef HAS_WIFI
-    bleTransportInit(settings.mycall, [](const std::string& json) {
-        processBleJson(json.c_str(), json.size());
-    });
-    #endif
+    // Initialise button manager (before BT so double-click can cycle BT mode)
+    buttonManagerInit();
 
     // Initialise display (if present)
     if (board->hasDisplay()) {
@@ -860,6 +859,8 @@ void setup() {
     wifiInit();
     // Initialise Ethernet (W5500) if the board has it
     ethInit();
+    // Initialise BLE (mode read from NVS — OFF, COEX, or EXCLUSIVE)
+    btManagerInit();
     #endif
 
     // Set system time to epoch 0 and configure NTP + timezone
@@ -1290,6 +1291,52 @@ void loop() {
     reportTopologyIfChanged(); // change-driven report with 30 s debounce
     #endif
 
-    bleTransportTick();
+    btManagerTick();
+    ledFeedbackTick();
+
+    // ── Button gesture dispatch ──────────────────────────────────────────────
+    switch (buttonManagerTick()) {
+        case ButtonEvent::SINGLE_CLICK:
+            // Toggle status display on/off
+            ledFeedback(1, 100, 0);
+            if (hasStatusDisplay()) {
+                if (oledEnabled) disableStatusDisplay();
+                else enableStatusDisplay();
+            }
+            break;
+        case ButtonEvent::DOUBLE_CLICK:
+            // Cycle BT mode: OFF → COEX → EXCLUSIVE → OFF
+            btManagerCycleMode();
+            ledFeedback(3, 80, 80);
+            logPrintf(LOG_INFO, "Button", "BT mode → %d", (int)btManagerGetMode());
+            break;
+        case ButtonEvent::LONG_PRESS:
+            // Toggle WiFi AP ↔ Client mode + reboot
+            ledFeedback(1, 500, 0);
+            #ifdef HAS_WIFI
+            settings.apMode = !settings.apMode;
+            saveSettings();
+            rebootTimer = millis() + 1000;
+            rebootRequested = true;
+            #endif
+            break;
+        case ButtonEvent::VERY_LONG_PRESS:
+            // Factory reset
+            ledFeedback(255, 50, 50);
+            logPrintf(LOG_WARN, "Button", "FACTORY RESET in 2 seconds!");
+            delay(2000);
+            #ifdef NRF52_PLATFORM
+            InternalFS.format();
+            NVIC_SystemReset();
+            #else
+            nvs_flash_erase();
+            LittleFS.format();
+            ESP.restart();
+            #endif
+            break;
+        default:
+            break;
+    }
+
     heapTick();
 }

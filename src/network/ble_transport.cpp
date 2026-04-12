@@ -3,7 +3,7 @@
 #include <Arduino.h>
 #include <NimBLEDevice.h>
 #include "ble_transport.h"
-#include "logging.h"
+#include "util/logging.h"
 
 // Nordic UART Service UUIDs
 static const char* NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -16,6 +16,7 @@ static NimBLEAdvertising*    s_adv     = nullptr;
 static BleRxCallback         s_onRx;
 static std::string           s_rxBuf;
 static bool                  s_clientConnected = false;
+static BleConnectCallback    s_connectCb;
 
 // Manufacturer-specific advertisement data (10 bytes)
 // Byte 0-1: company id 0x0808 (rMesh)
@@ -31,11 +32,12 @@ class ServerCB : public NimBLEServerCallbacks {
     void onConnect(NimBLEServer*) override {
         s_clientConnected = true;
         logPrintf(LOG_INFO, "BLE", "Client connected");
+        if (s_connectCb) s_connectCb(true);
     }
     void onDisconnect(NimBLEServer*) override {
         s_clientConnected = false;
         logPrintf(LOG_INFO, "BLE", "Client disconnected");
-        // Restart advertising so next client can connect
+        if (s_connectCb) s_connectCb(false);
         if (s_adv) s_adv->start();
     }
 };
@@ -158,6 +160,24 @@ void bleTransportTick() {
             s_adv->setScanResponseData(scanResp);
         }
     }
+}
+
+void bleTransportDeinit() {
+    if (s_adv) s_adv->stop();
+    NimBLEDevice::deinit(true);
+    s_server = nullptr;
+    s_txChar = nullptr;
+    s_adv = nullptr;
+    s_clientConnected = false;
+    logPrintf(LOG_INFO, "BLE", "Deinitialized");
+}
+
+bool bleTransportIsConnected() {
+    return s_clientConnected;
+}
+
+void bleTransportSetConnectCallback(BleConnectCallback cb) {
+    s_connectCb = cb;
 }
 
 #endif // HAS_WIFI

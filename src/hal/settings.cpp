@@ -64,6 +64,7 @@ char oledDisplayGroup[17] = {0};
 uint16_t oledPageInterval = 5000;
 uint8_t  oledPageMask     = 0xFF;
 int8_t   oledButtonPin    = -1;
+uint8_t  btMode           = 0;   // BT_OFF
 
 // webPasswordHash is defined in auth.cpp for both WiFi and non-WiFi builds
 
@@ -247,6 +248,7 @@ void loadSettings() {
     oledPageMask     = prefs.getUChar("oledPageMask", 0xFF);
     if (oledPageMask == 0) oledPageMask = 0xFF;
     oledButtonPin    = prefs.getChar("oledBtnPin", -1);
+    btMode           = prefs.getUChar("btMode", 0);
 
 #ifdef HAS_WIFI
     // Ethernet & per-interface settings
@@ -527,6 +529,7 @@ void saveOledSettings() {
     #endif
     prefs.putUChar("oledPageMask", oledPageMask);
     prefs.putChar("oledBtnPin", oledButtonPin);
+    prefs.putUChar("btMode", btMode);
 }
 
 void saveSettings() {

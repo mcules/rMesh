@@ -238,73 +238,7 @@ void showWiFiStatus() {
     // Process deferred WiFi scan actions from event callback
     processDeferredScanActions();
 
-    if (board->hasUserButton() && board->hasDisplay()) {
-    // Long press (>=2s): toggle AP/Client mode + reboot
-    // Short press (<2s): toggle status display on/off
-    //
-    // Initialise buttonPressed to the current button state so that a
-    // permanently LOW GPIO 0 (e.g. serial DTR holding it down) does not
-    // register as a fresh press.  Only a HIGH→LOW transition counts.
-    static bool firstCall = true;
-    static bool buttonPressed = false;
-    static uint32_t buttonPressTime = 0;
-    static bool longPressHandled = false;
-    if (firstCall) {
-        firstCall = false;
-        buttonPressed = getKeyApMode();   // seed with current state
-        longPressHandled = buttonPressed; // suppress stale long-press
-        buttonPressTime = millis();
-        return;                           // skip first evaluation
-    }
-
-    bool currentButton = getKeyApMode();
-
-    if (currentButton && !buttonPressed) {
-        // Button just pressed (HIGH→LOW transition)
-        buttonPressed = true;
-        buttonPressTime = millis();
-        longPressHandled = false;
-    }
-
-    if (currentButton && buttonPressed && !longPressHandled) {
-        // Button still held – check for long press
-        if (millis() - buttonPressTime >= 2000) {
-            longPressHandled = true;
-            settings.apMode = !settings.apMode;
-            saveSettings();
-            rebootTimer = millis(); rebootRequested = true;
-            delay(500);
-        }
-    }
-
-    if (!currentButton && buttonPressed) {
-        // Button released
-        buttonPressed = false;
-        if (!longPressHandled && (millis() - buttonPressTime >= 50)) {
-            // Short press – toggle status display (persisted setting)
-            if (hasStatusDisplay()) {
-                if (oledEnabled) {
-                    disableStatusDisplay();
-                } else {
-                    enableStatusDisplay();
-                }
-            }
-        }
-    }
-
-    } else if (board->hasUserButton()) {
-        // Original behaviour: simple press toggles AP mode
-        if (getKeyApMode() != apModeKey) {
-            delay(100);
-            apModeKey = getKeyApMode();
-            if (apModeKey == 1) {
-                settings.apMode = !settings.apMode;
-                saveSettings();
-                rebootTimer = millis(); rebootRequested = true;
-                delay(500);
-            }
-        }
-    }
+    // Button handling is now in button_manager.cpp (called from main loop)
 
     //Status LED
     if (settings.apMode) {

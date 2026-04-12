@@ -140,7 +140,8 @@ extern char oledDisplayGroup[17];       // Group to show last message from
 extern uint16_t oledPageInterval;       // Auto-rotate interval in ms (persisted)
 extern uint8_t  oledPageMask;           // Bitmask of pages to include in rotation (persisted)
 extern int8_t   oledButtonPin;          // GPIO for manual page-next button (-1 = disabled, persisted)
-void saveOledSettings();                // Persist oledEnabled + oledDisplayGroup to NVS
+extern uint8_t  btMode;                // BT mode: 0=OFF, 1=COEX, 2=EXCLUSIVE (persisted)
+void saveOledSettings();                // Persist oledEnabled + oledDisplayGroup + btMode to NVS
 
 // Channel/group names (persisted on device, shared across all clients)
 #define MAX_CHANNELS 10
