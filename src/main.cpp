@@ -17,7 +17,7 @@
 #include <ArduinoJson.h>
 
 #ifdef NRF52_PLATFORM
-#include "platform_nrf52.h"
+#include "util/platform_nrf52.h"
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
 #else
@@ -27,56 +27,29 @@
 #endif
 
 #include "config.h"
-#include "hal.h"
-#include "frame.h"
-#include "settings.h"
+#include "hal/hal.h"
+#include "mesh/frame.h"
+#include "hal/settings.h"
 #include "main.h"
-#include "wifiFunctions.h"
-#include "webFunctions.h"
-#include "serial.h"
-#include "helperFunctions.h"
-#include "peer.h"
-#include "ack.h"
-#include "udp.h"
-#include "ethFunctions.h"
-#include "routing.h"
-#include "reporting.h"
-#include "dutycycle.h"
-#include "persistence.h"
+#include "network/wifiFunctions.h"
+#include "network/webFunctions.h"
+#include "util/serial.h"
+#include "util/helperFunctions.h"
+#include "mesh/peer.h"
+#include "mesh/ack.h"
+#include "network/udp.h"
+#include "network/ethFunctions.h"
+#include "mesh/routing.h"
+#include "mesh/reporting.h"
+#include "hal/dutycycle.h"
+#include "util/persistence.h"
 #include "time.h"
-#include "logging.h"
-#include "heapdbg.h"
-#include "bgWorker.h"
-#include "api.h"
-
-#ifdef LILYGO_T_LORA_PAGER
-#include "display_LILYGO_T-LoraPager.h"
-#include "hal_LILYGO_T-LoraPager.h"
-#endif
-
-#ifdef SEEED_SENSECAP_INDICATOR
-#include "display_SEEED_SenseCAP_Indicator.h"
-#include "hal_SEEED_SenseCAP_Indicator.h"
-#endif
-
-#ifdef HELTEC_WIFI_LORA_32_V3
-#include "display_HELTEC_WiFi_LoRa_32_V3.h"
-#endif
-#ifdef ESP32_E22_V1
-#include "display_ESP32_E22_V1.h"
-#endif
-#ifdef HELTEC_HT_TRACKER_V1_2
-#include "display_HELTEC_HT-Tracker_V1_2.h"
-#endif
-#ifdef LILYGO_T3_LORA32_V1_6_1
-#include "display_LILYGO_T3_LoRa32_V1_6_1.h"
-#endif
-#ifdef LILYGO_T_BEAM
-#include "display_LILYGO_T-Beam.h"
-#endif
-#ifdef LILYGO_T_ECHO
-#include "display_LILYGO_T-Echo.h"
-#endif
+#include "util/logging.h"
+#include "util/heapdbg.h"
+#include "util/bgWorker.h"
+#include "network/api.h"
+#include "bsp/BoardFactory.h"
+#include "display/statusDisplay.h"
 
 
 // ── Port iteration order ─────────────────────────────────────────────────────
@@ -95,6 +68,9 @@ static void buildPortOrder() {
 #endif
 
 // ── Global state ──────────────────────────────────────────────────────────────
+
+/** Board configuration — set once via BoardFactory::create(). */
+IBoardConfig* board = nullptr;
 
 /** POSIX timezone rule string for CET/CEST (Central Europe). */
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
@@ -504,39 +480,17 @@ void processRxFrame(Frame &f) {
                 wsBroadcast(jsonBuffer, len);
                 #endif
                 addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
-                #ifdef LILYGO_T_LORA_PAGER
-                // Archive to SD card without size limit when a card is inserted
+                // Archive to SD card (no-op on boards without SD)
                 pagerAddMessageToSD(jsonBuffer, len);
-                #endif
 
-                // Display incoming message on T-LoraPager screen
-                #ifdef LILYGO_T_LORA_PAGER
+                // Notify display drivers of the incoming message
                 if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
                     char textBuf[261] = {0};
                     memcpy(textBuf, f.message, f.messageLength);
                     displayOnNewMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
-                }
-                displayMonitorFrame(f);
-                #endif
-
-                // Display incoming message on SenseCAP Indicator screen
-                #ifdef SEEED_SENSECAP_INDICATOR
-                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
-                    char textBuf[261] = {0};
-                    memcpy(textBuf, f.message, f.messageLength);
-                    displayOnNewMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
-                }
-                displayMonitorFrame(f);
-                #endif
-
-                // Show last message on status display (SSD1306 or E-Paper)
-                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO) || defined(ESP32_E22_V1)
-                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
-                    char textBuf[261] = {0};
-                    memcpy(textBuf, f.message, f.messageLength);
                     onStatusDisplayMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
                 }
-                #endif
+                displayMonitorFrame(f);
 
                 // TRACE echo: if we are the destination, append our callsign + time and reply
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
@@ -750,16 +704,10 @@ void setup() {
     // so early UART output doesn't interfere with esptool auto-reset.
     #endif
 
-    #if defined(LILYGO_T_LORA_PAGER)
-    // USB-CDC needs ~1 s to enumerate; early output would be lost
+    #if defined(ARDUINO_USB_CDC_ON_BOOT) && !defined(NRF52_PLATFORM)
+    // USB-CDC needs time to enumerate; early output would be lost
     delay(2000);
-    logPrintf(LOG_INFO, "Boot", "=== rMesh T-LoraPager boot ===");
-    logPrintf(LOG_INFO, "Boot", "PSRAM: %s (%u bytes)", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
-    logPrintf(LOG_INFO, "Boot", "Free heap: %u", ESP.getFreeHeap());
     Serial.flush();
-    #elif defined(SEEED_SENSECAP_INDICATOR)
-    // UART0 via CH340 bridge — ready immediately, no wait needed
-    delay(100);
     #elif defined(NRF52_PLATFORM)
     // USB-CDC on nRF52840 — wait up to 3s for host to connect
     {
@@ -880,13 +828,17 @@ void setup() {
     apiLoadBuffers();
     #endif
 
+    // Instantiate the board configuration from the BSP factory
+    board = BoardFactory::create();
+
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
 
-    // Initialise status display (if present)
-    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO) || defined(ESP32_E22_V1)
-    initStatusDisplay();
-    #endif
+    // Initialise display (if present)
+    if (board->hasDisplay()) {
+        initStatusDisplay(board);
+    }
+    initDisplay();
 
     #ifdef HAS_WIFI
     // Register WiFi scan handler once (before wifiInit, which may be called repeatedly)
@@ -954,30 +906,18 @@ void loop() {
     showWiFiStatus();
 
     // ── 3. Display polling ────────────────────────────────────────────────────
-    #ifdef LILYGO_T_LORA_PAGER
+    // Full-UI displays (T-LoraPager, SenseCAP) and E-Paper (T-Echo)
+    // run their own update loop; status-display boards (OLED, TFT) are
+    // refreshed on a 5 s timer.  Weak no-ops ensure dead-code-free linking.
     displayUpdateLoop();
-    #endif
-    #ifdef SEEED_SENSECAP_INDICATOR
-    displayUpdateLoop();
-    #endif
-    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(ESP32_E22_V1)
-    {
-        // Always tick — drivers gate internally on oledEnabled, but the
-        // boot-splash hibernate path on Heltec/T3/T-Beam/E22 runs through
-        // updateStatusDisplay() even when the user has the OLED disabled.
+    if (board->hasDisplay()) {
         static uint32_t oledRefreshTimer = 0;
         if (timerExpired(oledRefreshTimer)) {
             oledRefreshTimer = millis() + 5000;
             updateStatusDisplay();
         }
-        #ifdef ESP32_E22_V1
         displayButtonPoll();
-        #endif
     }
-    #endif
-    #ifdef LILYGO_T_ECHO
-    displayUpdateLoop();
-    #endif
 
     // ── 4. ANNOUNCE beacon ────────────────────────────────────────────────────
     // Enqueue an ANNOUNCE_FRAME on both WiFi (port 1) and LoRa (port 0)
@@ -1299,7 +1239,9 @@ void loop() {
     if (pendingSettingsSave) {
         pendingSettingsSave = false;
         saveSettings();
+        #ifdef HAS_WIFI
         buildPortOrder();  // primaryInterface may have changed
+        #endif
     }
 
     // Deferred LoRa reinit after settings change
