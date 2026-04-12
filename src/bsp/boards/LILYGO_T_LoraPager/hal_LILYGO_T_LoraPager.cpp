@@ -1,5 +1,5 @@
 /*
- * hal_LILYGO_T-LoraPager.cpp
+ * hal_LILYGO_T_LoraPager.cpp
  *
  * Hardware abstraction layer for the LILYGO T-LoraPager (ESP32-S3 + SX1262).
  *
@@ -11,7 +11,7 @@
  */
 
 #include "hal/hal.h"
-#include "display/display_LILYGO_T-LoraPager.h"
+#include "display/display_LILYGO_T_LoraPager.h"
 #include "RadioLib.h"
 #include "hal/settings.h"
 #include "mesh/frame.h"

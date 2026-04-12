@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- * display_LILYGO_T-LoraPager.h
+ * display_LILYGO_T_LoraPager.h
  *
  * Chat-Display + QWERTY-Keyboard für den LILYGO T-LoraPager.
  *

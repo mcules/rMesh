@@ -73,8 +73,11 @@ void displayButtonPoll();
 // ── Shared utilities ────────────────────────────────────────────────────────
 
 /// Check whether a message matches the user-configured display group filter.
-/// Returns true if the message should be shown on the status display.
 bool matchesDisplayGroup(const char* dstGroup, const char* dstCall);
+
+/// Convert a UTF-8 string to CP437 encoding (German umlauts + common accents).
+/// Unmapped codepoints are replaced with '?'.
+void utf8ToCP437(const char* src, char* dst, size_t dstLen);
 
 // ── T-LoraPager SD card ─────────────────────────────────────────────────────
 

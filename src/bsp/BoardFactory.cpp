@@ -8,7 +8,6 @@
 #include "boards/LILYGO_T_Beam/Board_LILYGO_T_Beam.h"
 #include "boards/LILYGO_T_Echo/Board_LILYGO_T_Echo.h"
 #include "boards/LILYGO_T_LoraPager/Board_LILYGO_T_LoraPager.h"
-#include "boards/LILYGO_T_ETH_Elite/Board_LILYGO_T_ETH_Elite.h"
 #include "boards/LILYGO_T_ETH_Elite_SX1262/Board_LILYGO_T_ETH_Elite_SX1262.h"
 #include "boards/SEEED_SenseCAP_Indicator/Board_SEEED_SenseCAP_Indicator.h"
 #include "boards/SEEED_XIAO_ESP32S3_Wio_SX1262/Board_SEEED_XIAO_ESP32S3_Wio_SX1262.h"
@@ -39,8 +38,6 @@ IBoardConfig* BoardFactory::create() {
     return new Board_LILYGO_T_Echo();
 #elif defined(LILYGO_T_LORA_PAGER)
     return new Board_LILYGO_T_LoraPager();
-#elif defined(LILYGO_T_ETH_ELITE)
-    return new Board_LILYGO_T_ETH_Elite();
 #elif defined(LILYGO_T_ETH_ELITE_SX1262)
     return new Board_LILYGO_T_ETH_Elite_SX1262();
 #elif defined(SEEED_SENSECAP_INDICATOR)

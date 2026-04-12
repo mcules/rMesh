@@ -4,7 +4,7 @@
 #include "bsp/IBoardConfig.h"
 #include "displayRotation.h"
 #include "statusDisplay.h"
-#include "bsp/boards/LILYGO_T_Echo/hal_LILYGO_T-Echo.h"
+#include "bsp/boards/LILYGO_T_Echo/hal_LILYGO_T_Echo.h"
 #include "hal/settings.h"
 #include "mesh/peer.h"
 #include "mesh/routing.h"

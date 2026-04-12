@@ -30,34 +30,6 @@
 #include <lgfx/v1/platforms/esp32s3/Bus_RGB.hpp>
 
 // ─── UTF-8 → CP437 (LovyanGFX Font0 = CP437) ─────────────────────────────────
-static void utf8ToCP437(const char* src, char* dst, size_t dstLen) {
-    size_t di = 0;
-    const uint8_t* s = (const uint8_t*)src;
-    while (*s && di < dstLen - 1) {
-        if (*s < 0x80) {
-            dst[di++] = (char)*s++;
-        } else if ((*s & 0xE0) == 0xC0 && s[1]) {
-            uint16_t cp = (uint16_t)((*s & 0x1F) << 6) | (s[1] & 0x3F);
-            s += 2;
-            switch (cp) {
-                case 0x00C4: dst[di++] = (char)0x8E; break;
-                case 0x00D6: dst[di++] = (char)0x99; break;
-                case 0x00DC: dst[di++] = (char)0x9A; break;
-                case 0x00E4: dst[di++] = (char)0x84; break;
-                case 0x00F6: dst[di++] = (char)0x94; break;
-                case 0x00FC: dst[di++] = (char)0x81; break;
-                case 0x00DF: dst[di++] = (char)0xE1; break;
-                case 0x00E9: dst[di++] = (char)0x82; break;
-                case 0x00E8: dst[di++] = (char)0x8A; break;
-                case 0x00E0: dst[di++] = (char)0x85; break;
-                default:     dst[di++] = '?';         break;
-            }
-        } else if ((*s & 0xF0) == 0xE0 && s[1] && s[2]) { s += 3; dst[di++] = '?'; }
-        else if ((*s & 0xF8) == 0xF0 && s[1] && s[2] && s[3]) { s += 4; dst[di++] = '?'; }
-        else { s++; }
-    }
-    dst[di] = '\0';
-}
 
 // ─── Display constants ───────────────────────────────────────────────────────
 #define DISP_W      480
