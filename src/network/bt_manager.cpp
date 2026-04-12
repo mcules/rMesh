@@ -27,7 +27,7 @@ static void onBleConnect(bool connected) {
     if (connected && !s_wifiStopped && !s_pendingWifiStop) {
         // BLE client connected in EXCLUSIVE mode → schedule WiFi shutdown
         logPrintf(LOG_INFO, "BT", "EXCLUSIVE: scheduling WiFi stop for BLE");
-        stopWebServer();
+        ws.closeAll();  // close WebSocket clients gracefully
         s_pendingWifiStop = true;
         s_wifiStopAt = millis() + 500;  // let AsyncTCP drain
     }
@@ -132,7 +132,7 @@ void btManagerSetMode(BtMode mode) {
         case BtMode::EXCLUSIVE:
             logPrintf(LOG_INFO, "BT", "Switching to EXCLUSIVE — scheduling WiFi stop, starting BLE");
             if (!s_wifiStopped && !s_pendingWifiStop) {
-                stopWebServer();
+                ws.closeAll();  // close WebSocket clients gracefully
                 s_pendingWifiStop = true;
                 s_wifiStopAt = millis() + 500;
             }
@@ -171,11 +171,11 @@ void btManagerTick() {
         }
     }
     // Deferred WiFi restore — after BLE stopped, bring WiFi back up
+    // WebServer stays registered (no end/begin cycle) — only WiFi needs restart
     if (s_pendingWifiRestore) {
         s_pendingWifiRestore = false;
-        logPrintf(LOG_INFO, "BT", "Restoring WiFi + WebServer...");
+        logPrintf(LOG_INFO, "BT", "Restoring WiFi...");
         wifiInit();
-        startWebServer();
         logPrintf(LOG_INFO, "BT", "WiFi restored, free heap: %u", ESP.getFreeHeap());
     }
 
