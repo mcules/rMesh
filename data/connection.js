@@ -76,12 +76,18 @@ var Connection = (function () {
 
     websocket.onopen = function (e) {
       setStatus('wifi');
+      // Hide BLE button when WiFi is back
+      var btn = document.getElementById('ble-connect-btn');
+      if (btn) btn.style.display = 'none';
+      _wsReconnectDelay = 2000;
       onOpen(e);
     };
 
     websocket.onclose = function (e) {
       setStatus('disconnected');
       onClose(e);
+      // Show BLE button as fallback if Web Bluetooth is available
+      if (navigator.bluetooth) showBleButton();
       // Reconnect after backoff
       setTimeout(connectWifi, _wsReconnectDelay);
       _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, 30000);
