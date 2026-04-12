@@ -10,7 +10,8 @@
  */
 
 #include "config.h"
-#include "frame.h"
+#include "mesh/frame.h"
+#include "bsp/IBoardConfig.h"
 
 #ifdef NRF52_PLATFORM
 #include <FreeRTOS.h>
@@ -111,3 +112,6 @@ extern uint16_t messagesHead;
 
 /** Set to true when LittleFS free space is critically low; triggers an immediate trim in the main loop. */
 extern volatile bool trimNeeded;
+
+/// Global board configuration — set once in setup() via BoardFactory::create().
+extern IBoardConfig* board;
