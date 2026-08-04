@@ -1,6 +1,19 @@
 # Changelog
 
-## [Unreleased]
+## [v26.8.0-dev]
+
+Erstes Dev-Release seit v26.4.1a-dev (April 2026). Bündelt die bisher nur als Nightly verfügbaren Zwischenstände **v26.4.2**, **v26.4.3** und **v26.7.0** (Details in den jeweiligen Sektionen weiter unten) plus alles Neue seither.
+
+### Highlights der gebündelten Zwischenstände
+
+- **v26.4.2**: Board Support Package (BSP) mit `IBoardConfig`-Interface statt `#ifdef`-Wildwuchs, Display-Treiber nach Display-Typ konsolidiert, Source-Tree komplett reorganisiert
+- **v26.4.3**: LittleFS-voll-Deadlock behoben, Loop-Task-Watchdog, NVS-Self-Heal, 8-MB-Partitionstabelle für Heltec-Boards, OTA-Größen-Guards (Brick-Schutz), Nachrichten-Limit nach realer Partitionsgröße
+- **v26.7.0**: Ergebnis dreier tiefer Code-Review-Durchgänge — Mesh-/Stabilitäts-/Power-Hardening, abwärtskompatibler LoRa-Broadcast-Relay (`loraFloodSingle`), TX-Watchdog, Boot-Loop-Schutz/Safe-Mode, kritische OTA-Auth- und Data-Race-Fixes
+
+### NEU
+
+- NEU: Native Unit-Test-Suite (`pio test -e native`) mit GitHub-Actions-CI und AddressSanitizer — reine LoRa-Mathematik (Time-on-Air, Duty-Cycle), Frame-Serialisierung und CLI-Parser laufen als Host-Tests bei jedem Push
+- NEU: Hardware-in-the-Loop-Testsuite ausgebaut (pytest, echte Nodes via USB/Serial) — exakte Assertions, Regressionstests, robuster UDP-/WiFi-Transport-Test mit sauberem Skip bei AP-Client-Isolation
 
 ### GEÄNDERT
 
@@ -9,6 +22,11 @@
 ### FIX
 
 - FIX: Announce-ACKs der Gegenstationen wurden im Monitor nie angezeigt (#55) — ein Announce erzeugt TX-Monitor-Frames auf WiFi UND LoRa im selben Rate-Limit-Fenster (max. 2 pro 500 ms), das Millisekunden später eintreffende ACK war immer das dritte Frame und wurde still verworfen. ACK-Frames sind jetzt vom Monitor-Rate-Limit ausgenommen; zusätzlich wird ein Announce-ACK wie ein Message-ACK im API-Event-Puffer registriert und als Debug-Event (`announce_ack`) ausgegeben
+- FIX: `wifi add` akzeptiert SSIDs (und Passwörter) mit Leerzeichen über Anführungszeichen-Syntax, z.B. `wifi add "Mein Netz" geheim`
+
+### CI
+
+- CI: native Test-Environment von der Nightly-/Release-Build-Matrix ausgenommen (Host-Tests laufen im eigenen Test-Workflow)
 
 ## [v26.7.0]
 
