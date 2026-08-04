@@ -204,6 +204,13 @@ uint8_t pendingForceChannel = 0;
 bool pendingLoraReinit   = false;
 bool pendingSettingsSave = false;
 
+/** Tune carrier state: request flag (set from WebSocket/CLI/display), active
+ *  flag and end deadline.  While tuneActive the LoRa radio transmits a
+ *  continuous wave, so LoRa RX polling and port-0 TX draining are suspended. */
+volatile bool pendingTune = false;
+bool tuneActive           = false;
+static uint32_t tuneEndMillis = 0;
+
 /** First OTA update check fires 1 hour after boot. */
 uint32_t updateCheckTimer = 60 * 60 * 1000;
 
@@ -1131,7 +1138,7 @@ void loop() {
                 // `continue` (not `break`): the guard is LoRa-only, so skip this
                 // port-0 frame but keep scanning — ready WiFi/LAN frames further down
                 // the buffer must not be held hostage by the LoRa pacing window.
-                if (txBuffer[i].port == 0 && !timerExpired(loraFluxGuard)) continue;
+                if (txBuffer[i].port == 0 && (!timerExpired(loraFluxGuard) || tuneActive)) continue;
 
                 // Track whether the frame was actually transmitted (not just postponed)
                 bool postponed = false;
@@ -1250,7 +1257,7 @@ void loop() {
 
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
-    if (checkReceive(f)) { processRxFrame(f); }   // LoRa
+    if (!tuneActive && checkReceive(f)) { processRxFrame(f); }   // LoRa
     #ifdef HAS_WIFI
     // Reset before the UDP parse: importBinary() only overwrites fields whose header
     // is present in the packet, so a shorter UDP frame in the same loop pass would
@@ -1404,6 +1411,31 @@ void loop() {
     // Deferred LoRa reinit after settings change
     if (pendingLoraReinit) {
         pendingLoraReinit = false;
+        initHal();
+    }
+
+    // ── Tune carrier ──────────────────────────────────────────────────────────
+    // Start a continuous wave for TUNE_DURATION ms (antenna tuning, #54).
+    // Deferred to the loop context because the request comes from the
+    // WebSocket task / CLI. While active, LoRa RX/TX is suspended; initHal()
+    // afterwards fully re-initialises the radio back into receive mode.
+    if (pendingTune) {
+        pendingTune = false;
+        if (!tuneActive && loraReady && loraEnabled && txFlag == false) {
+            if (isPublicBand(settings.loraFrequency) && !dutyCycleAllowed(TUNE_DURATION)) {
+                logPrintf(LOG_WARN, "LoRa", "Tune skipped: duty cycle limit reached");
+            } else {
+                logPrintf(LOG_INFO, "LoRa", "Tune: carrier on for %d ms", TUNE_DURATION);
+                tuneStart();
+                tuneActive = true;
+                tuneEndMillis = millis() + TUNE_DURATION;
+                if (isPublicBand(settings.loraFrequency)) dutyCycleTrackTx(TUNE_DURATION);
+            }
+        }
+    }
+    if (tuneActive && timerExpired(tuneEndMillis)) {
+        tuneActive = false;
+        logPrintf(LOG_INFO, "LoRa", "Tune: carrier off");
         initHal();
     }
 

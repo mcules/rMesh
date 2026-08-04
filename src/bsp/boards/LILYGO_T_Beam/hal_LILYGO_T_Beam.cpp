@@ -164,3 +164,18 @@ void transmitFrame(Frame &f) {
     //Monitor frame
     f.monitorJSON();
 }
+
+/**
+ * @brief Start a continuous tune carrier (#54).
+ *
+ * The SX127x has no CW command in LoRa mode, so switch to FSK with zero
+ * frequency deviation and enter direct-mode TX — an unmodulated carrier at
+ * the configured frequency/power. The main loop ends the carrier after
+ * TUNE_DURATION by calling initHal(), which restores the LoRa modem.
+ */
+void tuneStart() {
+    if (!loraReady) return;
+    radio.standby();
+    radio.beginFSK(settings.loraFrequency, 4.8f, 0.0f, 125.0f, settings.loraOutputPower, 16, false);
+    radio.transmitDirect();
+}

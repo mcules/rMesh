@@ -78,6 +78,7 @@ Befehlsuebersicht:
   xgrp <GROUP> <TEXT>          Gruppennachricht senden
   xtrace <CALL>                Trace-Nachricht senden
   announce                     Announce-Bake manuell ausloesen
+  tune                         Abstimm-Traeger senden (Dauerstrich, 5 s)
 
   Sicherheit:
   webpw <passwort>             WebUI-Passwort setzen

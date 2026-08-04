@@ -44,3 +44,7 @@ void transmitFrame(Frame &f) {
     txFlag = false;
     rxFlag = false;
 }
+
+/** Tune carrier (#54): no RF module present — nothing to do. */
+void tuneStart() {
+}

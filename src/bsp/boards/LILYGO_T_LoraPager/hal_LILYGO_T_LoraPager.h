@@ -30,6 +30,7 @@ void setWiFiLED(bool value);
 void initHal();
 bool checkReceive(Frame &f);
 void transmitFrame(Frame &f);
+void tuneStart();
 bool getKeyApMode();
 
 // SD card helpers (no-ops when no card is inserted)

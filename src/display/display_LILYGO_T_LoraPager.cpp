@@ -1325,10 +1325,8 @@ static void drawConfirmPower() {
 }
 
 static void doTune() {
-    Frame f;
-    f.frameType = Frame::FrameTypes::TUNE_FRAME;
-    f.transmitMillis = 0;
-    f.port = 0; txBuffer.push_back(f);
+    // Continuous tune carrier for TUNE_DURATION ms, handled in loop() (#54)
+    pendingTune = true;
     uiMode = UI_CHAT; needRedraw = true;
 }
 

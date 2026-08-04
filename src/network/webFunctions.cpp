@@ -593,10 +593,10 @@ void startWebServer() {
         }
 
         if (json["tune"].is<JsonVariant>()) {
-            logPrintf(LOG_INFO, "Web", "Send tune...");
-            Frame f;
-            f.frameType = Frame::FrameTypes::TUNE_FRAME;
-            sendFrame(f);
+            // Deferred to the main loop: starts a continuous carrier for
+            // TUNE_DURATION ms (#54) instead of queueing a one-shot packet.
+            logPrintf(LOG_INFO, "Web", "Tune requested...");
+            pendingTune = true;
         }
 
         if (json["reboot"].is<JsonVariant>()) {

@@ -793,6 +793,12 @@ void checkSerialRX() {
                     logPrintf(LOG_INFO, "CLI", "Announce triggered.");
                 }
 
+                // Start tune carrier (continuous wave for TUNE_DURATION ms, #54)
+                if (strncmp(serialRxBuffer, "tune", 4) == 0 && (serialRxBuffer[4] == '\0' || serialRxBuffer[4] == ' ')) {
+                    pendingTune = true;
+                    logPrintf(LOG_INFO, "CLI", "Tune carrier triggered.");
+                }
+
                 // Query: peer list as JSON
                 if (strncmp(serialRxBuffer, "peers", 5) == 0 && (serialRxBuffer[5] == '\0' || serialRxBuffer[5] == ' ')) {
                     JsonDocument doc;

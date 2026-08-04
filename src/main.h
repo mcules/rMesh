@@ -52,6 +52,12 @@ extern bool pendingShutdown;
 /** Set to true by the web UI to force an OTA update on a specific channel. */
 extern bool pendingForceUpdate;
 
+/** Set to true by the web UI / CLI / display to start a tune carrier in the loop context. */
+extern volatile bool pendingTune;
+
+/** True while the radio transmits the tune carrier (LoRa RX/TX suspended). */
+extern bool tuneActive;
+
 /** OTA channel index to use when pendingForceUpdate is true. */
 extern uint8_t pendingForceChannel;
 

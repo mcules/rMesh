@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### GEÄNDERT
+
+- GEÄNDERT: Tune sendet jetzt einen echten Dauerstrich-Träger (CW) von 5 Sekunden statt eines einzelnen 0xFF-Pakets über die normale TX-Warteschlange (#54) — der Träger startet sofort beim Klick (SX126x: `SetTxContinuousWave`; SX127x: FSK mit Hub 0), danach wird das Radio neu initialisiert und empfängt wieder. Auf dem 869,4-MHz-Band wird der Träger aufs Duty-Cycle-Budget angerechnet. Neuer Serial-Befehl `tune`
+
 ## [v26.7.0]
 
 Ergebnis von drei tiefen Code-Review-Durchgängen (Datei-Review, Flow-/Mesh-Analyse, Stabilität/Ressourcen/Power). Alle Änderungen bauen über ESP32-S3, klassischen ESP32 und nRF52.

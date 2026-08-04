@@ -167,3 +167,16 @@ void transmitFrame(Frame &f) {
     radio.startTransmit(txBuffer, txBufferLength);
     f.monitorJSON();
 }
+
+/**
+ * @brief Start a continuous tune carrier (#54).
+ *
+ * Puts the radio into unmodulated continuous-wave TX at the configured
+ * frequency/power. The main loop ends the carrier after TUNE_DURATION by
+ * calling initHal(), which fully re-initialises the radio into RX mode.
+ */
+void tuneStart() {
+    if (!loraReady) return;
+    radio.standby();
+    radio.transmitDirect();
+}

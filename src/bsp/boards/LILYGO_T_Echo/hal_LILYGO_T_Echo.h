@@ -53,6 +53,7 @@ void setWiFiLED(bool value);
 void initHal();
 bool checkReceive(Frame &f);
 void transmitFrame(Frame &f);
+void tuneStart();
 bool getKeyApMode();
 float getBatteryVoltage();
 

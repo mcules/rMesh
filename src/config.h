@@ -182,3 +182,10 @@ inline uint8_t syncWordForFrequency(float f) {
 
 /** UDP port used for all rMesh network communication. */
 #define UDP_PORT 3333
+
+/**
+ * Duration (ms) of the tune carrier (continuous wave) started by the Tune
+ * button.  Kept below the 10%%/60s duty-cycle budget of the public SRD band
+ * (6 s) so a single tune burst never exceeds the legal limit.
+ */
+#define TUNE_DURATION 5000

@@ -181,3 +181,18 @@ void transmitFrame(Frame &f) {
     f.monitorJSON();
 
 }
+
+/**
+ * @brief Start a continuous tune carrier (#54).
+ *
+ * Enables the external PA (TX_ENA) and puts the SX1268 into unmodulated
+ * continuous-wave TX. The main loop ends the carrier after TUNE_DURATION by
+ * calling initHal(), which restores the RX switch state and RX mode.
+ */
+void tuneStart() {
+    if (!loraReady) return;
+    digitalWrite(LORA_RX_ENA, 0);
+    digitalWrite(LORA_TX_ENA, 1);
+    radio.standby();
+    radio.transmitDirect();
+}
