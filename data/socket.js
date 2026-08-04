@@ -1066,6 +1066,8 @@ function fillSettingsForm(s) {
         batEnabledEl.checked = s.batteryEnabled !== false;
         toggleSection('batterySettingsSection', batEnabledEl.checked);
     }
+    const statusLedEl = document.getElementById("settingsStatusLedEnabled");
+    if (statusLedEl) statusLedEl.checked = s.statusLedEnabled === true;
     const batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) batVoltEl.value = s.batteryFullVoltage || 4.2;
 
@@ -1239,6 +1241,8 @@ function saveSettings() {
     s["updateChannel"] = parseInt(document.getElementById("settingsUpdateChannel").value);
     var batEnabledEl = document.getElementById("settingsBatteryEnabled");
     if (batEnabledEl) s["batteryEnabled"] = batEnabledEl.checked;
+    var statusLedEl = document.getElementById("settingsStatusLedEnabled");
+    if (statusLedEl) s["statusLedEnabled"] = statusLedEl.checked;
     var batVoltEl = document.getElementById("settingsBatteryFullVoltage");
     if (batVoltEl) s["batteryFullVoltage"] = parseFloat(batVoltEl.value);
     var wifiTxEl = document.getElementById("settingsWifiTxPower");

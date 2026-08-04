@@ -10,3 +10,11 @@ src/version.h
 # Auto-generated gzip-compressed web assets
 data_gz/
 /test/nodes.yml
+
+# HIL test node config (machine-specific; use nodes.example.yaml as template)
+test/nodes.yaml
+
+# Python bytecode / pytest cache
+__pycache__/
+*.pyc
+.pytest_cache/

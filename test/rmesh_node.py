@@ -182,8 +182,10 @@ class RMeshNode:
         """
         self.send_command(f"call {callsign}")
         time.sleep(0.3)
-        self.send_command(f"freq {freq_preset}")
-        time.sleep(0.3)
+        # Frequency preset lives under the 'lora' command group; bare 'freq 433'
+        # is a no-op (leaves the radio unconfigured / on freq 0).
+        self.send_command(f"lora freq {freq_preset}")
+        time.sleep(0.5)
         if wifi is None:
             # Disable WiFi to prevent NTP sync killing peers
             self.send_command("wifi clear")
@@ -286,3 +288,48 @@ class RMeshNode:
         self.send_command("se")
         lines = self.read_lines(timeout=2.0)
         return "\n".join(lines)
+
+    def get_settings_dict(self, retries: int = 2) -> dict[str, str]:
+        """Query settings and parse the `se` output into a flat {key: value} dict.
+
+        The firmware's showSettings() uses logRaw(), which is suppressed while
+        serialDebug is ON (raw text is for humans; debug mode emits structured
+        JSON only). So we briefly disable debug to capture the plain `se` reply,
+        parse it, then restore debug for the event-based tests. Enables exact-value
+        assertions instead of fragile substring matching.
+        """
+        result: dict[str, str] = {}
+        for _ in range(max(1, retries)):
+            self.send_command("dbg 0")      # logRaw prints only when debug is OFF
+            time.sleep(0.4)
+            raw = self.get_settings()
+            self.send_command("dbg 1")      # restore structured debug output
+            time.sleep(0.3)
+            self.drain_events()
+            for line in raw.splitlines():
+                s = line.strip()
+                if ":" not in s:
+                    continue
+                key, _sep, value = s.partition(":")
+                key = key.strip()
+                value = value.strip()
+                if key and " " not in key:  # skip prose lines, keep real setting keys
+                    result[key] = value
+            if "myCall" in result and "spreadingFactor" in result:
+                break
+        return result
+
+    def wait_for_line(self, substring: str, timeout: float = 2.0) -> str | None:
+        """Poll for a plain (non-DBG) line containing `substring`, up to timeout.
+
+        Faster and less flaky than read_lines() which always sleeps the full
+        timeout. Returns the matching line or None.
+        """
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            with self._lock:
+                for i, line in enumerate(self._lines):
+                    if substring in line:
+                        return self._lines.pop(i)
+            time.sleep(0.05)
+        return None

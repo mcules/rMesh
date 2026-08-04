@@ -10,7 +10,8 @@
  */
 
 #include "config.h"
-#include "frame.h"
+#include "mesh/frame.h"
+#include "bsp/IBoardConfig.h"
 
 #ifdef NRF52_PLATFORM
 #include <FreeRTOS.h>
@@ -51,6 +52,12 @@ extern bool pendingShutdown;
 /** Set to true by the web UI to force an OTA update on a specific channel. */
 extern bool pendingForceUpdate;
 
+/** Set to true by the web UI / CLI / display to start a tune carrier in the loop context. */
+extern volatile bool pendingTune;
+
+/** True while the radio transmits the tune carrier (LoRa RX/TX suspended). */
+extern bool tuneActive;
+
 /** OTA channel index to use when pendingForceUpdate is true. */
 extern uint8_t pendingForceChannel;
 
@@ -89,6 +96,33 @@ extern SemaphoreHandle_t fsMutex;
 extern SemaphoreHandle_t listMutex;
 
 /**
+ * @brief When true, all LittleFS writes are suspended.
+ *
+ * Set during a U_SPIFFS OTA so background tasks (FileWriter, peer/route/API save
+ * workers) don't write into the filesystem partition while it is being overwritten
+ * raw by the Update library — which would corrupt the freshly flashed image.
+ */
+extern volatile bool otaFsFreeze;
+
+/**
+ * @brief RAII guard for listMutex.
+ *
+ * Takes listMutex on construction and releases it on scope exit, so every
+ * early return from a peerList/routingList mutator releases the lock. The
+ * loop() task is the only writer; background tasks (reporting, persistence)
+ * only read under this lock, so guarding the loop-side mutations is what
+ * makes their reader-side locking actually protect against use-after-free.
+ */
+struct ListLock {
+    bool held;
+    explicit ListLock(TickType_t wait = portMAX_DELAY)
+        : held(listMutex != NULL && xSemaphoreTake(listMutex, wait) == pdTRUE) {}
+    ~ListLock() { if (held) xSemaphoreGive(listMutex); }
+    ListLock(const ListLock&) = delete;
+    ListLock& operator=(const ListLock&) = delete;
+};
+
+/**
  * @brief FreeRTOS task handle identifying the Arduino loop() task.
  *
  * Used by sendFrame() to detect when it is called from a background task
@@ -111,3 +145,12 @@ extern uint16_t messagesHead;
 
 /** Set to true when LittleFS free space is critically low; triggers an immediate trim in the main loop. */
 extern volatile bool trimNeeded;
+
+/** millis() of the last loop() iteration — loop-health heartbeat for diagnostics. */
+extern volatile uint32_t lastLoopMillis;
+
+/** Effective messages.json line limit — sized at boot from the LittleFS partition. */
+extern uint16_t maxStoredMessages;
+
+/// Global board configuration — set once in setup() via BoardFactory::create().
+extern IBoardConfig* board;

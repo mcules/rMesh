@@ -229,6 +229,52 @@ These commands were added for the test framework:
 
 Commands with `x` prefix avoid collisions with existing commands (`grp` vs `g`, `trace`/`txbuf` vs `t`).
 
+## Native (host) unit tests — no hardware
+
+Pure-logic modules are unit-tested on the host via PlatformIO's `native`
+environment (gated in CI, `.github/workflows/native-tests.yml`):
+
+```bash
+pio test -e native
+```
+
+Suites (`test/test_*/`): `test_frame` (import/export round trip, oversized-callsign
+clamp, 4-bit hopCount masking, 20k-iteration import **fuzzer under AddressSanitizer**),
+`test_toa` (Time-on-Air math + guards), `test_lora_params` (SF/CR/BW/preamble
+clamping), `test_dutycycle` (EU868 accounting incl. the drain regression). Lightweight
+mocks live in `test/mocks/`.
+
+## Reading settings in tests (important)
+
+`get_settings_dict()` returns the node's settings as a `{key: value}` dict for
+exact-value assertions. Note: the firmware's `showSettings()` uses `logRaw()`,
+which is **suppressed while `serialDebug` is ON** (debug mode emits structured
+JSON only). `get_settings_dict()` therefore briefly toggles debug off to capture
+the plain `se` reply, then restores it. LoRa modem params are set via the `lora`
+command group (`lora sf 9`, `lora cr 6`, `lora bw 125`, `lora op 14`) — **not**
+bare `sf 9`.
+
+## Test files (current)
+
+| File | Min. Nodes | Description |
+|------|-----------|-------------|
+| `test_node_basic.py` | 1 | Boot, version, settings (exact-value), callsign, LoRa params |
+| `test_regression.py` | 1 | Guards specific fixes: callsign clamp, LoRa param validation, new settings |
+| `test_messaging.py` | 2 | Direct/group message, trace, ACK, timing (LoRa) |
+| `test_udp.py` | 2 | WiFi/UDP transport (needs `wifi:` config on both nodes) |
+| `test_peers.py` | 2 | Peer discovery, announce, signal quality |
+| `test_routing.py` | 2-3 | Routing table, relay/repeat |
+
+## Roadmap (not yet implemented)
+
+- Multi-hop route aging / black-hole recovery (3 nodes, forced topology).
+- Broadcast-relay (`loraFloodSingle`) airtime comparison.
+- REST/WebSocket API tests over the network interface (auth, settings, POST).
+- Soak/stress test flooding messages while watching `/api/diagnostics`
+  (heap, `loopAgeMs`, dropped counters).
+- OTA end-to-end; fault injection (FS-full, malformed input).
+- Testability refactors to unit-test dedup + routing decisions natively.
+
 ## Known Limitations
 
 - **WiFi + Peer Timeouts**: When a node has WiFi access and syncs via NTP, `time()` jumps from ~0 to the current Unix time. Peers added before the NTP sync are then immediately removed by `checkPeerList()` (timestamp difference > 60 min). Therefore, WiFi is disabled by default in tests.

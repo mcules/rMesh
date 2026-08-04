@@ -177,8 +177,12 @@ def nodes(config) -> list[RMeshNode]:
             _log(f"  [{node.name}] Ready: {ready.get('call')} "
                  f"({ready.get('board')}, {ready.get('version')})")
         else:
-            # No ready event — reboot to get one
-            _log(f"  [{node.name}] No ready event, rebooting...")
+            # No ready event — the firmware only emits it when serialDebug is on,
+            # and that defaults off on a fresh boot. Enable debug (persisted to NVS)
+            # and reboot so the ready handshake is emitted.
+            _log(f"  [{node.name}] No ready event, enabling debug + rebooting...")
+            node.send_command("dbg 1")
+            time.sleep(0.4)
             node.send_command("reb")
             time.sleep(5.0)
             ready = node.wait_for_event("ready", timeout=15.0)
@@ -188,7 +192,8 @@ def nodes(config) -> list[RMeshNode]:
                      f"({ready.get('board')}, {ready.get('version')})")
             else:
                 pytest.fail(
-                    f"[{node.name}] Node not responding on {node.port}"
+                    f"[{node.name}] Node not responding on {node.port} "
+                    f"(no ready event even after enabling debug)"
                 )
 
     # ── Step 2: Verify firmware version ───────────────────────────────────
@@ -219,9 +224,25 @@ def nodes(config) -> list[RMeshNode]:
 
     for node, nc in zip(node_list, node_configs):
         node.enable_debug()
+
+        # Frequency-band safety guard: refuse to run if the node's CURRENT band
+        # differs from the configured preset. configure() sends `freq <preset>`,
+        # which would switch the band — transmitting on a band the RF front-end is
+        # not built for can damage hardware. Abort instead.
+        preset = str(nc.get("preset", "868"))
+        cur = node.get_settings_dict()
+        freq = cur.get("frequency", "").strip()          # e.g. "434.850 MHz"
+        node_band = "433" if freq.startswith("43") else ("868" if freq.startswith("86") else "?")
+        if node_band != "?" and node_band != preset:
+            pytest.fail(
+                f"[{node.name}] Frequency-band mismatch: node is on {freq} "
+                f"({node_band} band) but nodes.yaml preset is {preset}. "
+                f"Refusing to switch bands (RF hardware safety) — fix the preset."
+            )
+
         node.configure(
             callsign=nc["call"],
-            freq_preset=nc.get("preset", "868"),
+            freq_preset=preset,
             wifi=nc.get("wifi"),
         )
         node.drain_events()

@@ -1,0 +1,25 @@
+# Example node config for the hardware-in-the-loop (HIL) test suite.
+# Copy to test/nodes.yaml and adjust ports/callsigns/preset to your setup.
+#
+#   pytest test/ --config test/nodes.yaml -v            # build + flash + test
+#   pytest test/ --config test/nodes.yaml --no-flash -v # test already-flashed fw
+#
+# IMPORTANT (frequency safety): `preset` MUST match the band your hardware is
+# wired/tuned for. The suite sends `freq <preset>` on configure — setting the
+# wrong band can transmit on a frequency the RF front-end is not built for.
+# The nodes here run on 434.850 MHz (433 band) → preset "433".
+
+nodes:
+  - name: node_a
+    board: HELTEC_WiFi_LoRa_32_V3   # must equal the PlatformIO env / ready-event board
+    port: COM9                      # serial port (COM9 varies on this setup — check with `se`)
+    call: TEST-1
+    preset: "433"
+
+  # Add a second (and third) node for messaging / peer / routing tests.
+  # They only run when enough nodes are connected via USB.
+  # - name: node_b
+  #   board: HELTEC_WiFi_LoRa_32_V3
+  #   port: COM10
+  #   call: TEST-2
+  #   preset: "433"

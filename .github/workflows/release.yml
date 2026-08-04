@@ -39,8 +39,9 @@ jobs:
         run: pip install platformio
       - id: list
         run: |
+          # Exclude native: host unit-test env (build_src_filter = -<*>), pio run fails with 'Nothing to build'
           envs=$(pio project config --json-output \
-            | python3 -c "import json,sys; print(json.dumps([s[0].split(':',1)[1] for s in json.load(sys.stdin) if s[0].startswith('env:') and 'T-Echo' not in s[0]]))")
+            | python3 -c "import json,sys; print(json.dumps([s[0].split(':',1)[1] for s in json.load(sys.stdin) if s[0].startswith('env:') and 'T-Echo' not in s[0] and s[0] != 'env:native']))")
           echo "envs=$envs" >> "$GITHUB_OUTPUT"
           echo "Envs: $envs"
 

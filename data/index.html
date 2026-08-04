@@ -340,6 +340,15 @@
             </td>
           </tr>
           <tr>
+            <td data-i18n="setup.status_led">Status-LED:</td>
+            <td>
+              <label class="toggle-switch" onclick="event.stopPropagation()">
+                <input type="checkbox" id="settingsStatusLedEnabled">
+                <span class="toggle-track"><span class="toggle-thumb"></span></span>
+              </label>
+            </td>
+          </tr>
+          <tr>
             <td colspan="2">
               <button class="button" id="settingsDeleteMessages" data-i18n="btn.delete_messages">Nachrichten löschen</button>
               <button class="button" id="statusSyncTime" data-i18n="btn.sync_time">Browserzeit sync.</button>
@@ -1264,7 +1273,7 @@
 
     document.getElementById("tuneButton").addEventListener("click", function() {
       sendWS(JSON.stringify({tune: true}));
-      msgBox("Tune sent.");
+      msgBox("Tune: 5 s Träger / carrier");
     });
 
     document.getElementById("announceButton").addEventListener("click", function() {

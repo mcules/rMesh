@@ -90,11 +90,33 @@ inline uint8_t syncWordForFrequency(float f) {
  */
 #define PEER_RETRY_COOLDOWN (90 * 1000UL)
 
-/** Maximum number of messages persisted in messages.json (flash). */
-#define MAX_STORED_MESSAGES 1000
+/** Fallback/minimum number of messages persisted in messages.json (flash).
+ *  The effective limit (maxStoredMessages) is computed at boot from the
+ *  actual LittleFS partition size, so old 448 KB layouts and new 3.9 MB
+ *  layouts coexist during the migration. This value is used when the size
+ *  cannot be determined (nRF52 InternalFS) and as the lower bound. */
+#define MAX_STORED_MESSAGES 500
+
+/** Sizing inputs for the boot-time message-limit calculation:
+ *  reserve for WebUI assets + peers/routes/api buffers + LittleFS overhead,
+ *  average JSONL line size, and a hard upper cap. */
+#define MSG_STORE_FS_RESERVE   (300 * 1024)
+#define MSG_STORE_AVG_LINE     300
+#define MSG_STORE_MAX_LIMIT    5000
 
 /** Minimum free bytes on LittleFS before writes are skipped and a trim is triggered. */
 #define FS_MIN_FREE_BYTES (50 * 1024)
+
+/** Task-watchdog timeout for the main loop (ms). A wedged loop reboots the node. */
+#define LOOP_WDT_TIMEOUT_MS (120 * 1000)
+
+/**
+ * Max time (ms) txFlag/rxFlag may stay latched before the TX watchdog force-clears
+ * them and reinitialises the radio. Guards against a missed TX_DONE/RX_DONE IRQ or a
+ * failed startTransmit() leaving the node unable to transmit on ANY port. Must exceed
+ * the longest legitimate Time-on-Air (≈8 s for a max frame at SF12/BW125).
+ */
+#define RADIO_FLAG_STUCK_TIMEOUT_MS (15 * 1000)
 
 /** Maximum number of messages held in the RAM message cache (dedup ring buffer). */
 #define MAX_STORED_MESSAGES_RAM 60
@@ -141,6 +163,14 @@ inline uint8_t syncWordForFrequency(float f) {
 #define ROUTING_BUFFER_SIZE 1000
 
 /**
+ * Max age (s, for time()) of a routing entry before it is evicted.
+ * A live path is refreshed on every overheard frame from its destination, so
+ * only genuinely stale routes expire — this lets a longer/alternate path be
+ * relearned after a next hop's onward link dies (prevents permanent black-holes).
+ */
+#define ROUTE_MAX_AGE PEER_TIMEOUT
+
+/**
  * Grace period (s) for flash-restored peers before they are marked unavailable.
  * After a reboot, loaded peers start as available but are given only this much
  * time (instead of the full PEER_INACTIVE_TIMEOUT) to prove they are still alive.
@@ -152,3 +182,10 @@ inline uint8_t syncWordForFrequency(float f) {
 
 /** UDP port used for all rMesh network communication. */
 #define UDP_PORT 3333
+
+/**
+ * Duration (ms) of the tune carrier (continuous wave) started by the Tune
+ * button.  Kept below the 10%%/60s duty-cycle budget of the public SRD band
+ * (6 s) so a single tune burst never exceeds the legal limit.
+ */
+#define TUNE_DURATION 5000

@@ -16,6 +16,7 @@ Befehlsuebersicht:
   wifi scan                    Wifi scannen
   wifi list                    Alle WLAN-Netzwerke anzeigen
   wifi add <SSID> [<PW>]       Netzwerk hinzufuegen (PW optional)
+                               SSID mit Leerzeichen: wifi add "Mein WLAN" <PW>
   wifi del <N>                 Netzwerk N loeschen (1-basiert)
   wifi fav <N>                 Netzwerk N als Favorit setzen
   wifi pw <N> <PW>             Passwort von Netzwerk N aendern
@@ -77,6 +78,7 @@ Befehlsuebersicht:
   xgrp <GROUP> <TEXT>          Gruppennachricht senden
   xtrace <CALL>                Trace-Nachricht senden
   announce                     Announce-Bake manuell ausloesen
+  tune                         Abstimm-Traeger senden (Dauerstrich, 5 s)
 
   Sicherheit:
   webpw <passwort>             WebUI-Passwort setzen

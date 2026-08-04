@@ -1,5 +1,117 @@
 # Changelog
 
+## [v26.8.0-dev]
+
+Erstes Dev-Release seit v26.4.1a-dev (April 2026). Bündelt die bisher nur als Nightly verfügbaren Zwischenstände **v26.4.2**, **v26.4.3** und **v26.7.0** (Details in den jeweiligen Sektionen weiter unten) plus alles Neue seither.
+
+### Highlights der gebündelten Zwischenstände
+
+- **v26.4.2**: Board Support Package (BSP) mit `IBoardConfig`-Interface statt `#ifdef`-Wildwuchs, Display-Treiber nach Display-Typ konsolidiert, Source-Tree komplett reorganisiert
+- **v26.4.3**: LittleFS-voll-Deadlock behoben, Loop-Task-Watchdog, NVS-Self-Heal, 8-MB-Partitionstabelle für Heltec-Boards, OTA-Größen-Guards (Brick-Schutz), Nachrichten-Limit nach realer Partitionsgröße
+- **v26.7.0**: Ergebnis dreier tiefer Code-Review-Durchgänge — Mesh-/Stabilitäts-/Power-Hardening, abwärtskompatibler LoRa-Broadcast-Relay (`loraFloodSingle`), TX-Watchdog, Boot-Loop-Schutz/Safe-Mode, kritische OTA-Auth- und Data-Race-Fixes
+
+### NEU
+
+- NEU: Native Unit-Test-Suite (`pio test -e native`) mit GitHub-Actions-CI und AddressSanitizer — reine LoRa-Mathematik (Time-on-Air, Duty-Cycle), Frame-Serialisierung und CLI-Parser laufen als Host-Tests bei jedem Push
+- NEU: Hardware-in-the-Loop-Testsuite ausgebaut (pytest, echte Nodes via USB/Serial) — exakte Assertions, Regressionstests, robuster UDP-/WiFi-Transport-Test mit sauberem Skip bei AP-Client-Isolation
+
+### GEÄNDERT
+
+- GEÄNDERT: Tune sendet jetzt einen echten Dauerstrich-Träger (CW) von 5 Sekunden statt eines einzelnen 0xFF-Pakets über die normale TX-Warteschlange (#54) — der Träger startet sofort beim Klick (SX126x: `SetTxContinuousWave`; SX127x: FSK mit Hub 0), danach wird das Radio neu initialisiert und empfängt wieder. Auf dem 869,4-MHz-Band wird der Träger aufs Duty-Cycle-Budget angerechnet. Neuer Serial-Befehl `tune`
+
+### FIX
+
+- FIX: Announce-ACKs der Gegenstationen wurden im Monitor nie angezeigt (#55) — ein Announce erzeugt TX-Monitor-Frames auf WiFi UND LoRa im selben Rate-Limit-Fenster (max. 2 pro 500 ms), das Millisekunden später eintreffende ACK war immer das dritte Frame und wurde still verworfen. ACK-Frames sind jetzt vom Monitor-Rate-Limit ausgenommen; zusätzlich wird ein Announce-ACK wie ein Message-ACK im API-Event-Puffer registriert und als Debug-Event (`announce_ack`) ausgegeben
+- FIX: `wifi add` akzeptiert SSIDs (und Passwörter) mit Leerzeichen über Anführungszeichen-Syntax, z.B. `wifi add "Mein Netz" geheim`
+
+### CI
+
+- CI: native Test-Environment von der Nightly-/Release-Build-Matrix ausgenommen (Host-Tests laufen im eigenen Test-Workflow)
+
+## [v26.7.0]
+
+Ergebnis von drei tiefen Code-Review-Durchgängen (Datei-Review, Flow-/Mesh-Analyse, Stabilität/Ressourcen/Power). Alle Änderungen bauen über ESP32-S3, klassischen ESP32 und nRF52.
+
+### NEU
+
+- NEU: Abwärtskompatibler LoRa-Broadcast-Relay (`loraFloodSingle`, Default an) — ein geflooded (unrouted) LoRa-Frame wird als EINE Kopie an den besten Nachbarn eingereiht statt als eine Kopie pro Nachbar. Eine LoRa-Übertragung erreicht physisch ohnehin alle Nachbarn (Relay/Consume sind viaCall-unabhängig, Mithören-ACK greift), daher identische Flood-Abdeckung bei ~1/N Airtime. Das Frame ist byteidentisch zur bisherigen Einzelkopie → ältere Firmware im Netz merkt keinen Unterschied. Abschaltbar per `lora floodsingle 0`
+- NEU: Status-LED (blinkende WiFi-/Status-LED) als Einstellung — Default AUS zum Stromsparen; schaltbar in der WebUI (System-Sektion), per Serial `led 0|1` und über die API
+- NEU: Boot-Loop-Schutz / Safe-Mode (ESP32) — nach mehreren schnellen Reboots in Folge (RTC-Zähler) wird das Wiederherstellen von Peers/Routes/Nachrichten übersprungen, sodass der Node mit erreichbarer WebUI/AP hochkommt statt in einer Endlos-Reboot-Schleife zu bricken; der Zähler wird nach stabiler Laufzeit zurückgesetzt (ein bewusstes Power-Cycle setzt ihn ohnehin zurück)
+- NEU: TX-Watchdog — ein hängendes `txFlag`/`rxFlag` (fehlgeschlagenes `startTransmit()` oder verpasster TX_DONE/RX_DONE-IRQ) legte bisher die gesamte Übertragung auf ALLEN Ports (LoRa, WiFi, Ethernet) dauerhaft still, ohne dass Loop-Watchdog oder Recovery griffen; wird jetzt nach 15 s erkannt, zurückgesetzt und das Radio neu initialisiert
+
+### GEÄNDERT
+
+- GEÄNDERT: Peer-/Route-Wartung läuft jetzt auch vor NTP-Sync — bisher wurde die komplette Wartung übersprungen, solange die Zeit nicht plausibel war, sodass LoRa-only-, AP-Mode- und nRF52-Nodes (die nie NTP bekommen) tote Peers nie entfernten und die Peer-Liste voll lief (Boot-Sekunden dienen als Zeitbasis, der NTP-Sprung wird weiterhin korrigiert)
+- GEÄNDERT: Routen altern jetzt aus und werden beim endgültigen Peer-Timeout entfernt (wenn das Callsign auf keinem Transport mehr erreichbar ist) — behebt dauerhafte Black-Holes, wenn ein Next-Hop lebt, aber seine Weiterleitung zum Ziel gestorben ist
+- GEÄNDERT: Uplink-Erkennung berücksichtigt Ethernet — `hasInternetUplink()` und der OTA-Update-Check galten nur bei WiFi-Verbindung; ein T-ETH-Elite über LAN (WiFi aus) meldete keine Topologie, führte keine Remote-Commands aus und updatete nie
+- GEÄNDERT: LoRa-Modem-Parameter (SF/CR/BW/Preamble) werden aus WS/CLI/NVS auf SX126x-gültige Bereiche geklemmt — ein ungültiger Wert (z.B. SF 0) wurde bisher gespeichert und in die Airtime-Berechnung gefüttert (UB), während das Radio still den alten Modem-Zustand behielt
+- GEÄNDERT: Duty-Cycle-Zähler (869,4–869,65 MHz) rechnet mit Worst-Case-Header — der bisherige Schätzwert unterschätzte die reale Time-on-Air relayter Frames (bis zu 5 Callsign-Felder), wodurch das 10%-Budget zu niedrig verbucht wurde
+- GEÄNDERT: Reliable-Frames (Sync) werden pro Port serialisiert statt global — ein zähes LoRa-Sync-Frame blockierte bisher neue Sync-Frames auf WiFi/LAN
+- GEÄNDERT: OTA-Update-Check läuft nur noch beim ersten WiFi-Connect nach dem Boot — bei instabilem WiFi stallte er sonst bei jedem Reconnect den Loop (≥10 s, bei gefundenem Update Minuten) und machte das Mesh taub; der 24-h-Timer deckt den Steady-State
+- GEÄNDERT: API-Event-Ringpuffer (`api_evts.bin`) wird auf einer eigenen ~30-Minuten-Kadenz persistiert statt alle 5 Minuten bei jeglichem Traffic — deutlich weniger Flash-Verschleiß für volatile Diagnostikdaten
+- GEÄNDERT: Peer-/Route-Persistenz kopiert die Listen unter kurzem `listMutex`-Halten und schreibt danach ins Flash — bisher blockierte ein bis zu 30 s langer Flash-Write jeden Listen-Zugriff (Reporting, Display)
+- GEÄNDERT: Loop gibt im Leerlauf eine Tick ab (lässt Idle-Task/Power-Management laufen); T-Echo schaltet den ungenutzten L76K-GPS ab (~20–30 mA gespart)
+- GEÄNDERT: PRNG wird beim Boot geseedet — identische Boards nach gemeinsamem Stromausfall erzeugten sonst dieselbe Announce-/ACK-/Retry-Jitter-Sequenz und kollidierten wiederholt
+
+### FIX
+
+- FIX (kritisch): OTA-Upload-Endpoint prüfte die Authentifizierung erst im Completion-Handler — das Firmware-Image wurde bereits geschrieben und als Boot-Partition gesetzt, bevor der 401 kam. Auth erfolgt jetzt VOR `Update.begin()` im Body-Handler; ein unauthentifizierter Upload wird abgewiesen, bevor irgendetwas geschrieben wird
+- FIX (kritisch): U_SPIFFS-OTA überschrieb die gemountete LittleFS-Partition, während Hintergrund-Tasks weiter hineinschrieben — jetzt werden alle FS-Writes während eines Filesystem-Updates ausgesetzt und ein Reboot erzwungen (auch im `noreboot`-Pfad), damit das frische Image sauber gemountet wird
+- FIX (kritisch): Data-Race auf `peerList`/`routingList` — der Loop-Task mutierte die Listen ohne `listMutex`, während der Hintergrund-Task (Reporting/Persistenz) unter Lock darüber iterierte (Use-after-free bei Reallokation). Alle loop-seitigen Mutatoren sperren jetzt (RAII-Guard `ListLock`)
+- FIX: Callsign-Overflow — der serielle `call`-Befehl akzeptierte bis zu 16 Zeichen, die Frame-Felder fassen aber nur `MAX_CALLSIGN_LENGTH` (9); ein längeres Rufzeichen wurde ohne Nullterminator kopiert (korrupte On-Air-Frames, kaputte Dedup/ACK-Vergleiche). Jetzt geklemmt
+- FIX: VLA-Stack-Overflow in `Frame::messageJSON()` — `char text[messageLength+1]` mit einer ungeprüften uint16-Länge (bis 65535) konnte den Task-Stack sprengen; jetzt fester Puffer + Clamp, und `messageLength` wird auch am WS-Eingang geklemmt
+- FIX: Out-of-Bounds-Bit-Write auf `udpPeerLegacy[-1]` bei einem Legacy-UDP-Paket von unbekannter IP bei vollem Peer-Table (Heap-Korruption) — jetzt `peerIdx >= 0`-Guard
+- FIX: `Frame`-Objekt wurde zwischen LoRa- und UDP-Empfang im selben Loop-Durchlauf ohne Reset wiederverwendet — ein kürzeres UDP-Frame erbte stale `dstCall`/`message`/`id` des vorherigen LoRa-Frames (Fehlklassifikation, falsche Dedup/ACK). Frame wird jetzt vor dem UDP-Parse zurückgesetzt
+- FIX: ACK-Purge im TX-Buffer ignorierte `srcCall` — da IDs nur pro Quelle eindeutig sind, konnte ein kollidierendes `(nodeCall,id)` einer fremden Quelle ein unbeteiligtes wartendes Relay löschen. Jetzt Match über das volle `(srcCall,viaCall,id)`-Tupel
+- FIX: `Frame::exportBinary()` — fehlende Längenprüfung vor Message-Header/ID, und die Truncation überschrieb das `messageLength`-Member (verkürzte Retransmits dauerhaft); jetzt Bounds-Check und lokale Clamp-Variable
+- FIX: Duty-Cycle-Bucket entleerte sich unter Last kaum — durch Integer-Truncation und unbedingtes Vorrücken des Fensteranfangs verpuffte die abzubauende Zeit, sodass alle LoRa-Sendungen dauerhaft um 5 s verschoben wurden, gerade wenn das Mesh ausgelastet war
+- FIX: Flux-Guard (`break` statt `continue`) hielt sendebereite WiFi-/LAN-Frames zurück, während er nur das LoRa-Pacing betreffen sollte
+- FIX: Topologie-Report wurde nach einem fehlgeschlagenen POST für ~24,8 Tage unterdrückt statt in 60 s erneut versucht
+- FIX: Originierendes `sendFrame()` übersprang LoRa bei einer veralteten WiFi-Route (fehlender Freshness-Check) — nach einem WiFi-Drop ging die Nachricht ins Leere; jetzt derselbe 60-s-Freshness-Gate wie im Relay-Pfad
+- FIX: Bulk-Import (`/api/import`) akkumuliert jetzt den über mehrere TCP-Fragmente ankommenden Body — bisher wurde jedes Fragment als kompletter JSON-Body geparst, wodurch das Feature bei seiner eigentlichen Nutzlast (100+ Nachrichten) scheiterte
+- FIX: `POST /api/messages` fehlte der `heapGuard` der übrigen Endpunkte; `batteryFullVoltage` aus der WS wird geklemmt (verhinderte Division durch ~0 in der Akku-Prozentberechnung); AP-Passwort mit 1–7 Zeichen wird abgelehnt (WPA braucht ≥8, sonst startet der AP nicht → Selbst-Aussperrung); AP-Passwort wird in `/api/settings` maskiert
+- FIX: `strlen(nullptr)`-Absturz im `sendFrame`-WS-Handler bei nicht-String-`messageText`
+- FIX: udpPeers-Vektoren in den Display-`doSave()`-Funktionen (Pager/SenseCAP) wurden nur teilweise neu aufgebaut → unterschiedliche Längen der Parallel-Vektoren und OOB-Zugriff; jetzt werden alle vier synchron gebaut
+- FIX: `trimFileTask` prüft jetzt Schreibfehler und den `xTaskCreate`-Rückgabewert (kein stiller Datenverlust/Leak); der Notfall-Trim hat einen Debounce und einen Last-Resort-Truncate, damit ein voll gelaufenes Dateisystem keinen Task-Respawn-Sturm mehr auslöst
+- FIX: Heap-Watchdog wird auf ~1 Hz gedrosselt statt in jedem Loop-Durchlauf `getMaxAllocHeap()` (Freelist-Scan) aufzurufen
+- FIX (Display): SenseCAP zeigte den ältesten Bildschirminhalt statt der neuesten Nachrichten und invertiert; Gruppen-Tab-Touch-Trefferzone stimmte nicht mit den gezeichneten Tabs überein; „Nachr. löschen"-Menüpunkt war tot; Pager-Chat konnte bei kleiner Schriftgröße den Stack überlaufen (`tmp[]`-Puffer geklemmt); Pager warnt jetzt bei leerem Rufzeichen statt still zu verwerfen; Pager-Monitor-Frame-Labels ans Frame-Enum angeglichen
+- FIX (Display/Strom): T-Echo-E-Paper wurde durch den 5-s-Status-Timer zu ständigen Full-Refreshes getrieben (~17k/Tag, Batterie-/Panel-Verschleiß) — E-Paper läuft jetzt nur noch über die eigene Update-Loop
+- FIX: Doppelte Display-Initialisierung beim Boot (2,5-s-Splash/Freeze pro Speichern/Reinit) durch Once-Guard in `initDisplay()` behoben; doppelte Radio-Initialisierung beim Boot behoben (`pendingLoraReinit` wird nach dem Setup gelöscht)
+- FIX: SPI-Lock für den „Flashing"-Bildschirm des Pagers während OTA (paralleler Radio-SPI-Zugriff aus dem AsyncTCP-Task hätte den Bus korrumpieren können)
+- FIX: T-ETH-Elite hatte eine 16-MB-Partitionstabelle bei 8-MB-deklariertem Board — LittleFS jenseits 8 MB unbenutzbar und SPIFFS-OTA-Brick-Gefahr; `flash_size`/`maximum_size` korrigiert
+- FIX: Nightly-CI verglich zum Skip-Check den Branchnamen statt der Commit-SHA (`--target dev-next`) und schnitt daher jede Nacht ein Release, auch ohne Commits — jetzt Vergleich der aufgelösten Commit-SHA
+- FIX: Boot-Preload und weitere file-gespeiste Callsign-Kopien nutzen `strlcpy` (garantierte Nullterminierung)
+
+## [v26.4.3]
+
+- FIX: LittleFS-voll-Deadlock — war das Dateisystem einmal voll (z.B. messages.json + WebUI-Assets auf der 448-KB-Partition des Heltec V3), wurden alle Datei-Writes dauerhaft übersprungen, ohne dass der Trim je etwas entfernte (Zeilenlimit noch nicht erreicht). Nachrichten erschienen ab dann nie mehr in der WebUI. Jetzt: Notfall-Trim halbiert messages.json bei Platzmangel unabhängig vom Zeilenlimit
+- FIX: Wegen Platzmangel übersprungene Datei-Writes werden jetzt im `fileWriter.dropped`-Zähler (`/api/status`) gezählt — ein volles Dateisystem ist damit in der Diagnose sichtbar statt still zu scheitern
+- GEÄNDERT: Nachrichten-Limit für messages.json wird beim Boot aus der tatsächlichen LittleFS-Partitionsgröße berechnet ((Partition − 300 KB Reserve) / 300 B, min. 500, max. 5000) — Altgeräte mit 448-KB-Partition bleiben bei ~500, per USB/Web-Flasher neu geflashte Geräte mit 3,9-MB-Partition bekommen automatisch 5000; sanfter Übergang ohne Zwangs-Neuflash (fester Fallback `MAX_STORED_MESSAGES` 1000 → 500, gilt auch für nRF52/InternalFS)
+- GEÄNDERT: Heltec V3 / V4 / Wireless Stick Lite V3 / HT-Tracker V1.2 nutzen jetzt `partitions_8MB.csv` — LittleFS wächst von 448 KB auf 3,9 MB, App-Slots von 1,75 MB auf 2 MB (die bisherige Tabelle nutzte nur 4 MB des 8-MB-Flash). Gilt nur für per USB/Web-Flasher neu geflashte Geräte; per OTA aktualisierte Geräte behalten das alte Layout (Firmware-OTA funktioniert weiter, das LittleFS-Update wird auf Altgeräten übersprungen)
+- NEU: Task-Watchdog (120 s) auf der Main-Loop — hängt die Loop (HTTP/WebSocket laufen dann weiter, während Mesh-Verarbeitung, Status-Push und Nachrichtenempfang stehen), rebootet der Node jetzt automatisch; während OTA-Downloads wird der Watchdog temporär ausgesetzt
+- NEU: Loop-Heartbeat `system.loopAgeMs` in `/api/diagnostics` — Loop-Gesundheit ist remote prüfbar
+- FIX: Fehlgeschlagenes `prefs.begin()` (NVS korrupt / Fremd-Firmware-Reste) wird jetzt erkannt: NVS wird einmalig gelöscht und neu initialisiert statt dass alle Speichervorgänge still scheitern — Ursache für „CLI speichert keine Einstellungen"
+- FIX: `saveSettings()` verifiziert den geschriebenen Config-Blob und meldet „Settings saved." bzw. „SETTINGS SAVE FAILED" in der Konsole; auch `saveWifiNetworks()`/`saveUdpPeers()` melden Schreibfehler
+- FIX: Factory-Reset-Befehl `de`/`defaults` reagiert nur noch auf exakte Eingabe — vorher löste JEDE Eingabe, die mit „de" beginnt (z.B. „debug", Tippfehler), einen kompletten NVS-Wipe mit Reboot aus
+- FIX: Serielle Konsole filtert Terminal-Steuerzeichen — Backspace/DEL editieren jetzt den Eingabepuffer, ANSI-Escape-Sequenzen (Pfeiltasten) werden verworfen. Vorher landeten die Bytes ungefiltert in gespeicherten Einstellungen (z.B. Backspaces im Rufzeichen) und machten jeden WebSocket-Frame zu ungültigem JSON — die WebUI blieb komplett leer
+- FIX: Beim Settings-Laden werden Steuerzeichen aus gespeicherten Strings entfernt (Rufzeichen, Position, NTP, SSIDs) — bereits betroffene Geräte heilen sich mit dem Update selbst
+- FIX: `/ota`-Upload prüft die Image-Größe gegen die Ziel-Partition BEVOR geschrieben wird — ein zu großes Filesystem-Image (z.B. 3,9-MB-littlefs.bin auf 448-KB-Altlayout) hinterließ vorher einen halbgeschriebenen Superblock, LittleFS panicte bei jedem Boot (`lfs_fs_grow`-Assert) und der Node war bis zum USB-Neuflash gebrickt
+
+## [v26.4.2]
+
+- NEU: Board Support Package (BSP) — abstraktes `IBoardConfig`-Interface ersetzt verstreute `#ifdef BOARD_XYZ`-Abfragen; Board-Fähigkeiten werden zur Laufzeit abgefragt statt zur Compile-Zeit
+- NEU: `BoardFactory` als einzige Stelle im Projekt mit Board-Identitätsprüfung — aller übriger Code fragt Fähigkeiten über das Interface ab
+- NEU: Display-Treiber nach Display-Typ statt Board-Name — drei identische SSD1306-U8g2-Treiber zu einem generischen konsolidiert; Treiber für ThingPulse-SSD1306, ST7735-TFT und GxEPD2-E-Paper jeweils als eigenständige, wiederverwendbare Module
+- NEU: `IBoardConfig` um TFT- und E-Paper-Pin-Methoden erweitert — Display-Treiber sind damit vollständig board-unabhängig
+- NEU: Shared Utilities `matchesDisplayGroup()` und `utf8ToCP437()` eliminieren duplizierten Code in 6 bzw. 2 Display-Treibern
+- GEÄNDERT: Source-Tree komplett reorganisiert — `src/bsp/boards/` mit per-Board-Ordnern, `src/display/` für Display-Treiber, `src/mesh/`, `src/network/`, `src/hal/`, `src/util/` für thematische Gruppierung; `src/`-Root enthält nur noch 4 Dateien
+- GEÄNDERT: `platformio.ini` mit `[esp32_base]` extends-Pattern konsolidiert — gemeinsame lib_deps, build_flags und Platform-Version zentral definiert
+- GEÄNDERT: `build_src_filter` pro Environment steuert, welche HAL- und Display-Dateien kompiliert werden — ersetzt die bisherigen `#ifdef`-Kompilierungsguards
+- GEÄNDERT: Dateinamen normalisiert — Bindestriche durch Unterstriche ersetzt für konsistente Benennung
+- FIX: nRF52-Kompatibilität für `portENTER_CRITICAL` (Single-Core vs Multi-Core API-Unterschied)
+- FIX: nRF52 `Preferences::getUShort` nicht verfügbar — Fallback auf `getUChar` mit Skalierung
+- ENTFERNT: T-ETH-Elite Board ohne SX1262 (orphaned, kein PlatformIO-Environment)
+
 ## [v26.4.1a]
 
 - GEÄNDERT: ESP32_E22_V1 — maximale TX-Leistung auf 33 dBm angehoben (E22-Modul mit PA)

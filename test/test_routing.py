@@ -12,6 +12,16 @@ from test_peers import _ensure_peers
 LORA_TIMEOUT = 30.0
 
 
+def _reaches_directly(node, call) -> bool:
+    """True if `node` has `call` as a directly-reachable peer (in RF range),
+    i.e. no relay is needed. On a bench all nodes hear each other directly, so
+    genuine multi-hop relay cannot be exercised — the relevant tests then skip."""
+    for p in node.get_peers():
+        if p.get("call") == call and p.get("available"):
+            return True
+    return False
+
+
 @pytest.mark.min_nodes(2)
 class TestRouteCreation:
     """Routing table tests (2+ nodes)."""
@@ -79,6 +89,10 @@ class TestRelay:
 
     def test_relay_increments_hop_count(self, node_a, node_c, config):
         """Relayed message has hopCount > 0."""
+        call_c = config["nodes"][2]["call"]
+        if _reaches_directly(node_a, call_c):
+            pytest.skip("node_a reaches node_c directly (bench) — no multi-hop to test; "
+                        "separate the nodes so C is only reachable via B")
         node_c.drain_events()
         time.sleep(1.0)
 
@@ -93,11 +107,13 @@ class TestRelay:
 
     def test_relay_trace_shows_path(self, node_a, node_c, config):
         """Trace from A to C shows intermediate nodes in path."""
-        node_a.drain_events()
-        time.sleep(1.0)
-
         call_c = config["nodes"][2]["call"]
         call_b = config["nodes"][1]["call"]
+        if _reaches_directly(node_a, call_c):
+            pytest.skip("node_a reaches node_c directly (bench) — trace has no relay hop; "
+                        "separate the nodes so C is only reachable via B")
+        node_a.drain_events()
+        time.sleep(1.0)
         node_a.send_trace(call_c)
 
         # Wait for trace echo

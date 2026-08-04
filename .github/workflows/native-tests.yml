@@ -1,0 +1,27 @@
+name: Unit Tests (native)
+
+# Host-side unit tests for pure-logic modules (frame (de)serialization,
+# duty-cycle accounting, ...). No hardware required — runs on the GitHub runner
+# via PlatformIO's `native` environment. Gates every push/PR.
+
+on:
+  push:
+    branches: [dev-next, dev, main]
+  pull_request:
+
+jobs:
+  native-unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      - name: Run native unit tests
+        run: pio test -e native -v

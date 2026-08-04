@@ -17,7 +17,7 @@
 #include <ArduinoJson.h>
 
 #ifdef NRF52_PLATFORM
-#include "platform_nrf52.h"
+#include "util/platform_nrf52.h"
 #include <Adafruit_LittleFS.h>
 #include <InternalFileSystem.h>
 #else
@@ -27,56 +27,29 @@
 #endif
 
 #include "config.h"
-#include "hal.h"
-#include "frame.h"
-#include "settings.h"
+#include "hal/hal.h"
+#include "mesh/frame.h"
+#include "hal/settings.h"
 #include "main.h"
-#include "wifiFunctions.h"
-#include "webFunctions.h"
-#include "serial.h"
-#include "helperFunctions.h"
-#include "peer.h"
-#include "ack.h"
-#include "udp.h"
-#include "ethFunctions.h"
-#include "routing.h"
-#include "reporting.h"
-#include "dutycycle.h"
-#include "persistence.h"
+#include "network/wifiFunctions.h"
+#include "network/webFunctions.h"
+#include "util/serial.h"
+#include "util/helperFunctions.h"
+#include "mesh/peer.h"
+#include "mesh/ack.h"
+#include "network/udp.h"
+#include "network/ethFunctions.h"
+#include "mesh/routing.h"
+#include "mesh/reporting.h"
+#include "hal/dutycycle.h"
+#include "util/persistence.h"
 #include "time.h"
-#include "logging.h"
-#include "heapdbg.h"
-#include "bgWorker.h"
-#include "api.h"
-
-#ifdef LILYGO_T_LORA_PAGER
-#include "display_LILYGO_T-LoraPager.h"
-#include "hal_LILYGO_T-LoraPager.h"
-#endif
-
-#ifdef SEEED_SENSECAP_INDICATOR
-#include "display_SEEED_SenseCAP_Indicator.h"
-#include "hal_SEEED_SenseCAP_Indicator.h"
-#endif
-
-#ifdef HELTEC_WIFI_LORA_32_V3
-#include "display_HELTEC_WiFi_LoRa_32_V3.h"
-#endif
-#ifdef ESP32_E22_V1
-#include "display_ESP32_E22_V1.h"
-#endif
-#ifdef HELTEC_HT_TRACKER_V1_2
-#include "display_HELTEC_HT-Tracker_V1_2.h"
-#endif
-#ifdef LILYGO_T3_LORA32_V1_6_1
-#include "display_LILYGO_T3_LoRa32_V1_6_1.h"
-#endif
-#ifdef LILYGO_T_BEAM
-#include "display_LILYGO_T-Beam.h"
-#endif
-#ifdef LILYGO_T_ECHO
-#include "display_LILYGO_T-Echo.h"
-#endif
+#include "util/logging.h"
+#include "util/heapdbg.h"
+#include "util/bgWorker.h"
+#include "network/api.h"
+#include "bsp/BoardFactory.h"
+#include "display/statusDisplay.h"
 
 
 // ── Port iteration order ─────────────────────────────────────────────────────
@@ -95,6 +68,9 @@ static void buildPortOrder() {
 #endif
 
 // ── Global state ──────────────────────────────────────────────────────────────
+
+/** Board configuration — set once via BoardFactory::create(). */
+IBoardConfig* board = nullptr;
 
 /** POSIX timezone rule string for CET/CEST (Central Europe). */
 const char* TZ_INFO = "CET-1CEST,M3.5.0,M10.5.0/3";
@@ -130,6 +106,21 @@ uint16_t messagesHead = 0;
 /** Mutex protecting all LittleFS accesses. */
 SemaphoreHandle_t fsMutex = NULL;
 SemaphoreHandle_t listMutex = NULL;
+volatile bool otaFsFreeze = false;
+
+// ── Boot-loop safe mode (ESP32) ──────────────────────────────────────────────
+// Counts consecutive boots in RTC memory (survives resets, cleared on power loss).
+// After too many rapid reboots we skip restoring persisted peers/routes/messages —
+// the usual culprit for a crash-on-load boot loop — so the node comes up on an
+// AP with the WebUI reachable instead of bricking. Counter is cleared once the
+// node has run stably for a while.
+bool safeMode = false;
+#ifndef NRF52_PLATFORM
+RTC_NOINIT_ATTR uint32_t rtcBootMagic;
+RTC_NOINIT_ATTR uint32_t rtcBootCount;
+#define BOOT_MAGIC 0x724D5348UL          // 'rMSH'
+#define SAFE_MODE_BOOT_THRESHOLD 4
+#endif
 TaskHandle_t mainLoopTaskHandle = NULL;
 
 // ── Timing ────────────────────────────────────────────────────────────────────
@@ -213,6 +204,13 @@ uint8_t pendingForceChannel = 0;
 bool pendingLoraReinit   = false;
 bool pendingSettingsSave = false;
 
+/** Tune carrier state: request flag (set from WebSocket/CLI/display), active
+ *  flag and end deadline.  While tuneActive the LoRa radio transmits a
+ *  continuous wave, so LoRa RX polling and port-0 TX draining are suspended. */
+volatile bool pendingTune = false;
+bool tuneActive           = false;
+static uint32_t tuneEndMillis = 0;
+
 /** First OTA update check fires 1 hour after boot. */
 uint32_t updateCheckTimer = 60 * 60 * 1000;
 
@@ -221,6 +219,13 @@ uint32_t messagesDeleteTimer = 30 * 60 * 1000;
 
 /** Filesystem low-space flag — set by addJSONtoFileTask, consumed by main loop. */
 volatile bool trimNeeded = false;
+
+/** millis() of the last loop() iteration — loop-health heartbeat for /api/diagnostics. */
+volatile uint32_t lastLoopMillis = 0;
+
+/** Effective messages.json line limit — computed at boot from the LittleFS
+ *  partition size (see setup()); falls back to MAX_STORED_MESSAGES. */
+uint16_t maxStoredMessages = MAX_STORED_MESSAGES;
 
 /** First topology report fires 5 minutes after boot. */
 uint32_t reportingTimer = 5 * 60 * 1000;
@@ -341,6 +346,19 @@ void processRxFrame(Frame &f) {
                 // Direct ACK to us: mark peer available, add 0-hop route
                 availablePeerList(f.nodeCall, true, f.port);
                 addRoutingList(f.nodeCall, f.nodeCall, f.hopCount);
+
+                // Register the confirmation like a message ACK (#55): API event
+                // ring buffer + debug event for the test framework.
+                #ifdef HAS_WIFI
+                apiRecordAckEvent(f);
+                #endif
+                if (serialDebug) {
+                    JsonDocument dbgAck;
+                    dbgAck["event"] = "announce_ack";
+                    dbgAck["nodeCall"] = f.nodeCall;
+                    dbgAck["port"] = f.port;
+                    logJson(dbgAck);
+                }
             } else if (strlen(f.viaCall) > 0) {
                 // Overheard ACK: nodeCall confirmed viaCall as its peer.
                 // Learn that viaCall is reachable through nodeCall (1 extra hop).
@@ -359,11 +377,14 @@ void processRxFrame(Frame &f) {
                 addACK(f.srcCall, settings.mycall, f.id);
             }
 
-            // Remove all pending retries for this (viaCall, id) pair from txBuffer
+            // Remove all pending retries for this (srcCall, viaCall, id) tuple.
+            // Match srcCall too: ids are only unique per source (each node seeds its
+            // own counter), so a colliding (viaCall,id) from a different source would
+            // otherwise cancel an unrelated pending relay to the same next hop.
             txBuffer.erase(
                 std::remove_if(txBuffer.begin(), txBuffer.end(),
                     [&](const Frame& txB) {
-                        return (strcmp(txB.viaCall, f.nodeCall) == 0) && (txB.id == f.id);
+                        return (strcmp(txB.viaCall, f.nodeCall) == 0) && (txB.id == f.id) && (strcmp(txB.srcCall, f.srcCall) == 0);
                     }),
                 txBuffer.end()
             );
@@ -482,7 +503,7 @@ void processRxFrame(Frame &f) {
 
             // Store (srcCall, id) in the ring-buffer to suppress future duplicates
             if ((found == false) && (f.messageLength > 0)) {
-                strncpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
+                strlcpy(messages[messagesHead].srcCall, f.srcCall, MAX_CALLSIGN_LENGTH + 1);
                 messages[messagesHead].id = f.id;
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
@@ -503,40 +524,18 @@ void processRxFrame(Frame &f) {
                 #ifdef HAS_WIFI
                 wsBroadcast(jsonBuffer, len);
                 #endif
-                addJSONtoFile(jsonBuffer, len, "/messages.json", MAX_STORED_MESSAGES);
-                #ifdef LILYGO_T_LORA_PAGER
-                // Archive to SD card without size limit when a card is inserted
+                addJSONtoFile(jsonBuffer, len, "/messages.json", maxStoredMessages);
+                // Archive to SD card (no-op on boards without SD)
                 pagerAddMessageToSD(jsonBuffer, len);
-                #endif
 
-                // Display incoming message on T-LoraPager screen
-                #ifdef LILYGO_T_LORA_PAGER
+                // Notify display drivers of the incoming message
                 if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
                     char textBuf[261] = {0};
                     memcpy(textBuf, f.message, f.messageLength);
                     displayOnNewMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
-                }
-                displayMonitorFrame(f);
-                #endif
-
-                // Display incoming message on SenseCAP Indicator screen
-                #ifdef SEEED_SENSECAP_INDICATOR
-                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
-                    char textBuf[261] = {0};
-                    memcpy(textBuf, f.message, f.messageLength);
-                    displayOnNewMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
-                }
-                displayMonitorFrame(f);
-                #endif
-
-                // Show last message on status display (SSD1306 or E-Paper)
-                #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO) || defined(ESP32_E22_V1)
-                if (f.messageType == Frame::MessageTypes::TEXT_MESSAGE) {
-                    char textBuf[261] = {0};
-                    memcpy(textBuf, f.message, f.messageLength);
                     onStatusDisplayMessage(f.srcCall, textBuf, f.dstGroup, f.dstCall);
                 }
-                #endif
+                displayMonitorFrame(f);
 
                 // TRACE echo: if we are the destination, append our callsign + time and reply
                 if ((strcmp(f.dstCall, settings.mycall) == 0) && (f.messageType == Frame::MessageTypes::TRACE_MESSAGE) && (strstr((char*)f.message, "ECHO") == NULL)) {
@@ -715,6 +714,12 @@ void processRxFrame(Frame &f) {
                                             "{\"event\":\"repeat_dropped\",\"reason\":\"buffer_full\",\"src\":\"%s\",\"id\":%u,\"via\":\"%s\",\"port\":%d}",
                                             tf.srcCall, (unsigned)tf.id, tf.viaCall, tf.port);
                                     }
+                                    // Backward-compatible LoRa flood: peerList is SNR-sorted, so the
+                                    // first eligible peer is the best link. One LoRa transmission
+                                    // reaches every neighbor (relay/consume are viaCall-independent,
+                                    // neighbors overheard-ACK), so a single copy floods identically at
+                                    // ~1/N the airtime. Frame is wire-identical → old nodes unaffected.
+                                    if (extSettings.loraFloodSingle && tf.port == 0 && routing == false) break;
                                 }
                             }
                         }
@@ -750,16 +755,10 @@ void setup() {
     // so early UART output doesn't interfere with esptool auto-reset.
     #endif
 
-    #if defined(LILYGO_T_LORA_PAGER)
-    // USB-CDC needs ~1 s to enumerate; early output would be lost
+    #if defined(ARDUINO_USB_CDC_ON_BOOT) && !defined(NRF52_PLATFORM)
+    // USB-CDC needs time to enumerate; early output would be lost
     delay(2000);
-    logPrintf(LOG_INFO, "Boot", "=== rMesh T-LoraPager boot ===");
-    logPrintf(LOG_INFO, "Boot", "PSRAM: %s (%u bytes)", psramFound() ? "OK" : "NOT FOUND", ESP.getPsramSize());
-    logPrintf(LOG_INFO, "Boot", "Free heap: %u", ESP.getFreeHeap());
     Serial.flush();
-    #elif defined(SEEED_SENSECAP_INDICATOR)
-    // UART0 via CH340 bridge — ready immediately, no wait needed
-    delay(100);
     #elif defined(NRF52_PLATFORM)
     // USB-CDC on nRF52840 — wait up to 3s for host to connect
     {
@@ -779,10 +778,29 @@ void setup() {
     }
     #endif
 
+    // Seed the PRNG so identical boards powered up together don't generate the same
+    // announce/ACK/retry jitter sequence and collide on-air repeatedly. On ESP32
+    // random() is already HW-backed; this mainly hardens the nRF52 PRNG path.
+    #ifdef NRF52_PLATFORM
+    randomSeed((uint32_t)micros() ^ (uint32_t)millis());
+    #else
+    randomSeed(esp_random());
+    #endif
+
     #ifndef NRF52_PLATFORM
     lastResetReason = getResetReasonStr();
     logPrintf(LOG_INFO, "Boot", "Reset reason: %s", lastResetReason);
     logPrintf(LOG_INFO, "Boot", "Free heap: %u bytes", ESP.getFreeHeap());
+
+    // Boot-loop detection: count consecutive boots in RTC memory. If we keep
+    // rebooting quickly, enter safe mode and skip restoring persisted state.
+    if (rtcBootMagic != BOOT_MAGIC) { rtcBootMagic = BOOT_MAGIC; rtcBootCount = 0; }
+    rtcBootCount++;
+    if (rtcBootCount >= SAFE_MODE_BOOT_THRESHOLD) {
+        safeMode = true;
+        logPrintf(LOG_ERROR, "Boot", "SAFE MODE: %u consecutive boots — skipping peer/route/message restore",
+                  (unsigned)rtcBootCount);
+    }
 
     // ESP32 (original): Reinitialize task WDT with reduced timeout,
     // since the WiFi stack blocks CPU 0 for >30 s during scans/reconnects.
@@ -829,6 +847,20 @@ void setup() {
             logPrintf(LOG_ERROR, "FS", "Format failed!");
         }
     }
+    // Size the message store from the actual partition: old 448 KB layouts
+    // keep the small limit, freshly (USB/web-flasher) flashed 3.9 MB layouts
+    // get more headroom — soft migration, no reflash required.
+    {
+        size_t total = LittleFS.totalBytes();
+        if (total > MSG_STORE_FS_RESERVE) {
+            size_t limit = (total - MSG_STORE_FS_RESERVE) / MSG_STORE_AVG_LINE;
+            if (limit > MSG_STORE_MAX_LIMIT) limit = MSG_STORE_MAX_LIMIT;
+            if (limit < MAX_STORED_MESSAGES) limit = MAX_STORED_MESSAGES;
+            maxStoredMessages = (uint16_t)limit;
+        }
+        logPrintf(LOG_INFO, "FS", "LittleFS %u KB — message store limit: %u",
+                  (unsigned)(total / 1024), (unsigned)maxStoredMessages);
+    }
     #endif
     fsMutex = xSemaphoreCreateMutex();
     listMutex = xSemaphoreCreateMutex();
@@ -850,22 +882,24 @@ void setup() {
     #endif
 
     // Pre-populate the in-RAM deduplication ring-buffer from messages.json
-    File file = LittleFS.open("/messages.json", "r");
-    if (file) {
-        JsonDocument doc;
-        while (file.available()) {
-            DeserializationError error = deserializeJson(doc, file);
-            if (error == DeserializationError::Ok) {
-                const char* tempSrc = doc["message"]["srcCall"] | "";
-                uint32_t tempId = doc["message"]["id"] | 0;
-                strncpy(messages[messagesHead].srcCall, tempSrc, MAX_CALLSIGN_LENGTH + 1);
-                messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
-                if (++messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
-            } else if (error != DeserializationError::EmptyInput) {
-                file.readStringUntil('\n'); // skip malformed line and continue
+    // (skipped in safe mode: a corrupt messages.json is a candidate crash-on-load).
+    if (!safeMode) {
+        File file = LittleFS.open("/messages.json", "r");
+        if (file) {
+            JsonDocument doc;
+            while (file.available()) {
+                DeserializationError error = deserializeJson(doc, file);
+                if (error == DeserializationError::Ok) {
+                    const char* tempSrc = doc["message"]["srcCall"] | "";
+                    strlcpy(messages[messagesHead].srcCall, tempSrc, MAX_CALLSIGN_LENGTH + 1);
+                    messages[messagesHead].id = doc["message"]["id"].as<uint32_t>();
+                    if (++messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
+                } else if (error != DeserializationError::EmptyInput) {
+                    file.readStringUntil('\n'); // skip malformed line and continue
+                }
             }
+            file.close();
         }
-        file.close();
     }
 
     // Start shared background worker BEFORE loading peers/routes, so its
@@ -873,20 +907,30 @@ void setup() {
     // be reallocated later (key mitigation against heap fragmentation).
     bgWorkerInit();
 
-    // Restore persisted peers and routes from flash
-    loadPeers();
-    loadRoutes();
-    #ifdef HAS_WIFI
-    apiLoadBuffers();
-    #endif
+    // Restore persisted peers and routes from flash (skipped in safe mode).
+    if (!safeMode) {
+        loadPeers();
+        loadRoutes();
+        #ifdef HAS_WIFI
+        apiLoadBuffers();
+        #endif
+    }
+
+    // Instantiate the board configuration from the BSP factory
+    board = BoardFactory::create();
 
     // Initialise LoRa radio and any board-specific peripherals
     initHal();
+    // loadSettings() sets pendingLoraReinit; clear it here so the first loop()
+    // iteration does not immediately re-run initHal() (redundant radio re-init
+    // and a brief RX-deaf window right after boot).
+    pendingLoraReinit = false;
 
-    // Initialise status display (if present)
-    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(LILYGO_T_ECHO) || defined(ESP32_E22_V1)
-    initStatusDisplay();
-    #endif
+    // Initialise display (if present)
+    if (board->hasDisplay()) {
+        initStatusDisplay(board);
+    }
+    initDisplay();
 
     #ifdef HAS_WIFI
     // Register WiFi scan handler once (before wifiInit, which may be called repeatedly)
@@ -908,6 +952,27 @@ void setup() {
 
     // Start the async web server and WebSocket endpoint
     startWebServer();
+
+    #ifndef NRF52_PLATFORM
+    // Subscribe loopTask to the task watchdog: if the main loop wedges,
+    // the node reboots instead of staying half-dead (HTTP/WS alive, mesh
+    // processing stopped).
+    {
+        esp_task_wdt_config_t wdtConfig = {
+            .timeout_ms    = LOOP_WDT_TIMEOUT_MS,
+            .idle_core_mask = 0,      // don't watch idle tasks
+            .trigger_panic = true,    // panic → reboot with backtrace
+        };
+        esp_err_t wdtErr = esp_task_wdt_reconfigure(&wdtConfig);
+        if (wdtErr != ESP_OK) wdtErr = esp_task_wdt_init(&wdtConfig);
+        if (wdtErr == ESP_OK && esp_task_wdt_add(NULL) == ESP_OK) {
+            logPrintf(LOG_INFO, "System", "Loop watchdog armed (%u s)", (unsigned)(LOOP_WDT_TIMEOUT_MS / 1000));
+        } else {
+            logPrintf(LOG_WARN, "System", "Loop watchdog init failed (%d)", (int)wdtErr);
+        }
+    }
+    #endif
+    lastLoopMillis = millis();
 
     logPrintf(LOG_INFO, "System", "");
     logPrintf(LOG_INFO, "System", "%s", PIO_ENV_NAME);
@@ -944,6 +1009,14 @@ void setup() {
  * 11. Topology reporting (hourly + change-driven 30 s debounce).
  */
 void loop() {
+    // Heartbeat: feeds the task watchdog and lets /api/diagnostics report
+    // loop health. A wedged loop now reboots after WDT timeout instead of
+    // leaving the node half-dead (HTTP alive, mesh processing stopped).
+    #ifndef NRF52_PLATFORM
+    esp_task_wdt_reset();
+    #endif
+    lastLoopMillis = millis();
+
     // ── 0. Deferred sends from background tasks (e.g. WebSocket) ────────────
     processPendingSends();
 
@@ -954,30 +1027,22 @@ void loop() {
     showWiFiStatus();
 
     // ── 3. Display polling ────────────────────────────────────────────────────
-    #ifdef LILYGO_T_LORA_PAGER
+    // Full-UI displays (T-LoraPager, SenseCAP) and E-Paper (T-Echo)
+    // run their own update loop; status-display boards (OLED, TFT) are
+    // refreshed on a 5 s timer.  Weak no-ops ensure dead-code-free linking.
     displayUpdateLoop();
-    #endif
-    #ifdef SEEED_SENSECAP_INDICATOR
-    displayUpdateLoop();
-    #endif
-    #if defined(HELTEC_WIFI_LORA_32_V3) || defined(LILYGO_T3_LORA32_V1_6_1) || defined(LILYGO_T_BEAM) || defined(HELTEC_HT_TRACKER_V1_2) || defined(ESP32_E22_V1)
-    {
-        // Always tick — drivers gate internally on oledEnabled, but the
-        // boot-splash hibernate path on Heltec/T3/T-Beam/E22 runs through
-        // updateStatusDisplay() even when the user has the OLED disabled.
+    if (board->hasDisplay()) {
+        // E-paper is driven solely by displayUpdateLoop()'s own throttle. Never call
+        // updateStatusDisplay() for it here: that does an unconditional full-panel
+        // refresh (~2s flash) and on the 5 s timer would run ~17k full refreshes/day —
+        // heavy battery drain, constant flicker, and rapid panel wear.
         static uint32_t oledRefreshTimer = 0;
-        if (timerExpired(oledRefreshTimer)) {
+        if (!board->isEPaper() && timerExpired(oledRefreshTimer)) {
             oledRefreshTimer = millis() + 5000;
             updateStatusDisplay();
         }
-        #ifdef ESP32_E22_V1
         displayButtonPoll();
-        #endif
     }
-    #endif
-    #ifdef LILYGO_T_ECHO
-    displayUpdateLoop();
-    #endif
 
     // ── 4. ANNOUNCE beacon ────────────────────────────────────────────────────
     // Enqueue an ANNOUNCE_FRAME on both WiFi (port 1) and LoRa (port 0)
@@ -1015,19 +1080,44 @@ void loop() {
         sendPeerList();
     }
 
+    // ── TX watchdog ───────────────────────────────────────────────────────────
+    // txFlag/rxFlag gate the entire TX drain (all ports). If startTransmit() failed
+    // or a TX_DONE/RX_DONE IRQ was missed, the flag stays latched and the node goes
+    // permanently deaf on LoRa AND WiFi AND Ethernet, while loop()/loraReady look
+    // healthy so nothing recovers. Force-clear a stuck flag and reinit the radio.
+    {
+        static uint32_t radioFlagSince = 0;
+        if (txFlag || rxFlag) {
+            if (radioFlagSince == 0) radioFlagSince = millis();
+            else if ((millis() - radioFlagSince) > RADIO_FLAG_STUCK_TIMEOUT_MS) {
+                logPrintf(LOG_ERROR, "LoRa", "radio flag stuck %lums (tx=%d rx=%d) — forcing RX recovery",
+                          (unsigned long)(millis() - radioFlagSince), (int)txFlag, (int)rxFlag);
+                txFlag = false;
+                rxFlag = false;
+                loraReady = false;   // engage the periodic 30s reinit/recovery path
+                radioFlagSince = 0;
+            }
+        } else {
+            radioFlagSince = 0;
+        }
+    }
+
     // ── 5. TX-buffer draining ─────────────────────────────────────────────────
     // Only transmit when no LoRa TX/RX is already in progress
     if ((txFlag == false) && (rxFlag == false)) {
 
-        // Synchronous frames (retry > 1) must be sent one at a time per port.
-        // Check whether all previously marked sync frames have been sent.
-        bool sendNewSyncFrame = true;
+        // Synchronous frames (retry > 1) must be sent one at a time PER PORT.
+        // Track in-flight sync frames per port so a slow LoRa (port 0) frame does
+        // not block reliable WiFi/LAN frames on their own idle ports.
+        bool sendNewSyncFrame[3] = {true, true, true};
         for (int i = 0; i < txBuffer.size(); i++) {
-            if (txBuffer[i].syncFlag == true) {sendNewSyncFrame = false;}
+            if (txBuffer[i].syncFlag == true && txBuffer[i].port < 3) {
+                sendNewSyncFrame[txBuffer[i].port] = false;
+            }
         }
 
         // Mark the first unsent sync frame per port as ready to send
-        if (sendNewSyncFrame == true) {
+        {
             // Iterate ports in priority order: primary network → secondary → LoRa
             #ifdef HAS_WIFI
             const uint8_t* po = portOrder;
@@ -1036,6 +1126,7 @@ void loop() {
             #endif
             for (int pi = 0; pi < 3; pi++) {
                 uint8_t port = po[pi];
+                if (port >= 3 || !sendNewSyncFrame[port]) continue;
                 for (int i = 0; i < txBuffer.size(); i++) {
                     if ((txBuffer[i].retry > 1) && (txBuffer[i].port == port)) {
                         txBuffer[i].syncFlag = true;
@@ -1056,8 +1147,11 @@ void loop() {
         for (int i = 0; i < txBuffer.size(); i++) {
             if (timerExpired(txBuffer[i].transmitMillis) && ((txBuffer[i].retry <= 1) || (txBuffer[i].syncFlag == true))) {
                 // Flux guard: enforce minimum pause between LoRa transmissions
-                // so remote receivers can settle back into RX mode (improves range)
-                if (txBuffer[i].port == 0 && !timerExpired(loraFluxGuard)) break;
+                // so remote receivers can settle back into RX mode (improves range).
+                // `continue` (not `break`): the guard is LoRa-only, so skip this
+                // port-0 frame but keep scanning — ready WiFi/LAN frames further down
+                // the buffer must not be held hostage by the LoRa pacing window.
+                if (txBuffer[i].port == 0 && (!timerExpired(loraFluxGuard) || tuneActive)) continue;
 
                 // Track whether the frame was actually transmitted (not just postponed)
                 bool postponed = false;
@@ -1068,8 +1162,15 @@ void loop() {
                 } else {
                     switch (txBuffer[i].port){
                         case 0: {
-                            // Duty cycle enforcement for public SRD band (10% in 60s)
-                            uint32_t toa = getTOA(txBuffer[i].messageLength + 10 + 2 * MAX_CALLSIGN_LENGTH);
+                            // Duty cycle enforcement for public SRD band (10% in 60s).
+                            // Worst-case header: a relayed frame carries up to 5 callsign
+                            // fields (src/node/via/dstGroup/dstCall), each 1 length byte +
+                            // MAX_CALLSIGN_LENGTH, plus the 1-byte message header + 4-byte id.
+                            // The old "10 + 2*MAX_CALLSIGN_LENGTH" (28 B) under-counted the
+                            // real on-air time, so the 10% EU868 budget was under-charged and
+                            // the node could legally over-transmit. Over-estimating is safe.
+                            const uint16_t MAX_FRAME_HEADER = 5 * (1 + MAX_CALLSIGN_LENGTH) + 1 + 4;
+                            uint32_t toa = getTOA(txBuffer[i].messageLength + MAX_FRAME_HEADER);
                             if (isPublicBand(settings.loraFrequency) && !dutyCycleAllowed(toa)) {
                                 // Postpone frame instead of dropping it
                                 txBuffer[i].transmitMillis = millis() + 5000;
@@ -1169,8 +1270,12 @@ void loop() {
 
     // ── 6. Receive dispatch ───────────────────────────────────────────────────
     Frame f;
-    if (checkReceive(f)) { processRxFrame(f); }   // LoRa
+    if (!tuneActive && checkReceive(f)) { processRxFrame(f); }   // LoRa
     #ifdef HAS_WIFI
+    // Reset before the UDP parse: importBinary() only overwrites fields whose header
+    // is present in the packet, so a shorter UDP frame in the same loop pass would
+    // otherwise inherit stale srcCall/dstCall/message/id from the LoRa frame above.
+    f = Frame();
     if (checkUDP(f))     { processRxFrame(f); }   // UDP
     #endif
 
@@ -1233,8 +1338,12 @@ void loop() {
     }
 
     // ── 7a. Heap watchdog — reboot when heap is critically low ──────────────
+    // Gate to ~1 Hz: ESP.getMaxAllocHeap() walks the entire heap free-list, so
+    // running it every loop pass (thousands/s) is a needless CPU tax.
     #ifndef NRF52_PLATFORM
-    {
+    static uint32_t heapCheckTimer = 0;
+    if (timerExpired(heapCheckTimer)) {
+        heapCheckTimer = millis() + 1000;
         uint32_t freeHeap = ESP.getFreeHeap();
         uint32_t maxAlloc = ESP.getMaxAllocHeap();
         if ((freeHeap < 10000 || maxAlloc < 4096) && !rebootRequested) {
@@ -1264,10 +1373,18 @@ void loop() {
         persistTimer = millis() + PERSIST_INTERVAL;
         if (routesDirty) saveRoutes();
         if (peersDirty)  savePeers();
-        #ifdef HAS_WIFI
-        if (apiBuffersDirty) apiSaveBuffers();
-        #endif
     }
+
+    #ifdef HAS_WIFI
+    // API diagnostic ring buffers (RX/TX/ACK events) are volatile and non-critical;
+    // persist them on a much longer cadence than routes/peers to cut flash wear
+    // (they were being fully rewritten every 5 min on any traffic).
+    static uint32_t apiPersistTimer = 0;
+    if (timerExpired(apiPersistTimer)) {
+        apiPersistTimer = millis() + (6 * PERSIST_INTERVAL);  // ~30 min
+        if (apiBuffersDirty) apiSaveBuffers();
+    }
+    #endif
 
     // ── 8. Reboot / shutdown ──────────────────────────────────────────────────
     #ifdef NRF52_PLATFORM
@@ -1299,12 +1416,39 @@ void loop() {
     if (pendingSettingsSave) {
         pendingSettingsSave = false;
         saveSettings();
+        #ifdef HAS_WIFI
         buildPortOrder();  // primaryInterface may have changed
+        #endif
     }
 
     // Deferred LoRa reinit after settings change
     if (pendingLoraReinit) {
         pendingLoraReinit = false;
+        initHal();
+    }
+
+    // ── Tune carrier ──────────────────────────────────────────────────────────
+    // Start a continuous wave for TUNE_DURATION ms (antenna tuning, #54).
+    // Deferred to the loop context because the request comes from the
+    // WebSocket task / CLI. While active, LoRa RX/TX is suspended; initHal()
+    // afterwards fully re-initialises the radio back into receive mode.
+    if (pendingTune) {
+        pendingTune = false;
+        if (!tuneActive && loraReady && loraEnabled && txFlag == false) {
+            if (isPublicBand(settings.loraFrequency) && !dutyCycleAllowed(TUNE_DURATION)) {
+                logPrintf(LOG_WARN, "LoRa", "Tune skipped: duty cycle limit reached");
+            } else {
+                logPrintf(LOG_INFO, "LoRa", "Tune: carrier on for %d ms", TUNE_DURATION);
+                tuneStart();
+                tuneActive = true;
+                tuneEndMillis = millis() + TUNE_DURATION;
+                if (isPublicBand(settings.loraFrequency)) dutyCycleTrackTx(TUNE_DURATION);
+            }
+        }
+    }
+    if (tuneActive && timerExpired(tuneEndMillis)) {
+        tuneActive = false;
+        logPrintf(LOG_INFO, "LoRa", "Tune: carrier off");
         initHal();
     }
 
@@ -1318,14 +1462,22 @@ void loop() {
     }
 
     // ── 10. messages.json housekeeping ────────────────────────────────────────
-    if (trimNeeded) {
+    // Debounce: on a genuinely full FS the emergency trim can fail (no room for the
+    // temp copy), leaving trimNeeded re-armed every write batch. Without this guard
+    // the loop would respawn two 8 KB-stack trim tasks every pass → CPU/heap churn.
+    static uint32_t trimDebounce = 0;
+    if (trimNeeded && timerExpired(trimDebounce)) {
         trimNeeded = false;
+        trimDebounce = millis() + 60000;  // at most one emergency trim per minute
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // reset 24 h timer
-        trimFile("/messages.json", MAX_STORED_MESSAGES);
+        // Low space: emergency trim (maxLines=0 → halve) — the fixed limit
+        // may already be satisfied while the filesystem is still full.
+        trimFile("/messages.json", 0);
+        trimFile("/ack.json", 0);
     }
     if (timerExpired(messagesDeleteTimer)) {
         messagesDeleteTimer = millis() + 24 * 60 * 60 * 1000; // repeat every 24 h
-        trimFile("/messages.json", MAX_STORED_MESSAGES);
+        trimFile("/messages.json", maxStoredMessages);
     }
 
     #ifdef HAS_WIFI
@@ -1338,4 +1490,19 @@ void loop() {
     #endif
 
     heapTick();
+
+    // Once the node has run stably past the boot-crash window, clear the boot-loop
+    // counter so a single later crash doesn't eventually trip safe mode.
+    #ifndef NRF52_PLATFORM
+    static bool bootStabilized = false;
+    if (!bootStabilized && millis() > 30000) { bootStabilized = true; rtcBootCount = 0; }
+    #endif
+
+    // Yield one tick when fully idle so lower-priority tasks and the FreeRTOS idle
+    // task get to run (the latter is what lets the SoC drop into automatic light
+    // sleep when power management is configured). Bounded to 1 tick so LoRa RX
+    // polling latency is essentially unaffected; skipped whenever TX/RX is active.
+    if (txBuffer.empty() && !txFlag && !rxFlag) {
+        vTaskDelay(1);
+    }
 }

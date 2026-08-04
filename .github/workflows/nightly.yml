@@ -49,7 +49,11 @@ jobs:
         run: |
           last_tag=$(gh release list --json tagName,isPrerelease --jq '[.[] | select(.tagName | startswith("nightly-"))][0].tagName' 2>/dev/null || echo "")
           if [ -n "$last_tag" ]; then
-            last=$(gh release view "$last_tag" --json targetCommitish --jq .targetCommitish 2>/dev/null || echo "")
+            # Resolve the COMMIT the tag points at. Do NOT use targetCommitish:
+            # releases are created with --target dev-next, so GitHub stores the
+            # branch name there, never a SHA — the comparison would never match
+            # and a nightly would be cut every night even with zero commits.
+            last=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${last_tag}" --jq .sha 2>/dev/null || echo "")
           else
             last=""
           fi
@@ -79,7 +83,9 @@ jobs:
                   continue
               opts = dict(section[1])
               platform = opts.get('platform', '')
-              if 'nrf' not in platform.lower():
+              # 'native' is the host unit-test env (build_src_filter = -<*>),
+              # pio run on it fails with 'Nothing to build'
+              if 'nrf' not in platform.lower() and platform != 'native':
                   print(name.split(':',1)[1])
           ")
           nrf52_envs=$(pio project config --json-output \
