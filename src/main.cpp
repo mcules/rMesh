@@ -346,6 +346,19 @@ void processRxFrame(Frame &f) {
                 // Direct ACK to us: mark peer available, add 0-hop route
                 availablePeerList(f.nodeCall, true, f.port);
                 addRoutingList(f.nodeCall, f.nodeCall, f.hopCount);
+
+                // Register the confirmation like a message ACK (#55): API event
+                // ring buffer + debug event for the test framework.
+                #ifdef HAS_WIFI
+                apiRecordAckEvent(f);
+                #endif
+                if (serialDebug) {
+                    JsonDocument dbgAck;
+                    dbgAck["event"] = "announce_ack";
+                    dbgAck["nodeCall"] = f.nodeCall;
+                    dbgAck["port"] = f.port;
+                    logJson(dbgAck);
+                }
             } else if (strlen(f.viaCall) > 0) {
                 // Overheard ACK: nodeCall confirmed viaCall as its peer.
                 // Learn that viaCall is reachable through nodeCall (1 extra hop).

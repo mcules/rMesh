@@ -98,7 +98,11 @@ void Frame::monitorJSON() {
     if (ESP.getFreeHeap() < 40000) return;
 
     // Rate-limit: max 2 monitor messages per second to reduce heap pressure
-    // from WebSocket shared_ptr allocations
+    // from WebSocket shared_ptr allocations.
+    // ACK frames are exempt (#55): an announce enqueues TX monitor frames on
+    // WiFi AND LoRa in the same window, so the ACK arriving milliseconds later
+    // was always the third frame and got silently dropped — the user never saw
+    // the confirmation. ACKs are rare and tiny, so passing them is heap-safe.
     static uint32_t lastMonitorMs = 0;
     static uint8_t  monitorCount  = 0;
     uint32_t now = millis();
@@ -106,7 +110,9 @@ void Frame::monitorJSON() {
         lastMonitorMs = now;
         monitorCount = 0;
     }
-    if (++monitorCount > 2) return;
+    bool isAck = (frameType == Frame::FrameTypes::ANNOUNCE_ACK_FRAME ||
+                  frameType == Frame::FrameTypes::MESSAGE_ACK_FRAME);
+    if (++monitorCount > 2 && !isAck) return;
 
     // Build monitor JSON directly into static buffer (no heap JsonDocument).
     // Only called from the main loop, so a static buffer is safe.

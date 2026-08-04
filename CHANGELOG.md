@@ -6,6 +6,10 @@
 
 - GEÄNDERT: Tune sendet jetzt einen echten Dauerstrich-Träger (CW) von 5 Sekunden statt eines einzelnen 0xFF-Pakets über die normale TX-Warteschlange (#54) — der Träger startet sofort beim Klick (SX126x: `SetTxContinuousWave`; SX127x: FSK mit Hub 0), danach wird das Radio neu initialisiert und empfängt wieder. Auf dem 869,4-MHz-Band wird der Träger aufs Duty-Cycle-Budget angerechnet. Neuer Serial-Befehl `tune`
 
+### FIX
+
+- FIX: Announce-ACKs der Gegenstationen wurden im Monitor nie angezeigt (#55) — ein Announce erzeugt TX-Monitor-Frames auf WiFi UND LoRa im selben Rate-Limit-Fenster (max. 2 pro 500 ms), das Millisekunden später eintreffende ACK war immer das dritte Frame und wurde still verworfen. ACK-Frames sind jetzt vom Monitor-Rate-Limit ausgenommen; zusätzlich wird ein Announce-ACK wie ein Message-ACK im API-Event-Puffer registriert und als Debug-Event (`announce_ack`) ausgegeben
+
 ## [v26.7.0]
 
 Ergebnis von drei tiefen Code-Review-Durchgängen (Datei-Review, Flow-/Mesh-Analyse, Stabilität/Ressourcen/Power). Alle Änderungen bauen über ESP32-S3, klassischen ESP32 und nRF52.
