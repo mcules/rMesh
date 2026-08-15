@@ -36,6 +36,7 @@
 
 bool serialDebug = false;
 bool serialMsgMonitor = false;
+bool serialJsonConsole = false;
 char serialRxBuffer[200] = {0};
 
 
@@ -744,6 +745,17 @@ void checkSerialRX() {
                     logPrintf(LOG_INFO, "Msg", "serialMsgMonitor: %s", serialMsgMonitor ? "true" : "false");
                 }
 
+                // JSON console toggle: "json 1" = console output as JSON lines
+                // (machine-readable, without the DBG: debug firehose), "json 0"
+                // = human-readable text (default).
+                if (strncmp(serialRxBuffer, "json", 4) == 0 && (serialRxBuffer[4] == ' ' || serialRxBuffer[4] == '\0')) {
+                    if (strlen(parameter) > 0) {
+                        serialJsonConsole = (parameter[0] == '1' || parameter[0] == 'e' || parameter[0] == 't');
+                        saveSettings();
+                    }
+                    logPrintf(LOG_INFO, "Config", "serialJsonConsole: %s", serialJsonConsole ? "true" : "false");
+                }
+
                 // Status LED on/off: "led 0|1"
                 if (strncmp(serialRxBuffer, "led", 3) == 0 && (serialRxBuffer[3] == ' ' || serialRxBuffer[3] == '\0')) {
                     if (strlen(parameter) > 0) {
@@ -754,6 +766,8 @@ void checkSerialRX() {
                 }
 
                 // Send direct message: "msg <CALL> <TEXT>"
+                // Broadcast to all nodes: "msg * <TEXT>" or "msg all <TEXT>"
+                // (empty dstCall on the wire — every node consumes the message)
                 if (strncmp(serialRxBuffer, "msg", 3) == 0 && serialRxBuffer[3] == ' ') {
                     char* sp = strchr(parameter, ' ');
                     if (sp != nullptr) {
@@ -761,10 +775,15 @@ void checkSerialRX() {
                         char dst[MAX_CALLSIGN_LENGTH + 1] = {0};
                         strncpy(dst, parameter, MAX_CALLSIGN_LENGTH);
                         for (size_t ci = 0; dst[ci]; ci++) dst[ci] = toupper(dst[ci]);
-                        sendMessage(dst, sp + 1);
-                        logPrintf(LOG_INFO, "Msg", "Message sent to %s", dst);
+                        if (strcmp(dst, "*") == 0 || strcmp(dst, "ALL") == 0) {
+                            sendMessage("", sp + 1);
+                            logPrintf(LOG_INFO, "Msg", "Broadcast message sent");
+                        } else {
+                            sendMessage(dst, sp + 1);
+                            logPrintf(LOG_INFO, "Msg", "Message sent to %s", dst);
+                        }
                     } else {
-                        logPrintf(LOG_INFO, "Msg", "Usage: msg <CALL> <TEXT>");
+                        logPrintf(LOG_INFO, "Msg", "Usage: msg <CALL|*> <TEXT>");
                     }
                 }
 

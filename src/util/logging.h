@@ -16,6 +16,8 @@ enum LogLevel {
  *
  * - serialDebug=false: LOG_INFO+ printed as "[tag] message\r\n", LOG_DEBUG suppressed.
  * - serialDebug=true:  all levels as DBG:{"level":"…","tag":"…","msg":"…"}\r\n
+ * - serialJsonConsole=true (and serialDebug=false): LOG_INFO+ as bare JSON
+ *   {"ts":…,"level":…,"tag":…,"msg":…}\r\n (no DBG: prefix)
  *
  * Callers must NOT include a trailing \n — the function appends \r\n automatically.
  */
@@ -27,6 +29,7 @@ void logPrintf(LogLevel level, const char* tag, const char* fmt, ...)
  *
  * Used for human-readable output like help text and settings display.
  * In serialDebug mode the output is suppressed (use logPrintf for structured output).
+ * In JSON console mode each line is wrapped as {"raw":"…"}\r\n.
  */
 void logRaw(const char* fmt, ...)
     __attribute__((format(printf, 1, 2)));
@@ -34,7 +37,7 @@ void logRaw(const char* fmt, ...)
 /**
  * @brief Emit a structured JSON debug object.
  *
- * Only produces output when serialDebug is true.
- * Format: DBG:{…}\r\n
+ * Produces output when serialDebug or serialJsonConsole is true.
+ * Format: DBG:{…}\r\n in debug mode, bare {…}\r\n in JSON console mode.
  */
 void logJson(const JsonDocument& doc);

@@ -410,7 +410,15 @@ void processRxFrame(Frame &f) {
 
             // Console message monitor: show delivery confirmation for our own messages
             if (serialMsgMonitor && (strcmp(f.srcCall, settings.mycall) == 0)) {
-                logPrintf(LOG_INFO, "Msg", "ACK: %s confirmed message %lu", f.nodeCall, (unsigned long)f.id);
+                if (serialJsonConsole) {
+                    JsonDocument monAck;
+                    monAck["event"] = "msg_ack";
+                    monAck["nodeCall"] = f.nodeCall;
+                    monAck["id"] = f.id;
+                    logJson(monAck);
+                } else {
+                    logPrintf(LOG_INFO, "Msg", "ACK: %s confirmed message %lu", f.nodeCall, (unsigned long)f.id);
+                }
             }
             break;
 
@@ -521,11 +529,26 @@ void processRxFrame(Frame &f) {
                 (f.messageType == Frame::MessageTypes::TEXT_MESSAGE || f.messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
                 char monBuf[261] = {0};
                 memcpy(monBuf, f.message, f.messageLength);
-                const char* monDst = (strlen(f.dstGroup) > 0) ? f.dstGroup
-                                   : (strlen(f.dstCall) > 0) ? f.dstCall : "ALL";
-                logPrintf(LOG_INFO, "Msg", "%s>%s%s [%u hops, %.0f dBm, %.1f dB]: %s",
-                          f.srcCall, (strlen(f.dstGroup) > 0) ? "@" : "", monDst,
-                          (unsigned)f.hopCount, f.rssi, f.snr, monBuf);
+                if (serialJsonConsole) {
+                    JsonDocument monMsg;
+                    monMsg["event"] = "message";
+                    monMsg["src"] = f.srcCall;
+                    monMsg["dst"] = f.dstCall;
+                    monMsg["grp"] = f.dstGroup;
+                    monMsg["id"] = f.id;
+                    monMsg["hops"] = f.hopCount;
+                    monMsg["rssi"] = f.rssi;
+                    monMsg["snr"] = f.snr;
+                    monMsg["port"] = f.port;
+                    monMsg["text"] = monBuf;
+                    logJson(monMsg);
+                } else {
+                    const char* monDst = (strlen(f.dstGroup) > 0) ? f.dstGroup
+                                       : (strlen(f.dstCall) > 0) ? f.dstCall : "ALL";
+                    logPrintf(LOG_INFO, "Msg", "%s>%s%s [%u hops, %.0f dBm, %.1f dB]: %s",
+                              f.srcCall, (strlen(f.dstGroup) > 0) ? "@" : "", monDst,
+                              (unsigned)f.hopCount, f.rssi, f.snr, monBuf);
+                }
             }
 
             if ((found == false) && (f.messageLength > 0) && (!forOther) && (f.messageType != Frame::MessageTypes::ROUTING_INFO_MESSAGE)) {

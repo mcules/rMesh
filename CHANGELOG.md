@@ -13,6 +13,8 @@ Erstes Dev-Release seit v26.4.1a-dev (April 2026). Bündelt die bisher nur als N
 ### NEU
 
 - NEU: Serial-Befehl `mon <1/0>` — Nachrichten-Monitor für die serielle Konsole: zeigt jede neu empfangene Text-/Trace-Nachricht (inkl. mitgehörter Nachrichten an andere Nodes) mit Absender, Ziel, Hops, RSSI/SNR und Text; bei eigenen Nachrichten wird die Zustellbestätigung angezeigt (`ACK: <CALL> confirmed message <ID>`). Persistent über Reboot (NVS), sichtbar in `settings`. Macht die Node komplett headless über USB-Serial nutzbar
+- NEU: Serial-Befehl `json <1/0>` — JSON-Konsolen-Modus (persistent, default aus): alle Konsolen-Ausgaben als maschinenlesbare JSON-Zeilen ohne den `DBG:`-Debug-Firehose. Log-Zeilen als `{"ts","level","tag","msg"}`, Monitor-Nachrichten als strukturierte Events (`{"event":"message",...}` / `{"event":"msg_ack",...}`), Rohausgaben (`h`, `settings`) als `{"raw":"..."}`. Die Abfragen `peers`/`routes`/`acks`/`xtxbuf` liefern damit auch ohne `dbg 1` ihre JSON-Antwort
+- NEU: Broadcast über die Konsole: `msg * <TEXT>` (oder `msg all <TEXT>`) sendet eine Nachricht an alle Nodes (leeres Ziel auf dem Frame — jede Node konsumiert sie)
 - NEU: Native Unit-Test-Suite (`pio test -e native`) mit GitHub-Actions-CI und AddressSanitizer — reine LoRa-Mathematik (Time-on-Air, Duty-Cycle), Frame-Serialisierung und CLI-Parser laufen als Host-Tests bei jedem Push
 - NEU: Hardware-in-the-Loop-Testsuite ausgebaut (pytest, echte Nodes via USB/Serial) — exakte Assertions, Regressionstests, robuster UDP-/WiFi-Transport-Test mit sauberem Skip bei AP-Client-Isolation
 

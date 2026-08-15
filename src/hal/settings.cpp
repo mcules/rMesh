@@ -187,6 +187,7 @@ void showSettings() {
     logRaw("  System:");
     logRaw("    serialDebug: %s", serialDebug ? "true" : "false");
     logRaw("    serialMsgMonitor: %s", serialMsgMonitor ? "true" : "false");
+    logRaw("    serialJsonConsole: %s", serialJsonConsole ? "true" : "false");
     logRaw("    batteryEnabled: %s", batteryEnabled ? "true" : "false");
     logRaw("    statusLedEnabled: %s", statusLedEnabled ? "true" : "false");
     logRaw("    batteryFullVoltage: %.2f V", batteryFullVoltage);
@@ -276,6 +277,7 @@ void loadSettings() {
     oledEnabled        = prefs.getBool("oledEnabled", false);
     serialDebug        = prefs.getBool("serialDebug", false);
     serialMsgMonitor   = prefs.getBool("msgMonitor", false);
+    serialJsonConsole  = prefs.getBool("jsonConsole", false);
     heapDebugEnabled   = prefs.getBool("heapDebug", false);
     {
         String grp = prefs.getString("oledGroup", "");
@@ -642,6 +644,7 @@ void saveSettings() {
     prefs.putUChar("cpuFreq", cpuFrequency);
     prefs.putBool("serialDebug", serialDebug);
     prefs.putBool("msgMonitor", serialMsgMonitor);
+    prefs.putBool("jsonConsole", serialJsonConsole);
     prefs.putBool("heapDebug", heapDebugEnabled);
     saveOledSettings();
 #ifdef HAS_WIFI

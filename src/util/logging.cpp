@@ -2,6 +2,7 @@
 #include <time.h>
 
 extern bool serialDebug;
+extern bool serialJsonConsole;
 
 static const char* levelToStr(LogLevel level) {
     switch (level) {
@@ -41,13 +42,15 @@ void logPrintf(LogLevel level, const char* tag, const char* fmt, ...) {
     char ts[24];
     formatTimestamp(ts, sizeof(ts));
 
-    if (serialDebug) {
+    if (serialDebug || serialJsonConsole) {
         JsonDocument doc;
         doc["ts"]    = ts;
         doc["level"] = levelToStr(level);
         doc["tag"]   = tag;
         doc["msg"]   = msg;
-        Serial.print("DBG:");
+        // "DBG:" prefix only in debug mode — the JSON console emits bare
+        // JSON lines so a machine consumer can parse the whole stream.
+        if (serialDebug) Serial.print("DBG:");
         serializeJson(doc, Serial);
         Serial.print("\r\n");
     } else {
@@ -62,12 +65,20 @@ void logRaw(const char* fmt, ...) {
     va_start(args, fmt);
     vsnprintf(msg, sizeof(msg), fmt, args);
     va_end(args);
-    Serial.printf("%s\r\n", msg);
+    if (serialJsonConsole) {
+        // Keep help text / settings dumps parseable in JSON console mode
+        JsonDocument doc;
+        doc["raw"] = msg;
+        serializeJson(doc, Serial);
+        Serial.print("\r\n");
+    } else {
+        Serial.printf("%s\r\n", msg);
+    }
 }
 
 void logJson(const JsonDocument& doc) {
-    if (!serialDebug) return;
-    Serial.print("DBG:");
+    if (!serialDebug && !serialJsonConsole) return;
+    if (serialDebug) Serial.print("DBG:");
     serializeJson(doc, Serial);
     Serial.print("\r\n");
 }

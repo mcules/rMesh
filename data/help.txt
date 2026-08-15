@@ -7,6 +7,7 @@ Befehlsuebersicht:
   reboot                       Neustart
   defaults                     Standardeinstellungen laden
   dbg <1/0>                    Debug-Modus ein/aus
+  json <1/0>                   Konsolen-Ausgabe als JSON ein/aus
 
   WiFi & Netzwerk:
   wifi <1/0>                   WiFi ein/aus
@@ -75,6 +76,7 @@ Befehlsuebersicht:
 
   Nachrichten:
   msg <CALL> <TEXT>            Direktnachricht senden
+  msg * <TEXT>                 Nachricht an alle senden (Broadcast)
   xgrp <GROUP> <TEXT>          Gruppennachricht senden
   xtrace <CALL>                Trace-Nachricht senden
   mon <1/0>                    Eingehende Nachrichten auf Konsole anzeigen
