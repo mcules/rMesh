@@ -77,6 +77,7 @@ Befehlsuebersicht:
   msg <CALL> <TEXT>            Direktnachricht senden
   xgrp <GROUP> <TEXT>          Gruppennachricht senden
   xtrace <CALL>                Trace-Nachricht senden
+  mon <1/0>                    Eingehende Nachrichten auf Konsole anzeigen
   announce                     Announce-Bake manuell ausloesen
   tune                         Abstimm-Traeger senden (Dauerstrich, 5 s)
 

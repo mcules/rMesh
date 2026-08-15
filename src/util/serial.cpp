@@ -35,6 +35,7 @@
 #include "mesh/ack.h"
 
 bool serialDebug = false;
+bool serialMsgMonitor = false;
 char serialRxBuffer[200] = {0};
 
 
@@ -729,6 +730,18 @@ void checkSerialRX() {
                         saveSettings();
                     }
                     logPrintf(LOG_INFO, "Debug", "serialDebug: %s", serialDebug ? "true" : "false");
+                }
+
+                // Message monitor toggle: "mon 1" = print every new incoming
+                // text/trace message on the serial console, "mon 0" = off.
+                // NOTE: must NOT use "monitor" — no conflict today, but keep it
+                // short and distinct from "msg"/"mhm"/"mht" prefixes.
+                if (strncmp(serialRxBuffer, "mon", 3) == 0 && (serialRxBuffer[3] == ' ' || serialRxBuffer[3] == '\0')) {
+                    if (strlen(parameter) > 0) {
+                        serialMsgMonitor = (parameter[0] == '1' || parameter[0] == 'e' || parameter[0] == 't');
+                        saveSettings();
+                    }
+                    logPrintf(LOG_INFO, "Msg", "serialMsgMonitor: %s", serialMsgMonitor ? "true" : "false");
                 }
 
                 // Status LED on/off: "led 0|1"

@@ -2,6 +2,7 @@
 
 
 extern bool serialDebug;
+extern bool serialMsgMonitor;
 
 void checkSerialRX();
 

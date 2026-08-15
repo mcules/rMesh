@@ -12,6 +12,7 @@ Erstes Dev-Release seit v26.4.1a-dev (April 2026). Bündelt die bisher nur als N
 
 ### NEU
 
+- NEU: Serial-Befehl `mon <1/0>` — Nachrichten-Monitor für die serielle Konsole: zeigt jede neu empfangene Text-/Trace-Nachricht (inkl. mitgehörter Nachrichten an andere Nodes) mit Absender, Ziel, Hops, RSSI/SNR und Text; bei eigenen Nachrichten wird die Zustellbestätigung angezeigt (`ACK: <CALL> confirmed message <ID>`). Persistent über Reboot (NVS), sichtbar in `settings`. Macht die Node komplett headless über USB-Serial nutzbar
 - NEU: Native Unit-Test-Suite (`pio test -e native`) mit GitHub-Actions-CI und AddressSanitizer — reine LoRa-Mathematik (Time-on-Air, Duty-Cycle), Frame-Serialisierung und CLI-Parser laufen als Host-Tests bei jedem Push
 - NEU: Hardware-in-the-Loop-Testsuite ausgebaut (pytest, echte Nodes via USB/Serial) — exakte Assertions, Regressionstests, robuster UDP-/WiFi-Transport-Test mit sauberem Skip bei AP-Client-Isolation
 

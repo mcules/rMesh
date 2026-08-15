@@ -407,6 +407,11 @@ void processRxFrame(Frame &f) {
                 dbgAck["id"] = f.id;
                 logJson(dbgAck);
             }
+
+            // Console message monitor: show delivery confirmation for our own messages
+            if (serialMsgMonitor && (strcmp(f.srcCall, settings.mycall) == 0)) {
+                logPrintf(LOG_INFO, "Msg", "ACK: %s confirmed message %lu", f.nodeCall, (unsigned long)f.id);
+            }
             break;
 
         // ── MESSAGE_FRAME ─────────────────────────────────────────────────────
@@ -507,6 +512,20 @@ void processRxFrame(Frame &f) {
                 messages[messagesHead].id = f.id;
                 messagesHead++;
                 if (messagesHead >= MAX_STORED_MESSAGES_RAM) { messagesHead = 0; }
+            }
+
+            // Console message monitor ("mon 1"): print every new text/trace
+            // message on the serial console — including messages addressed to
+            // other nodes (monitor semantics, for headless use over USB serial).
+            if (serialMsgMonitor && (found == false) && (f.messageLength > 0) &&
+                (f.messageType == Frame::MessageTypes::TEXT_MESSAGE || f.messageType == Frame::MessageTypes::TRACE_MESSAGE)) {
+                char monBuf[261] = {0};
+                memcpy(monBuf, f.message, f.messageLength);
+                const char* monDst = (strlen(f.dstGroup) > 0) ? f.dstGroup
+                                   : (strlen(f.dstCall) > 0) ? f.dstCall : "ALL";
+                logPrintf(LOG_INFO, "Msg", "%s>%s%s [%u hops, %.0f dBm, %.1f dB]: %s",
+                          f.srcCall, (strlen(f.dstGroup) > 0) ? "@" : "", monDst,
+                          (unsigned)f.hopCount, f.rssi, f.snr, monBuf);
             }
 
             if ((found == false) && (f.messageLength > 0) && (!forOther) && (f.messageType != Frame::MessageTypes::ROUTING_INFO_MESSAGE)) {
